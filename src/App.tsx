@@ -19,6 +19,7 @@ import { TelegramCenter } from './components/telegram/TelegramCenter.tsx';
 import { UserManagement } from './components/users/UserManagement.tsx';
 import { AuditLogViewer } from './components/audit/AuditLogViewer.tsx';
 import { SystemSettingsView } from './components/settings/SystemSettingsView.tsx';
+import { StorageService } from './services/storageService.ts';
 import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Building2 } from 'lucide-react';
 
 const ToastContainer: React.FC = () => {
@@ -183,6 +184,14 @@ const MainLayout: React.FC = () => {
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const { isKhmer } = useLanguage();
+  const [sysSettings, setSysSettings] = useState(() => StorageService.getSystemSettings());
+
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setSysSettings(StorageService.getSystemSettings());
+    });
+    return unsub;
+  }, []);
 
   if (isLoading) {
     return (
@@ -194,7 +203,7 @@ const AppContent: React.FC = () => {
           <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
           <span>{isKhmer ? 'កំពុងដំណើរការប្រព័ន្ធ...' : 'Connecting to EduTrack MIS...'}</span>
         </div>
-        <p className="text-xs text-slate-400">Phnom Penh International Academy</p>
+        <p className="text-xs text-slate-400">{sysSettings.organizationName}</p>
       </div>
     );
   }

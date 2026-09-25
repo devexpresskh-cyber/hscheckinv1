@@ -306,14 +306,20 @@ export const AttendanceEngine = {
 
     // Geofencing verification
     let locationVerified = true;
-    if (systemSettings.enforceGeofence && !params.bypassGeofence && params.latitude && params.longitude) {
+    if (params.latitude && params.longitude) {
       const geo = this.verifyLocation(params.latitude, params.longitude, systemSettings);
-      if (!geo.inside) {
+      locationVerified = geo.inside;
+      if (systemSettings.enforceGeofence && !params.bypassGeofence && !geo.inside) {
         return {
           success: false,
           message: `Check-in denied: You are ${geo.distance}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`
         };
       }
+    } else if (systemSettings.enforceGeofence && !params.bypassGeofence) {
+      return {
+        success: false,
+        message: 'Check-in denied: GPS location coordinates are required because Campus Geofence Enforcement is active.'
+      };
     }
 
     // Status evaluation based on class session / schedule

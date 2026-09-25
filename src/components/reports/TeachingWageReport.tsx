@@ -29,6 +29,14 @@ export const TeachingWageReport: React.FC = () => {
   const { canAccessDepartment } = useAuth();
   const { showToast } = useNotification();
   const { isKhmer } = useLanguage();
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setSystemSettings(StorageService.getSystemSettings());
+    });
+    return unsub;
+  }, []);
 
   // Filters
   const [selectedMonth, setSelectedMonth] = useState('2026-09');
@@ -501,6 +509,22 @@ export const TeachingWageReport: React.FC = () => {
 
       {/* Main Table */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+        
+        {/* Printable Org Banner */}
+        <div className="hidden print:block p-6 border-b border-slate-200 text-center">
+          <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+            {systemSettings.organizationName}
+          </h1>
+          {systemSettings.khmerOrgName && (
+            <p className="text-sm font-khmer font-bold text-slate-800 mt-0.5">
+              {systemSettings.khmerOrgName}
+            </p>
+          )}
+          <p className="text-xs text-slate-600 mt-1">
+            Faculty Teaching Hours & Wage Compensation Report • Period: {dateFilterMode === 'month' ? selectedMonth : `${startDate} to ${endDate}`}
+          </p>
+        </div>
+
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-sm sm:text-base font-black text-slate-900">
@@ -671,6 +695,21 @@ export const TeachingWageReport: React.FC = () => {
             {/* Modal Body: Printable Payslip Voucher */}
             <div id="teacher-payslip-print" className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
               
+              {/* Printable Org Banner */}
+              <div className="hidden print:block text-center border-b border-slate-200 pb-4 mb-2">
+                <h1 className="text-xl font-black text-slate-900 uppercase">
+                  {systemSettings.organizationName}
+                </h1>
+                {systemSettings.khmerOrgName && (
+                  <p className="text-sm font-khmer font-bold text-slate-700 mt-0.5">
+                    {systemSettings.khmerOrgName}
+                  </p>
+                )}
+                <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">
+                  Official Faculty Teaching Wage Voucher
+                </p>
+              </div>
+
               {/* Teacher Profile Summary Card */}
               <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">

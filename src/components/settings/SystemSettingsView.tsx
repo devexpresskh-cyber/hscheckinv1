@@ -20,20 +20,35 @@ export const SystemSettingsView: React.FC = () => {
   const { currentUser, hasPermission } = useAuth();
   const { showToast } = useNotification();
 
-  const [settings, setSettings] = useState<SystemSettings>(StorageService.getSystemSettings());
+  const [settings, setSettings] = useState<SystemSettings>(() => StorageService.getSystemSettings());
+
+  // Listen to live Firestore updates
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setSettings(StorageService.getSystemSettings());
+    });
+    return unsub;
+  }, []);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    StorageService.saveSystemSettings(settings);
+    const updated: SystemSettings = {
+      ...settings,
+      organizationName: settings.organizationName || settings.schoolName || 'EduTrack Academy',
+      schoolName: settings.organizationName || settings.schoolName || 'EduTrack Academy',
+      khmerOrgName: settings.khmerOrgName || settings.khmerSchoolName || 'សាលាអន្តរជាតិ',
+      khmerSchoolName: settings.khmerOrgName || settings.khmerSchoolName || 'សាលាអន្តរជាតិ'
+    };
+    StorageService.saveSystemSettings(updated);
     StorageService.addAuditLog({
       userId: currentUser.id,
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Updated System Settings',
-      target: 'Organization & Attendance Configuration',
+      target: `Organization Name: ${updated.organizationName}`,
       ipAddress: '127.0.0.1'
     });
-    showToast('System configuration saved', 'success');
+    showToast('System configuration & organization profile saved', 'success');
   };
 
   const handleExportBackup = () => {
@@ -98,19 +113,29 @@ export const SystemSettingsView: React.FC = () => {
               <input
                 type="text"
                 required
-                value={settings.schoolName}
-                onChange={e => setSettings({ ...settings, schoolName: e.target.value })}
+                value={settings.organizationName || settings.schoolName || ''}
+                onChange={e => setSettings({
+                  ...settings,
+                  organizationName: e.target.value,
+                  schoolName: e.target.value
+                })}
+                placeholder="e.g. Phnom Penh Academy"
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
               />
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1 font-khmer">
-                ឈ្មោះសាលា (ភាសាខ្មែរ)
+                ឈ្មោះសាលា / ស្ថាប័ន (ភាសាខ្មែរ)
               </label>
               <input
                 type="text"
-                value={settings.khmerSchoolName}
-                onChange={e => setSettings({ ...settings, khmerSchoolName: e.target.value })}
+                value={settings.khmerOrgName || settings.khmerSchoolName || ''}
+                onChange={e => setSettings({
+                  ...settings,
+                  khmerOrgName: e.target.value,
+                  khmerSchoolName: e.target.value
+                })}
+                placeholder="ឧ. សាលាអន្តរជាតិភ្នំពេញ"
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-khmer font-bold"
               />
             </div>

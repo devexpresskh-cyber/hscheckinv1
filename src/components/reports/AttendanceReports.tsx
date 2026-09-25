@@ -21,6 +21,14 @@ import { TeachingWageReport } from './TeachingWageReport.tsx';
 export const AttendanceReports: React.FC = () => {
   const { canAccessDepartment } = useAuth();
   const { showToast } = useNotification();
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setSystemSettings(StorageService.getSystemSettings());
+    });
+    return unsub;
+  }, []);
 
   const [reportType, setReportType] = useState<'teaching_wage' | 'monthly' | 'daily'>('teaching_wage');
   const [selectedMonth, setSelectedMonth] = useState('2026-09');
@@ -297,8 +305,11 @@ export const AttendanceReports: React.FC = () => {
         
         {/* Printable Org Banner */}
         <div className="hidden print:block p-6 border-b border-slate-200 text-center">
-          <h1 className="text-xl font-bold">Phnom Penh International Academy</h1>
-          <p className="text-xs text-slate-600">Faculty & Staff Attendance Report • Period: {selectedMonth}</p>
+          <h1 className="text-xl font-bold">{systemSettings.organizationName}</h1>
+          {systemSettings.khmerOrgName && (
+            <p className="text-sm font-khmer text-slate-800">{systemSettings.khmerOrgName}</p>
+          )}
+          <p className="text-xs text-slate-600 mt-1">Faculty & Staff Attendance Report • Period: {selectedMonth}</p>
         </div>
 
         <div className="overflow-x-auto">

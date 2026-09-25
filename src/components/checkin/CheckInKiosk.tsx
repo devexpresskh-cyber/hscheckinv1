@@ -45,8 +45,43 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const [customTimeInput, setCustomTimeInput] = useState<string>('');
   const [useCustomTime, setUseCustomTime] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+  const [deviceCoords, setDeviceCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [gpsMode, setGpsMode] = useState<'simulated' | 'device'>('simulated');
+  const [geoDistance, setGeoDistance] = useState<number | null>(null);
 
-  const systemSettings = StorageService.getSystemSettings();
+  // Subscribe to live settings updates
+  useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setSystemSettings(StorageService.getSystemSettings());
+    });
+    return unsub;
+  }, []);
+
+  // Try fetching browser GPS if supported
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          setDeviceCoords({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude
+          });
+          const check = AttendanceEngine.verifyLocation(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            systemSettings
+          );
+          setGeoDistance(check.distance);
+        },
+        () => {
+          // Fallback to simulated if device location denied
+          setGpsMode('simulated');
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+      );
+    }
+  }, [systemSettings]);
   const teachers = StorageService.getTeachers().filter(t => t.status === 'Active');
   const employees = StorageService.getEmployees().filter(e => e.status === 'Active');
   const attendanceList = StorageService.getAttendance();
@@ -229,10 +264,18 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
     setIsSubmitting(true);
 
-    // Check GPS Geofence boundary simulation
-    const isOnCampus = gpsSimulated === 'on_campus';
-    const lat = isOnCampus ? systemSettings.defaultLocationLatitude : systemSettings.defaultLocationLatitude + 0.05;
-    const lng = isOnCampus ? systemSettings.defaultLocationLongitude : systemSettings.defaultLocationLongitude + 0.05;
+    // Determine GPS coordinates (real device or simulated)
+    let lat: number;
+    let lng: number;
+
+    if (gpsMode === 'device' && deviceCoords) {
+      lat = deviceCoords.latitude;
+      lng = deviceCoords.longitude;
+    } else {
+      const isOnCampus = gpsSimulated === 'on_campus';
+      lat = isOnCampus ? systemSettings.defaultLocationLatitude : systemSettings.defaultLocationLatitude + 0.05;
+      lng = isOnCampus ? systemSettings.defaultLocationLongitude : systemSettings.defaultLocationLongitude + 0.05;
+    }
 
     setTimeout(() => {
       const result = AttendanceEngine.processCheckIn({
@@ -793,40 +836,73 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               
-              {/* Geofence Simulator Toggle */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-2">
-                <div>
-                  <span className="font-bold text-slate-800 block">
-                    {isKhmer ? 'ទីតាំងបរិវេណសាលា' : 'GPS Campus Boundary'}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    {isKhmer
-                      ? `កាំ ${systemSettings.geofenceRadiusMeters}ម ជុំវិញសាលា`
-                      : `Radius: ${systemSettings.geofenceRadiusMeters}m from Campus`}
-                  </span>
+              {/* Geofence Simulator & Device Location Toggle */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-between gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      {isKhmer ? 'ទីតាំងបរិវេណសាលា' : 'GPS Campus Boundary'}
+                      {systemSettings.enforceGeofence ? (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-700 border border-rose-200">
+                          {isKhmer ? 'កំពុងអនុវត្តកំហិត' : 'ENFORCED'}
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-slate-600">
+                          {isKhmer ? 'មិនកំហិត (Off)' : 'OFF'}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {isKhmer
+                        ? `កាំ ${systemSettings.geofenceRadiusMeters}ម ជុំវិញសាលា`
+                        : `Radius: ${systemSettings.geofenceRadiusMeters}m from Campus`}
+                      {deviceCoords && geoDistance !== null && (
+                        <span className="block text-[9px] text-indigo-600 font-mono">
+                          Device GPS: {geoDistance}m away ({geoDistance <= systemSettings.geofenceRadiusMeters ? 'Inside' : 'Outside'})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {deviceCoords && (
+                    <button
+                      type="button"
+                      onClick={() => setGpsMode(gpsMode === 'device' ? 'simulated' : 'device')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors shrink-0 ${
+                        gpsMode === 'device'
+                          ? 'bg-indigo-600 text-white border-indigo-700'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {gpsMode === 'device' ? 'Using Device GPS' : 'Use Real GPS'}
+                    </button>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shrink-0">
-                  <button
-                    onClick={() => setGpsSimulated('on_campus')}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
-                      gpsSimulated === 'on_campus'
-                        ? 'bg-emerald-600 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {isKhmer ? 'ក្នុងសាលា' : 'On-Campus'}
-                  </button>
-                  <button
-                    onClick={() => setGpsSimulated('off_campus')}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
-                      gpsSimulated === 'off_campus'
-                        ? 'bg-rose-600 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {isKhmer ? 'ក្រៅសាលា' : 'Outside'}
-                  </button>
-                </div>
+
+                {gpsMode === 'simulated' && (
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 self-end">
+                    <button
+                      onClick={() => setGpsSimulated('on_campus')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                        gpsSimulated === 'on_campus'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isKhmer ? 'ក្នុងសាលា' : 'On-Campus'}
+                    </button>
+                    <button
+                      onClick={() => setGpsSimulated('off_campus')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                        gpsSimulated === 'off_campus'
+                          ? 'bg-rose-600 text-white'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isKhmer ? 'ក្រៅសាលា' : 'Outside'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Time Override Simulator */}

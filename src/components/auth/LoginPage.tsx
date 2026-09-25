@@ -242,7 +242,7 @@ export const LoginPage: React.FC = () => {
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
               <span>{isKhmer ? 'ប្រព័ន្ធការពារទិន្នន័យស្របតាមស្តង់ដារ' : '256-bit SSL Protected MIS'}</span>
             </span>
-            <span>Phnom Penh Academy • Academic Year 2026-2027</span>
+            <span>{systemSettings.organizationName} • Academic Year 2026-2027</span>
           </div>
 
         </div>
