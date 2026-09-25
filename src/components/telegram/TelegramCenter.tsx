@@ -18,12 +18,28 @@ import {
   Sparkles,
   ExternalLink,
   ShieldCheck,
+  ShieldAlert,
   MessageSquare
 } from 'lucide-react';
 
 export const TelegramCenter: React.FC = () => {
   const { currentUser, hasPermission } = useAuth();
   const { showToast } = useNotification();
+
+  // Guard: teacher and employee cannot access telegram settings
+  if (currentUser.role === 'teacher' || currentUser.role === 'employee' || !hasPermission('telegram.view')) {
+    return (
+      <div className="bg-white rounded-3xl border border-rose-200 p-8 sm:p-12 text-center max-w-lg mx-auto mt-12 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h3 className="text-lg font-black text-slate-900">Access Restricted</h3>
+        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+          Faculty instructors and support employees are not authorized to view or configure Telegram Bot settings or notification dispatch credentials.
+        </p>
+      </div>
+    );
+  }
 
   const [activeSubTab, setActiveSubTab] = useState<'config' | 'simulator' | 'logs'>('config');
   const [settings, setSettings] = useState<TelegramSettings>(StorageService.getTelegramSettings());

@@ -15,20 +15,34 @@
     <script>
       (function() {
         try {
-          var desc = Object.getOwnPropertyDescriptor(window, 'fetch') || 
-                     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window) || {}, 'fetch');
-          if (desc && !desc.writable && !desc.set) {
-            var currentFetch = window.fetch;
+          var _currentFetch = window.fetch;
+          var proto = window;
+          while (proto) {
+            var d = Object.getOwnPropertyDescriptor(proto, 'fetch');
+            if (d) {
+              if (!d.set || !d.writable) {
+                try {
+                  Object.defineProperty(proto, 'fetch', {
+                    get: function() { return _currentFetch; },
+                    set: function(fn) { _currentFetch = fn; },
+                    configurable: true,
+                    enumerable: true
+                  });
+                } catch (e1) {}
+              }
+              break;
+            }
+            proto = Object.getPrototypeOf(proto);
+          }
+          try {
             Object.defineProperty(window, 'fetch', {
-              get: function() { return currentFetch; },
-              set: function(val) { currentFetch = val; },
+              get: function() { return _currentFetch; },
+              set: function(fn) { _currentFetch = fn; },
               configurable: true,
               enumerable: true
             });
-          }
-        } catch (e) {
-          console.warn('Fetch descriptor patch skipped:', e);
-        }
+          } catch (e2) {}
+        } catch (err) {}
       })();
     </script>
   </head>

@@ -5,7 +5,9 @@ import {
   Department,
   WorkLocation,
   TelegramSettings,
-  SystemSettings
+  SystemSettings,
+  Teacher,
+  Schedule
 } from '../types/index.ts';
 
 export const DEFAULT_ROLES: RoleDefinition[] = [
@@ -116,6 +118,160 @@ export const DEFAULT_USERS: UserAccount[] = [
     status: 'Active',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
     createdAt: new Date().toISOString()
+  },
+  {
+    id: 'usr-tch-001',
+    email: 'sok.chenda@edutrack.edu.kh',
+    fullName: 'Sok Chenda',
+    khmerName: 'សុខ ចិន្តា',
+    role: 'teacher',
+    department: 'Academic & Curriculum',
+    personId: 'tch-001',
+    status: 'Active',
+    pinCode: '1234',
+    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'usr-tch-002',
+    email: 'chann.borey@edutrack.edu.kh',
+    fullName: 'Chann Borey',
+    khmerName: 'ចាន់ បូរី',
+    role: 'teacher',
+    department: 'Academic & Curriculum',
+    personId: 'tch-002',
+    status: 'Active',
+    pinCode: '1234',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'usr-tch-003',
+    email: 'keo.piseth@edutrack.edu.kh',
+    fullName: 'Keo Piseth',
+    khmerName: 'កែវ ពិសិដ្ឋ',
+    role: 'teacher',
+    department: 'Academic & Curriculum',
+    personId: 'tch-003',
+    status: 'Active',
+    pinCode: '1234',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
+    createdAt: new Date().toISOString()
+  }
+];
+
+export const DEFAULT_TEACHERS: Teacher[] = [
+  {
+    id: 'tch-001',
+    teacherId: 'TCH-2026-001',
+    employeeId: 'EMP-101',
+    fullName: 'Sok Chenda',
+    khmerName: 'សុខ ចិន្តា',
+    gender: 'Female',
+    department: 'Academic & Curriculum',
+    position: 'Senior Mathematics Lecturer',
+    subject: 'Advanced Mathematics',
+    phone: '+855 12 345 678',
+    email: 'sok.chenda@edutrack.edu.kh',
+    telegramUsername: '@sok_chenda',
+    employmentType: 'Full-time',
+    status: 'Active',
+    joinDate: '2022-01-15',
+    assignedLocation: 'Main Campus - Central Building',
+    photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
+    assignedScheduleId: 'sch-standard-fulltime',
+    hourlyRate: 25.00,
+    currency: 'USD',
+    pinCode: '1234'
+  },
+  {
+    id: 'tch-002',
+    teacherId: 'TCH-2026-002',
+    employeeId: 'EMP-102',
+    fullName: 'Chann Borey',
+    khmerName: 'ចាន់ បូរី',
+    gender: 'Male',
+    department: 'Academic & Curriculum',
+    position: 'Associate Professor',
+    subject: 'Khmer Literature & History',
+    phone: '+855 11 987 654',
+    email: 'chann.borey@edutrack.edu.kh',
+    telegramUsername: '@chann_borey',
+    employmentType: 'Full-time',
+    status: 'Active',
+    joinDate: '2021-08-01',
+    assignedLocation: 'Main Campus - Central Building',
+    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
+    assignedScheduleId: 'sch-standard-fulltime',
+    hourlyRate: 22.00,
+    currency: 'USD',
+    pinCode: '1234'
+  },
+  {
+    id: 'tch-003',
+    teacherId: 'TCH-2026-003',
+    employeeId: 'EMP-103',
+    fullName: 'Keo Piseth',
+    khmerName: 'កែវ ពិសិដ្ឋ',
+    gender: 'Male',
+    department: 'Academic & Curriculum',
+    position: 'Lecturer & Lab Instructor',
+    subject: 'Computer Science & IT',
+    phone: '+855 92 888 777',
+    email: 'keo.piseth@edutrack.edu.kh',
+    telegramUsername: '@keo_piseth',
+    employmentType: 'Full-time',
+    status: 'Active',
+    joinDate: '2023-03-10',
+    assignedLocation: 'Main Campus - Central Building',
+    photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
+    assignedScheduleId: 'sch-standard-fulltime',
+    hourlyRate: 28.00,
+    currency: 'USD',
+    pinCode: '1234'
+  }
+];
+
+export const DEFAULT_SCHEDULES: Schedule[] = [
+  {
+    id: 'sch-standard-fulltime',
+    name: 'Standard Morning Shift',
+    khmerName: 'វេនព្រឹកស្តង់ដារ',
+    department: 'Academic & Curriculum',
+    targetType: 'Standard',
+    daysOfWeek: [1, 2, 3, 4, 5],
+    startTime: '07:30',
+    endTime: '11:30',
+    gracePeriodMinutes: 15,
+    absenceDetectionMinutes: 60,
+    requiredCheckIn: true,
+    requiredCheckOut: true,
+    location: 'Main Campus - Central Building',
+    applicableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    workLocation: 'Main Campus - Central Building',
+    isOvernight: false,
+    color: '#4F46E5',
+    isActive: true
+  },
+  {
+    id: 'sch-afternoon-fulltime',
+    name: 'Standard Afternoon Shift',
+    khmerName: 'វេនរសៀលស្តង់ដារ',
+    department: 'Academic & Curriculum',
+    targetType: 'Standard',
+    daysOfWeek: [1, 2, 3, 4, 5],
+    startTime: '13:00',
+    endTime: '17:00',
+    gracePeriodMinutes: 15,
+    absenceDetectionMinutes: 60,
+    requiredCheckIn: true,
+    requiredCheckOut: true,
+    location: 'Main Campus - Central Building',
+    applicableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    workLocation: 'Main Campus - Central Building',
+    isOvernight: false,
+    color: '#0ea5e9',
+    isActive: true
   }
 ];
 
@@ -307,5 +463,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   defaultLocationLongitude: 104.9282,
   geofenceRadiusMeters: 500,
   enforceGeofence: false,
-  allowSelfCorrection: true
+  allowSelfCorrection: true,
+  requirePinForKiosk: true,
+  allowSwitchStaffInKiosk: true,
+  requireBarcodeScanOnly: false
 };

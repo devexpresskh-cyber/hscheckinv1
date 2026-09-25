@@ -43,13 +43,25 @@ export const AttendanceList: React.FC = () => {
 
   // Filter daily attendance
   const filteredAttendance = useMemo(() => {
+    const isTeacherOrEmployee = currentUser.role === 'teacher' || currentUser.role === 'employee';
     return attendanceList.filter(record => {
       // Date filter
       if (selectedDate && record.date !== selectedDate) return false;
-      // Supervisor department check
-      if (!canAccessDepartment(record.department)) return false;
-      // Dropdown department
-      if (selectedDept !== 'All' && record.department !== selectedDept) return false;
+
+      // Teacher must only see owned attendance
+      if (isTeacherOrEmployee) {
+        const isOwned =
+          (currentUser.personId && record.personId === currentUser.personId) ||
+          record.personId === currentUser.id ||
+          record.personName.toLowerCase() === currentUser.fullName.toLowerCase();
+        if (!isOwned) return false;
+      } else {
+        // Supervisor department check
+        if (!canAccessDepartment(record.department)) return false;
+        // Dropdown department
+        if (selectedDept !== 'All' && record.department !== selectedDept) return false;
+      }
+
       // Status
       if (selectedStatus !== 'All' && record.status !== selectedStatus) return false;
       // Search
@@ -61,15 +73,24 @@ export const AttendanceList: React.FC = () => {
       }
       return true;
     });
-  }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment]);
+  }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment, currentUser]);
 
   // Filter corrections
   const filteredCorrections = useMemo(() => {
+    const isTeacherOrEmployee = currentUser.role === 'teacher' || currentUser.role === 'employee';
     return corrections.filter(c => {
-      if (!canAccessDepartment(c.department)) return false;
+      if (isTeacherOrEmployee) {
+        const isOwned =
+          (currentUser.personId && c.personId === currentUser.personId) ||
+          c.personId === currentUser.id ||
+          c.personName.toLowerCase() === currentUser.fullName.toLowerCase();
+        if (!isOwned) return false;
+      } else {
+        if (!canAccessDepartment(c.department)) return false;
+      }
       return true;
     });
-  }, [corrections, canAccessDepartment]);
+  }, [corrections, canAccessDepartment, currentUser]);
 
   const pendingCorrectionsCount = filteredCorrections.filter(c => c.status === 'Pending').length;
 
@@ -274,6 +295,28 @@ export const AttendanceList: React.FC = () => {
         </div>
       </div>
 
+      {/* Teacher Owned Attendance Security Banner */}
+      {(currentUser.role === 'teacher' || currentUser.role === 'employee') && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 sm:p-4 bg-indigo-50/90 rounded-2xl border border-indigo-200 text-indigo-950 text-xs">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+            <div>
+              <span className="font-bold">
+                {isKhmer ? 'កំណត់ត្រាវត្តមានផ្ទាល់ខ្លួន៖ ' : 'Owned Attendance History: '}
+              </span>
+              <span className="text-slate-600">
+                {isKhmer
+                  ? `បង្ហាញកំណត់ត្រាវត្តមានផ្ទាល់ខ្លួនរបស់ ${currentUser.fullName} ប៉ុណ្ណោះ។ មិនអនុញ្ញាតឱ្យផ្លាស់ប្តូរ ឬមើលគ្រូដទៃឡើយ។`
+                  : `Showing records for ${currentUser.fullName} only. Viewing or altering other faculty records is strictly disabled.`}
+              </span>
+            </div>
+          </div>
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-200 text-indigo-900 uppercase tracking-wide shrink-0 self-start sm:self-auto">
+            {isKhmer ? 'វត្តមានផ្ទាល់ខ្លួន' : 'Owned Only'}
+          </span>
+        </div>
+      )}
+
       {/* Tab 1: Daily Attendance Roster */}
       {activeTab === 'daily' && (
         <div className="space-y-4">
@@ -305,16 +348,18 @@ export const AttendanceList: React.FC = () => {
                 />
               </div>
 
-              <select
-                value={selectedDept}
-                onChange={e => setSelectedDept(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-hidden"
-              >
-                <option value="All">All Departments</option>
-                {departments.map(d => (
-                  <option key={d.id} value={d.name}>{d.name}</option>
-                ))}
-              </select>
+              {currentUser.role !== 'teacher' && currentUser.role !== 'employee' && (
+                <select
+                  value={selectedDept}
+                  onChange={e => setSelectedDept(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-hidden"
+                >
+                  <option value="All">All Departments</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              )}
 
               <select
                 value={selectedStatus}

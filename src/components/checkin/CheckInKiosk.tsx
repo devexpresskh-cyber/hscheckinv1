@@ -21,19 +21,32 @@ import {
   Info,
   BookOpen,
   GraduationCap,
-  Lock
+  Lock,
+  KeyRound,
+  Scan,
+  ShieldAlert,
+  Delete,
+  Eye,
+  EyeOff,
+  Hash,
+  Check,
+  X
 } from 'lucide-react';
 
 interface CheckInKioskProps {
   isMobileModal?: boolean;
   onCloseMobileModal?: () => void;
+  isPublicKiosk?: boolean;
+  onExitPublicKiosk?: () => void;
 }
 
 export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   isMobileModal = false,
-  onCloseMobileModal
+  onCloseMobileModal,
+  isPublicKiosk = false,
+  onExitPublicKiosk
 }) => {
-  const { currentUser, allUsers } = useAuth();
+  const { currentUser, allUsers, loginWithCredentials, loginWithPin, logout } = useAuth();
   const { showToast } = useNotification();
   const { t, isKhmer } = useLanguage();
 
@@ -49,6 +62,76 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const [deviceCoords, setDeviceCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [gpsMode, setGpsMode] = useState<'simulated' | 'device'>('simulated');
   const [geoDistance, setGeoDistance] = useState<number | null>(null);
+
+  // Kiosk In-Terminal Teacher Login States (When user is not authenticated as a teacher)
+  const [kioskIdentifier, setKioskIdentifier] = useState<string>('');
+  const [kioskPin, setKioskPin] = useState<string>('');
+  const [kioskLoginError, setKioskLoginError] = useState<string | null>(null);
+  const [isKioskLoggingIn, setIsKioskLoggingIn] = useState<boolean>(false);
+
+  // Anti-Proxy Restriction States
+  const [pinModal, setPinModal] = useState<{
+    isOpen: boolean;
+    action: 'checkin' | 'checkout';
+    specificSubjectId?: string;
+  }>({
+    isOpen: false,
+    action: 'checkin'
+  });
+  const [enteredPin, setEnteredPin] = useState<string>('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [showPinDigits, setShowPinDigits] = useState<boolean>(false);
+
+  // Handle in-terminal teacher authentication
+  const handleKioskTeacherLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kioskIdentifier.trim()) return;
+    setIsKioskLoggingIn(true);
+    setKioskLoginError(null);
+    try {
+      const success = kioskPin.trim()
+        ? await loginWithPin(kioskIdentifier.trim(), kioskPin.trim())
+        : await loginWithCredentials(kioskIdentifier.trim());
+      if (success) {
+        showToast(
+          isKhmer
+            ? 'បានផ្ទៀងផ្ទាត់ដោយជោគជ័យ! វត្តមានត្រូវបានចាក់សោរសម្រាប់តែអ្នក។'
+            : 'Authenticated successfully! Terminal locked to your owned profile.',
+          'success'
+        );
+        setKioskIdentifier('');
+        setKioskPin('');
+      } else {
+        setKioskLoginError(
+          isKhmer
+            ? 'រកមិនឃើញគណនីគ្រូ ឬលេខកូដសម្ងាត់ PIN មិនត្រឹមត្រូវ។'
+            : 'Faculty account not found or invalid PIN. Please verify credentials.'
+        );
+      }
+    } catch {
+      setKioskLoginError(
+        isKhmer ? 'មានបញ្ហាក្នុងការផ្ទៀងផ្ទាត់។ សូមព្យាយាមម្តងទៀត។' : 'Authentication failed. Please try again.'
+      );
+    } finally {
+      setIsKioskLoggingIn(false);
+    }
+  };
+
+  const handleQuickTeacherAuth = async (code: string) => {
+    setIsKioskLoggingIn(true);
+    setKioskLoginError(null);
+    try {
+      const success = await loginWithCredentials(code);
+      if (success) {
+        showToast(
+          isKhmer ? `បានចូលគណនីគ្រូ [${code}] ដោយជោគជ័យ!` : `Authenticated as teacher [${code}] successfully!`,
+          'success'
+        );
+      }
+    } finally {
+      setIsKioskLoggingIn(false);
+    }
+  };
 
   // Subscribe to live settings updates
   useEffect(() => {
@@ -86,7 +169,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const employees = StorageService.getEmployees().filter(e => e.status === 'Active');
   const attendanceList = StorageService.getAttendance();
 
-  // Create combined staff list
+  // Create combined staff list with personal security PINs
   const staffList = [
     ...teachers.map(t => ({
       id: t.id,
@@ -97,7 +180,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       dept: t.department,
       scheduleId: t.assignedScheduleId,
       location: t.assignedLocation,
-      photo: t.photoUrl
+      photo: t.photoUrl,
+      pinCode: t.pinCode || '1234',
+      email: t.email
     })),
     ...employees.map(e => ({
       id: e.id,
@@ -108,18 +193,50 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       dept: e.department,
       scheduleId: e.assignedScheduleId,
       location: e.workLocation,
-      photo: e.photoUrl
+      photo: e.photoUrl,
+      pinCode: e.pinCode || '1234',
+      email: e.email
     }))
   ];
 
-  // Set default selected staff
-  useEffect(() => {
+  // Strictly lock attendance to authenticated user's owned profile (No switching allowed)
+  const activeStaff = React.useMemo(() => {
+    if (!currentUser) return null;
+
+    // 1. By linked personId
     if (currentUser.personId) {
-      setSelectedStaffId(currentUser.personId);
-    } else if (staffList.length > 0 && !selectedStaffId) {
-      setSelectedStaffId(staffList[0].id);
+      const byPersonId = staffList.find(
+        s => s.id === currentUser.personId || s.code.toLowerCase() === currentUser.personId?.toLowerCase()
+      );
+      if (byPersonId) return byPersonId;
     }
-  }, [currentUser.personId, staffList.length]);
+
+    // 2. By user email
+    if (currentUser.email) {
+      const byEmail = staffList.find(
+        s => s.email && s.email.toLowerCase() === currentUser.email.toLowerCase()
+      );
+      if (byEmail) return byEmail;
+    }
+
+    // 3. By user full name
+    if (currentUser.fullName) {
+      const byName = staffList.find(
+        s => s.name.toLowerCase() === currentUser.fullName.toLowerCase()
+      );
+      if (byName) return byName;
+    }
+
+    // 4. Do not default to other teachers for admin accounts
+    return null;
+  }, [currentUser, staffList]);
+
+  // Keep selectedStaffId locked to activeStaff.id
+  useEffect(() => {
+    if (activeStaff) {
+      setSelectedStaffId(activeStaff.id);
+    }
+  }, [activeStaff]);
 
   // Live ticking clock
   useEffect(() => {
@@ -147,7 +264,6 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     return () => clearInterval(interval);
   }, [isKhmer]);
 
-  const activeStaff = staffList.find(s => s.id === selectedStaffId) || staffList[0];
   const schedules = StorageService.getSchedules();
   const activeSchedule = schedules.find(s => s.id === activeStaff?.scheduleId) || schedules[0] || {
     id: 'default',
@@ -227,8 +343,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
   const currentRecord = isTeacher ? activeSubjectRecord : generalRecord;
 
-  // Trigger Check-in
-  const handleCheckIn = (specificSubjectId?: string) => {
+  // Actual Check-in Execution
+  const executeCheckIn = (specificSubjectId?: string) => {
     if (!activeStaff) return;
 
     const targetSubject = isTeacher
@@ -311,8 +427,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     }, 350);
   };
 
-  // Trigger Check-out
-  const handleCheckOut = (specificSubjectId?: string) => {
+  // Actual Check-out Execution
+  const executeCheckOut = (specificSubjectId?: string) => {
     if (!activeStaff) return;
     setIsSubmitting(true);
 
@@ -347,6 +463,80 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     }, 350);
   };
 
+  // Trigger Check-in (Checks Anti-Proxy PIN restriction)
+  const handleCheckIn = (specificSubjectId?: string) => {
+    if (!activeStaff) return;
+
+    if (systemSettings.requirePinForKiosk !== false) {
+      setPinError(null);
+      setEnteredPin('');
+      setPinModal({
+        isOpen: true,
+        action: 'checkin',
+        specificSubjectId
+      });
+      return;
+    }
+
+    executeCheckIn(specificSubjectId);
+  };
+
+  // Trigger Check-out (Checks Anti-Proxy PIN restriction)
+  const handleCheckOut = (specificSubjectId?: string) => {
+    if (!activeStaff) return;
+
+    if (systemSettings.requirePinForKiosk !== false) {
+      setPinError(null);
+      setEnteredPin('');
+      setPinModal({
+        isOpen: true,
+        action: 'checkout',
+        specificSubjectId
+      });
+      return;
+    }
+
+    executeCheckOut(specificSubjectId);
+  };
+
+  // Verify PIN submission before executing attendance action
+  const handleVerifyPinAndSubmit = () => {
+    if (!activeStaff) return;
+    const requiredPin = activeStaff.pinCode || '1234';
+
+    if (enteredPin !== requiredPin) {
+      setPinError(
+        isKhmer
+          ? 'លេខកូដសម្ងាត់ PIN មិនត្រឹមត្រូវ! មិនអនុញ្ញាតឱ្យស្កេនជំនួសគ្រូដទៃឡើយ!'
+          : 'Incorrect PIN! You cannot clock in/out for another teacher.'
+      );
+      // Log unauthorized attempt to audit logs
+      StorageService.addAuditLog({
+        userId: currentUser?.id || 'terminal_kiosk',
+        userName: currentUser?.fullName || 'Kiosk Terminal',
+        userRole: currentUser?.role || 'kiosk',
+        action: 'SECURITY_ALERT_PROXY_ATTEMPT',
+        target: `Staff: ${activeStaff.name} [${activeStaff.code}]`,
+        details: `Failed PIN attempt to clock in as ${activeStaff.name} (${activeStaff.code})`,
+        ipAddress: 'Kiosk Terminal'
+      });
+      return;
+    }
+
+    // Success: close modal and perform action
+    const currentAction = pinModal.action;
+    const currentSubId = pinModal.specificSubjectId;
+    setPinModal({ isOpen: false, action: 'checkin' });
+    setEnteredPin('');
+    setPinError(null);
+
+    if (currentAction === 'checkin') {
+      executeCheckIn(currentSubId);
+    } else {
+      executeCheckOut(currentSubId);
+    }
+  };
+
   return (
     <div className={isMobileModal ? 'p-2 sm:p-4 max-w-md mx-auto w-full' : 'space-y-6 max-w-4xl mx-auto w-full'}>
       
@@ -372,13 +562,26 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             </p>
           </div>
 
-          {/* Live Clock Display */}
-          <div className="text-right sm:text-right bg-white/10 px-3.5 py-2 rounded-2xl border border-white/15 self-start sm:self-auto shrink-0">
-            <div className="text-xl sm:text-3xl font-mono font-extrabold tracking-wider text-white">
-              {currentTime || '--:--:--'}
-            </div>
-            <div className="text-[11px] sm:text-xs text-indigo-200 font-medium">
-              {currentDate}
+          {/* Live Clock Display & Exit Kiosk in Public Mode */}
+          <div className="flex items-center gap-3">
+            {isPublicKiosk && onExitPublicKiosk && (
+              <button
+                type="button"
+                onClick={onExitPublicKiosk}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-300" />
+                <span>{isKhmer ? 'ចាកចេញ / ចូលប្រព័ន្ធ' : 'Portal Login'}</span>
+              </button>
+            )}
+
+            <div className="text-right sm:text-right bg-white/10 px-3.5 py-2 rounded-2xl border border-white/15 self-start sm:self-auto shrink-0">
+              <div className="text-xl sm:text-3xl font-mono font-extrabold tracking-wider text-white">
+                {currentTime || '--:--:--'}
+              </div>
+              <div className="text-[11px] sm:text-xs text-indigo-200 font-medium">
+                {currentDate}
+              </div>
             </div>
           </div>
         </div>
@@ -386,28 +589,142 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         {/* Terminal Content Body */}
         <div className="p-4 sm:p-7 space-y-5 sm:space-y-6">
 
-          {/* Staff Switcher (For Multi-staff Terminal Testing) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-indigo-600 shrink-0" />
-              <span className="text-xs font-bold text-slate-700">
-                {isKhmer ? 'ស្កេនវត្តមានជា៖' : 'Clocking in as:'}
-              </span>
+          {/* Strict Owned Attendance Banner (No Switching Allowed) */}
+          {activeStaff ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-gradient-to-r from-indigo-50/95 via-slate-50 to-indigo-50/95 rounded-2xl border-2 border-indigo-200/90 shadow-xs">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/25">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-black text-slate-900">
+                      {isKhmer ? 'កត់ត្រាវត្តមានផ្ទាល់ខ្លួន (ចាក់សោរសម្រាប់តែអ្នក)' : 'Locked to Your Authenticated Account'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-300 uppercase tracking-wide">
+                      {isKhmer ? 'វត្តមានផ្ទាល់ខ្លួន' : 'Owned Only'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-medium mt-0.5 leading-relaxed">
+                    {isKhmer
+                      ? 'ប្រព័ន្ធត្រូវបានចាក់សោរសម្រាប់តែគណនីរបស់អ្នក។ មិនអនុញ្ញាតឱ្យផ្លាស់ប្តូរ ឬស្កេនជំនួសគ្រូដទៃឡើយ។'
+                      : 'Anti-proxy policy active: Switching staff is disabled. All attendance is recorded under your personal identity.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-indigo-200 shadow-2xs self-start sm:self-auto shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-mono text-xs font-black text-indigo-950">
+                  [{activeStaff.code}] {activeStaff.name}
+                </span>
+              </div>
             </div>
-            <div className="flex-1 max-w-md w-full">
-              <select
-                value={selectedStaffId}
-                onChange={e => setSelectedStaffId(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-              >
-                {staffList.map(s => (
-                  <option key={s.id} value={s.id}>
-                    [{s.code}] {s.name} {s.khmerName ? `(${s.khmerName})` : ''} - {s.dept}
-                  </option>
-                ))}
-              </select>
+          ) : (
+            <div className="bg-gradient-to-br from-indigo-50/90 via-white to-slate-50 rounded-3xl p-6 sm:p-8 border-2 border-indigo-200/90 shadow-sm space-y-6">
+              <div className="text-center max-w-md mx-auto space-y-2">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-600/30">
+                  <Lock className="w-7 h-7" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                  {isKhmer ? 'ចូលគណនីគ្រូដើម្បីកត់ត្រាវត្តមានផ្ទាល់ខ្លួន' : 'Teacher Login for Owned Attendance'}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  {isKhmer
+                    ? 'មិនអនុញ្ញាតឱ្យផ្លាស់ប្តូរ ឬស្កេនជំនួសគ្រូដទៃឡើយ។ លោកគ្រូ-អ្នកគ្រូ ត្រូវតែ Login ចូលគណនីផ្ទាល់ខ្លួនជាមុនសិន ដើម្បីកត់ត្រាវត្តមាន។'
+                    : 'Anti-proxy policy active: Switching staff is disabled. Each teacher must log in to their personal account to record owned attendance.'}
+                </p>
+                {currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'admin_hr') && (
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-semibold mt-1">
+                    <span>Admin: {currentUser.fullName}</span>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-indigo-700 font-bold">Proxy check-in disabled</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Login Form */}
+              <form onSubmit={handleKioskTeacherLogin} className="max-w-md mx-auto space-y-4">
+                {kioskLoginError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{kioskLoginError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKhmer ? 'លេខសម្គាល់គ្រូ (Teacher ID) ឬអ៊ីមែល' : 'Teacher ID or Email'}
+                  </label>
+                  <input
+                    type="text"
+                    value={kioskIdentifier}
+                    onChange={e => setKioskIdentifier(e.target.value)}
+                    placeholder="TCH-2026-001 or sok.chenda@edutrack.edu.kh"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKhmer ? 'លេខសម្ងាត់ផ្ទាល់ខ្លួន (PIN)' : 'Security PIN (Default: 1234)'}
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    value={kioskPin}
+                    onChange={e => setKioskPin(e.target.value)}
+                    placeholder="••••"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-center tracking-widest text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isKioskLoggingIn || !kioskIdentifier.trim()}
+                  className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-md shadow-indigo-600/25 transition-all disabled:opacity-50"
+                >
+                  {isKioskLoggingIn ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
+                  ) : (
+                    <span>{isKhmer ? 'ផ្ទៀងផ្ទាត់ & បើកវត្តមានផ្ទាល់ខ្លួន' : 'Authenticate & Record Owned Attendance'}</span>
+                  )}
+                </button>
+              </form>
+
+              {/* One-click Faculty Test Sign-in */}
+              <div className="pt-4 border-t border-slate-200 max-w-md mx-auto">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2 text-center">
+                  {isKhmer ? 'ចូលគណនីគ្រូផ្ទាល់ខ្លួន (One-Click Testing)' : 'One-Click Faculty Authentication:'}
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickTeacherAuth('TCH-2026-001')}
+                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-left"
+                  >
+                    <div className="font-bold text-slate-800 text-xs truncate">Sok Chenda</div>
+                    <div className="font-mono text-[10px] text-slate-400">TCH-2026-001</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickTeacherAuth('TCH-2026-002')}
+                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
+                  >
+                    <div className="font-bold text-slate-800 text-xs truncate">Chann Borey</div>
+                    <div className="font-mono text-[10px] text-slate-400">TCH-2026-002</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickTeacherAuth('TCH-2026-003')}
+                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
+                  >
+                    <div className="font-bold text-slate-800 text-xs truncate">Keo Piseth</div>
+                    <div className="font-mono text-[10px] text-slate-400">TCH-2026-003</div>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Active Staff Profile & Today's Schedule Card */}
           {activeStaff && (
@@ -670,8 +987,10 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             </div>
           )}
 
-          {/* Current Session Attendance Status Banner */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Current Session Attendance Status Banner & Action Buttons */}
+          {activeStaff && (
+            <>
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-xs shrink-0">
                 {isTeacher ? <GraduationCap className="w-5 h-5 text-indigo-600" /> : <Calendar className="w-5 h-5 text-indigo-600" />}
@@ -820,6 +1139,34 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
           </div>
 
+          {/* Active Session Footer: Sign out / Switch for next teacher */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-slate-800">
+                  {isKhmer ? `កំពុងស្ថិតក្នុងគណនីគ្រូ ${activeStaff.name} [${activeStaff.code}]` : `Authenticated: ${activeStaff.name} [${activeStaff.code}]`}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {isKhmer ? 'វត្តមានផ្ទាល់ខ្លួនប៉ុណ្ណោះ។ មិនអនុញ្ញាតឱ្យផ្លាស់ប្តូរ ឬស្កេនជំនួសគ្រូដទៃឡើយ។' : 'Owned attendance only. Switching staff on this terminal is disabled.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                showToast(isKhmer ? 'បានចាកចេញពីប្រព័ន្ធ។ គ្រូបន្ទាប់អាច Login បាន។' : 'Signed out successfully. Next teacher may sign in.', 'info');
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 font-bold text-xs border border-rose-200 shadow-2xs hover:border-rose-300 transition-all self-start sm:self-auto shrink-0"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>{isKhmer ? 'ចាកចេញ / គ្រូបន្ទាប់ចូល (Sign Out)' : 'Sign Out / Next Teacher'}</span>
+            </button>
+          </div>
+        </>
+      )}
+
           {/* Test & Simulation Controls Drawer */}
           <div className="pt-4 border-t border-slate-200 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
@@ -946,6 +1293,222 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         </div>
 
       </div>
+
+      {/* Anti-Proxy Personal PIN Verification Modal */}
+      {pinModal.isOpen && activeStaff && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in-50">
+          <div className="w-full max-w-sm sm:max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-amber-600 via-indigo-600 to-indigo-700 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black tracking-tight leading-tight">
+                    {isKhmer ? 'ផ្ទៀងផ្ទាត់លេខកូដសម្ងាត់ PIN' : 'Personal PIN Verification'}
+                  </h3>
+                  <p className="text-[10px] sm:text-[11px] text-amber-100/90 font-medium">
+                    {isKhmer ? 'ប្រព័ន្ធការពារការស្កេនជំនួសគ្រូដទៃ' : 'Anti-Proxy Attendance Protection'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPinModal({ isOpen: false, action: 'checkin' });
+                  setEnteredPin('');
+                  setPinError(null);
+                }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 space-y-4">
+              
+              {/* Staff Target Card */}
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                <img
+                  src={activeStaff.photo}
+                  alt={activeStaff.name}
+                  className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-200 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-black text-slate-900 truncate">
+                      {isKhmer && activeStaff.khmerName ? activeStaff.khmerName : activeStaff.name}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${
+                      pinModal.action === 'checkin' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {pinModal.action === 'checkin'
+                        ? (isKhmer ? 'ស្កេនចូល' : 'CLOCK IN')
+                        : (isKhmer ? 'ស្កេនចេញ' : 'CLOCK OUT')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                    ID: {activeStaff.code} • {activeStaff.dept}
+                  </p>
+                </div>
+              </div>
+
+              {/* Instruction */}
+              <p className="text-xs text-slate-600 text-center font-medium">
+                {isKhmer
+                  ? `សូមបញ្ចូលលេខកូដ PIN ផ្ទាល់ខ្លួន ៤ ខ្ទង់ របស់លោកគ្រូ/អ្នកគ្រូ ដើម្បីបញ្ជាក់វត្តមាន៖`
+                  : `Please enter your confidential 4-digit PIN to confirm your attendance:`}
+              </p>
+
+              {/* PIN Display (Circles / Digits) */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center justify-center gap-3 py-2">
+                  {[0, 1, 2, 3].map(idx => {
+                    const hasChar = enteredPin.length > idx;
+                    return (
+                      <div
+                        key={idx}
+                        className={`w-12 h-12 rounded-2xl border-2 flex items-center justify-center text-lg font-black transition-all ${
+                          hasChar
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-900 shadow-sm scale-105'
+                            : 'border-slate-300 bg-slate-50 text-transparent'
+                        }`}
+                      >
+                        {hasChar ? (showPinDigits ? enteredPin[idx] : '●') : ''}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Show Digits Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowPinDigits(!showPinDigits)}
+                  className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-800 font-semibold"
+                >
+                  {showPinDigits ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>{showPinDigits ? (isKhmer ? 'លាក់លេខកូដ' : 'Hide Digits') : (isKhmer ? 'បង្ហាញលេខកូដ' : 'Show Digits')}</span>
+                </button>
+              </div>
+
+              {/* Error Message */}
+              {pinError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs font-bold flex items-center gap-2 animate-in shake">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{pinError}</span>
+                </div>
+              )}
+
+              {/* Invisible input for physical keyboard entry */}
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  handleVerifyPinAndSubmit();
+                }}
+              >
+                <input
+                  type="password"
+                  autoFocus
+                  maxLength={6}
+                  value={enteredPin}
+                  onChange={e => {
+                    setEnteredPin(e.target.value.replace(/\D/g, '').slice(0, 6));
+                    if (pinError) setPinError(null);
+                  }}
+                  className="sr-only"
+                />
+              </form>
+
+              {/* Touchscreen Numpad */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-xs mx-auto pt-1">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => {
+                      if (enteredPin.length < 6) {
+                        setEnteredPin(prev => prev + num);
+                        if (pinError) setPinError(null);
+                      }
+                    }}
+                    className="h-12 rounded-2xl bg-slate-100 hover:bg-indigo-50 hover:border-indigo-300 text-slate-800 hover:text-indigo-900 border border-slate-200 font-mono font-black text-lg transition-all active:scale-95 shadow-2xs"
+                  >
+                    {num}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEnteredPin('');
+                    if (pinError) setPinError(null);
+                  }}
+                  className="h-12 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 font-bold text-xs transition-all active:scale-95"
+                >
+                  {isKhmer ? 'លុប' : 'Clear'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (enteredPin.length < 6) {
+                      setEnteredPin(prev => prev + '0');
+                      if (pinError) setPinError(null);
+                    }
+                  }}
+                  className="h-12 rounded-2xl bg-slate-100 hover:bg-indigo-50 hover:border-indigo-300 text-slate-800 hover:text-indigo-900 border border-slate-200 font-mono font-black text-lg transition-all active:scale-95 shadow-2xs"
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEnteredPin(prev => prev.slice(0, -1));
+                    if (pinError) setPinError(null);
+                  }}
+                  className="h-12 rounded-2xl bg-slate-100 hover:bg-rose-50 hover:border-rose-300 text-slate-600 hover:text-rose-700 border border-slate-200 font-bold text-xs flex items-center justify-center transition-all active:scale-95"
+                >
+                  <Delete className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinModal({ isOpen: false, action: 'checkin' });
+                    setEnteredPin('');
+                    setPinError(null);
+                  }}
+                  className="flex-1 py-3 rounded-2xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  {isKhmer ? 'បោះបង់' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  disabled={enteredPin.length < 4}
+                  onClick={handleVerifyPinAndSubmit}
+                  className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{isKhmer ? 'បញ្ជាក់វត្តមាន' : 'Verify & Clock In'}</span>
+                </button>
+              </div>
+
+              {/* Default PIN note */}
+              <p className="text-[10px] text-slate-400 text-center">
+                {isKhmer
+                  ? 'លេខកូដ PIN លំនាំដើម៖ 1234 (អាចកែប្រែក្នុងព័ត៌មានគ្រូ)'
+                  : 'Default PIN is 1234 (configurable in Teacher Management profile)'}
+              </p>
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

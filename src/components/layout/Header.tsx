@@ -13,6 +13,7 @@ import {
   Building2,
   Menu,
   Languages,
+  BookOpen,
   LogOut
 } from 'lucide-react';
 
@@ -21,13 +22,15 @@ interface HeaderProps {
   isMobileKioskOpen: boolean;
   onOpenTelegram: () => void;
   onToggleMobileMenu?: () => void;
+  onOpenManual?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onToggleMobileKiosk,
   isMobileKioskOpen,
   onOpenTelegram,
-  onToggleMobileMenu
+  onToggleMobileMenu,
+  onOpenManual
 }) => {
   const { currentUser, currentRole, hasPermission, logout } = useAuth();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, showToast } = useNotification();
@@ -137,6 +140,18 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right: Actions, Language Switcher, Scanner, Notifications, Role Switcher */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           
+          {/* User Manual quick button */}
+          {onOpenManual && (
+            <button
+              onClick={onOpenManual}
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 transition-colors"
+              title={isKhmer ? 'សៀវភៅណែនាំការប្រើប្រាស់ប្រព័ន្ធ (Khmer/English)' : 'System User Manual (Khmer/English)'}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden xl:inline">{isKhmer ? 'សៀវភៅណែនាំ' : 'Manual'}</span>
+            </button>
+          )}
+
           {/* Language Switcher Pill Button */}
           <button
             onClick={toggleLanguage}
@@ -176,16 +191,18 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Telegram Status Badge */}
-          <button
-            onClick={onOpenTelegram}
-            className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shrink-0"
-            title={isKhmer ? 'ការជូនដំណឹងតេឡេក្រាម' : 'Telegram Alerts configured and active'}
-          >
-            <div className="w-2 h-2 rounded-full bg-sky-500 animate-ping shrink-0" />
-            <span className="hidden md:inline">{t('header.telegram', 'Telegram')}:</span>
-            <span className="font-semibold">{telegramSettings.isEnabled ? t('header.active', 'Active') : t('header.muted', 'Muted')}</span>
-          </button>
+          {/* Telegram Status Badge (Restricted from teachers and employees) */}
+          {currentUser.role !== 'teacher' && currentUser.role !== 'employee' && hasPermission('telegram.view') && (
+            <button
+              onClick={onOpenTelegram}
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shrink-0"
+              title={isKhmer ? 'ការជូនដំណឹងតេឡេក្រាម' : 'Telegram Alerts configured and active'}
+            >
+              <div className="w-2 h-2 rounded-full bg-sky-500 animate-ping shrink-0" />
+              <span className="hidden md:inline">{t('header.telegram', 'Telegram')}:</span>
+              <span className="font-semibold">{telegramSettings.isEnabled ? t('header.active', 'Active') : t('header.muted', 'Muted')}</span>
+            </button>
+          )}
 
           {/* Notification Bell */}
           <div className="relative shrink-0">
@@ -310,6 +327,22 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Quick User Manual Link */}
+                {onOpenManual && (
+                  <div className="pb-1">
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onOpenManual();
+                      }}
+                      className="w-full flex items-center gap-2 py-2 px-3 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 transition-colors"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span>{isKhmer ? 'សៀវភៅណែនាំប្រព័ន្ធ (User Manual)' : 'System User Manual (Khmer/EN)'}</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Logout Button */}
                 <div className="pt-1">

@@ -25,6 +25,7 @@ import {
   Clock,
   Eye,
   X,
+  KeyRound,
   FileSpreadsheet
 } from 'lucide-react';
 
@@ -335,9 +336,18 @@ export const TeacherManagement: React.FC = () => {
                         <span className="text-[11px] text-indigo-700 font-semibold block">
                           {teacher.subject}
                         </span>
-                        <span className="inline-block mt-0.5 text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
-                          {teacher.currency === 'KHR' ? '៛' : '$'}{(teacher.hourlyRate ?? 20).toFixed(2)}/hr
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                          <span className="inline-block text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
+                            {teacher.currency === 'KHR' ? '៛' : '$'}{(teacher.hourlyRate ?? 20).toFixed(2)}/hr
+                          </span>
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200"
+                            title="Teacher Personal PIN for Fast PIN Login"
+                          >
+                            <KeyRound className="w-2.5 h-2.5 text-amber-600" />
+                            <span>PIN: {teacher.pinCode || '1234'}</span>
+                          </span>
+                        </div>
                       </td>
 
                       {/* Department & Position */}

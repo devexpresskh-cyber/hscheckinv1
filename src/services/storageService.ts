@@ -21,6 +21,8 @@ import {
 import {
   DEFAULT_ROLES,
   DEFAULT_USERS,
+  DEFAULT_TEACHERS,
+  DEFAULT_SCHEDULES,
   DEFAULT_DEPARTMENTS,
   DEFAULT_LOCATIONS,
   DEFAULT_TIMETABLE_PERIODS,
@@ -96,9 +98,9 @@ function setStored<T>(key: string, value: T): void {
 let cache = {
   roles: getStored<RoleDefinition[]>(STORAGE_KEYS.ROLES, DEFAULT_ROLES),
   users: getStored<UserAccount[]>(STORAGE_KEYS.USERS, DEFAULT_USERS),
-  teachers: getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, []),
+  teachers: getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, DEFAULT_TEACHERS),
   employees: getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, []),
-  schedules: getStored<Schedule[]>(STORAGE_KEYS.SCHEDULES, []),
+  schedules: getStored<Schedule[]>(STORAGE_KEYS.SCHEDULES, DEFAULT_SCHEDULES),
   periods: getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, DEFAULT_TIMETABLE_PERIODS),
   subjectSchedules: getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, []),
   attendance: getStored<AttendanceRecord[]>(STORAGE_KEYS.ATTENDANCE, []),
@@ -125,7 +127,18 @@ function initFirestoreSync() {
   // 1. Roles
   onSnapshot(collection(db, 'roles'), snapshot => {
     if (!snapshot.empty) {
-      cache.roles = snapshot.docs.map(d => d.data() as RoleDefinition);
+      cache.roles = snapshot.docs.map(d => {
+        const role = d.data() as RoleDefinition;
+        if (role.code === 'teacher' || role.code === 'employee') {
+          return {
+            ...role,
+            permissions: role.permissions.filter(
+              p => !['telegram.view', 'telegram.configure', 'settings.manage'].includes(p)
+            )
+          };
+        }
+        return role;
+      });
       setStored(STORAGE_KEYS.ROLES, cache.roles);
       notifyListeners();
     } else {
@@ -156,9 +169,17 @@ function initFirestoreSync() {
 
   // 3. Teachers
   onSnapshot(collection(db, 'teachers'), snapshot => {
-    cache.teachers = snapshot.docs.map(d => d.data() as Teacher);
-    setStored(STORAGE_KEYS.TEACHERS, cache.teachers);
-    notifyListeners();
+    if (!snapshot.empty) {
+      cache.teachers = snapshot.docs.map(d => d.data() as Teacher);
+      setStored(STORAGE_KEYS.TEACHERS, cache.teachers);
+      notifyListeners();
+    } else {
+      DEFAULT_TEACHERS.forEach(t => {
+        setDoc(doc(db, 'teachers', t.id), t).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `teachers/${t.id}`)
+        );
+      });
+    }
   }, err => handleFirestoreError(err, OperationType.GET, 'teachers'));
 
   // 4. Employees
@@ -170,9 +191,17 @@ function initFirestoreSync() {
 
   // 5. Schedules
   onSnapshot(collection(db, 'schedules'), snapshot => {
-    cache.schedules = snapshot.docs.map(d => d.data() as Schedule);
-    setStored(STORAGE_KEYS.SCHEDULES, cache.schedules);
-    notifyListeners();
+    if (!snapshot.empty) {
+      cache.schedules = snapshot.docs.map(d => d.data() as Schedule);
+      setStored(STORAGE_KEYS.SCHEDULES, cache.schedules);
+      notifyListeners();
+    } else {
+      DEFAULT_SCHEDULES.forEach(s => {
+        setDoc(doc(db, 'schedules', s.id), s).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `schedules/${s.id}`)
+        );
+      });
+    }
   }, err => handleFirestoreError(err, OperationType.GET, 'schedules'));
 
   // 6. Timetable Periods
@@ -331,10 +360,21 @@ export const StorageService = {
     return cache.roles;
   },
   saveRoles(roles: RoleDefinition[]) {
-    cache.roles = roles;
-    setStored(STORAGE_KEYS.ROLES, roles);
+    const sanitized = roles.map(r => {
+      if (r.code === 'teacher' || r.code === 'employee') {
+        return {
+          ...r,
+          permissions: r.permissions.filter(
+            p => !['telegram.view', 'telegram.configure', 'settings.manage'].includes(p)
+          )
+        };
+      }
+      return r;
+    });
+    cache.roles = sanitized;
+    setStored(STORAGE_KEYS.ROLES, sanitized);
     notifyListeners();
-    roles.forEach(r => {
+    sanitized.forEach(r => {
       setDoc(doc(db, 'roles', r.id), r).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `roles/${r.id}`)
       );
@@ -374,6 +414,33 @@ export const StorageService = {
       setDoc(doc(db, 'users', id), updated, { merge: true }).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `users/${id}`)
       );
+    }
+  },
+  deleteUser(id: string) {
+    const list = cache.users.filter(u => u.id !== id);
+    cache.users = list;
+    setStored(STORAGE_KEYS.USERS, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'users', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `users/${id}`)
+    );
+  },
+  deleteUsersBatch(ids: string[]) {
+    const idSet = new Set(ids);
+    const list = cache.users.filter(u => !idSet.has(u.id));
+    cache.users = list;
+    setStored(STORAGE_KEYS.USERS, list);
+    notifyListeners();
+    try {
+      const batch = writeBatch(db);
+      ids.forEach(id => {
+        batch.delete(doc(db, 'users', id));
+      });
+      batch.commit().catch(err => {
+        console.warn('Batch delete error:', err);
+      });
+    } catch (e) {
+      console.warn('Batch delete error:', e);
     }
   },
 

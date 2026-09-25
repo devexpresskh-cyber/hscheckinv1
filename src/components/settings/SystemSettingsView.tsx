@@ -13,12 +13,28 @@ import {
   RotateCcw,
   Save,
   CheckCircle2,
-  Database
+  Database,
+  ShieldAlert
 } from 'lucide-react';
 
 export const SystemSettingsView: React.FC = () => {
   const { currentUser, hasPermission } = useAuth();
   const { showToast } = useNotification();
+
+  // Guard: teacher and employee cannot access system settings
+  if (currentUser.role === 'teacher' || currentUser.role === 'employee' || !hasPermission('settings.manage')) {
+    return (
+      <div className="bg-white rounded-3xl border border-rose-200 p-8 sm:p-12 text-center max-w-lg mx-auto mt-12 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h3 className="text-lg font-black text-slate-900">Access Restricted</h3>
+        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+          Faculty instructors and support employees are not authorized to view or configure organization profile and system governance settings.
+        </p>
+      </div>
+    );
+  }
 
   const [settings, setSettings] = useState<SystemSettings>(() => StorageService.getSystemSettings());
 
@@ -262,6 +278,50 @@ export const SystemSettingsView: React.FC = () => {
                   onChange={e => setSettings({ ...settings, geofenceRadiusMeters: Number(e.target.value) })}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-mono font-bold"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Terminal Anti-Proxy & Security Controls */}
+          <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-4 text-xs">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-amber-700 shrink-0" />
+              <div>
+                <span className="font-bold text-amber-950 block">
+                  Strict Owned Attendance & Fraud Prevention (គោលការណ៍វត្តមានផ្ទាល់ខ្លួន)
+                </span>
+                <span className="text-[11px] text-amber-800">
+                  Switching staff on attendance terminals is permanently prohibited. Teachers must sign in to record owned attendance.
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-200/80">
+                <div>
+                  <span className="font-bold text-slate-900 block">Require Personal Security PIN</span>
+                  <span className="text-[11px] text-slate-500">
+                    Teachers must enter their confidential 4-digit PIN before check-in/out is recorded
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.requirePinForKiosk !== false}
+                  onChange={e => setSettings({ ...settings, requirePinForKiosk: e.target.checked })}
+                  className="w-5 h-5 rounded text-amber-600 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-indigo-50/70 rounded-xl border border-indigo-200">
+                <div>
+                  <span className="font-bold text-indigo-950 block">Switching Staff on Kiosk Status</span>
+                  <span className="text-[11px] text-indigo-700">
+                    Permanently Disabled: Faculty must authenticate to their owned account
+                  </span>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-indigo-600 text-white uppercase tracking-wider">
+                  Enforced
+                </span>
               </div>
             </div>
           </div>

@@ -56,6 +56,35 @@ export const ScheduleManagement: React.FC = () => {
   const [locations, setLocations] = useState<WorkLocation[]>(() => StorageService.getLocations());
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState(false);
 
+  // Identify teacher role and matching profile for owned-only schedule access
+  const isTeacher = currentUser.role === 'teacher';
+
+  const activeTeacher = useMemo(() => {
+    if (!currentUser) return null;
+    // 1. By linked personId
+    if (currentUser.personId) {
+      const byPersonId = teachers.find(
+        t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase()
+      );
+      if (byPersonId) return byPersonId;
+    }
+    // 2. By email
+    if (currentUser.email) {
+      const byEmail = teachers.find(
+        t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase()
+      );
+      if (byEmail) return byEmail;
+    }
+    // 3. By fullName
+    if (currentUser.fullName) {
+      const byName = teachers.find(
+        t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase()
+      );
+      if (byName) return byName;
+    }
+    return null;
+  }, [currentUser, teachers]);
+
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setSchedules(StorageService.getSchedules());
@@ -392,17 +421,62 @@ export const ScheduleManagement: React.FC = () => {
     }
   };
 
-  const filteredSubjectSchedules = subjectSchedules.filter(sub => {
-    const matchesTeacher = selectedTeacherFilter === 'All' || sub.teacherId === selectedTeacherFilter;
-    const q = subjectSearchQuery.toLowerCase().trim();
-    const matchesQuery = !q ||
-      sub.subject.toLowerCase().includes(q) ||
-      (sub.khmerSubject && sub.khmerSubject.toLowerCase().includes(q)) ||
-      sub.gradeClass.toLowerCase().includes(q) ||
-      sub.room.toLowerCase().includes(q) ||
-      sub.teacherName.toLowerCase().includes(q);
-    return matchesTeacher && matchesQuery;
-  });
+  // Scoped subject schedules: Teacher can view owned schedule only
+  const filteredSubjectSchedules = useMemo(() => {
+    return subjectSchedules.filter(sub => {
+      if (isTeacher) {
+        const isOwned =
+          (activeTeacher && sub.teacherId === activeTeacher.id) ||
+          (activeTeacher?.teacherId && sub.teacherId?.toLowerCase() === activeTeacher.teacherId.toLowerCase()) ||
+          (activeTeacher && sub.teacherName?.toLowerCase() === activeTeacher.fullName.toLowerCase()) ||
+          (currentUser.personId && (sub.teacherId === currentUser.personId || sub.teacherId?.toLowerCase() === currentUser.personId.toLowerCase())) ||
+          sub.teacherName?.toLowerCase() === currentUser.fullName.toLowerCase();
+        if (!isOwned) return false;
+      } else {
+        const matchesTeacher = selectedTeacherFilter === 'All' || sub.teacherId === selectedTeacherFilter;
+        if (!matchesTeacher) return false;
+      }
+
+      const q = subjectSearchQuery.toLowerCase().trim();
+      const matchesQuery = !q ||
+        sub.subject.toLowerCase().includes(q) ||
+        (sub.khmerSubject && sub.khmerSubject.toLowerCase().includes(q)) ||
+        sub.gradeClass.toLowerCase().includes(q) ||
+        sub.room.toLowerCase().includes(q) ||
+        sub.teacherName.toLowerCase().includes(q);
+      return matchesQuery;
+    });
+  }, [subjectSchedules, isTeacher, activeTeacher, currentUser, selectedTeacherFilter, subjectSearchQuery]);
+
+  // Scoped general duty shifts: Teacher sees their assigned shift
+  const filteredGeneralSchedules = useMemo(() => {
+    if (!isTeacher) return schedules;
+    const owned = schedules.filter(sch => {
+      // 1. Direct assigned schedule ID on teacher profile
+      if (activeTeacher?.assignedScheduleId && sch.id === activeTeacher.assignedScheduleId) {
+        return true;
+      }
+      // 2. Schedule assigned specifically to this teacher's ID or personId
+      if (sch.assignedPersonIds && (
+        (activeTeacher && sch.assignedPersonIds.includes(activeTeacher.id)) ||
+        (currentUser.personId && sch.assignedPersonIds.includes(currentUser.personId))
+      )) {
+        return true;
+      }
+      // 3. Fallback: department schedule if teacher has department and no explicit schedule assigned
+      if (!activeTeacher?.assignedScheduleId && sch.department === activeTeacher?.department) {
+        return true;
+      }
+      return false;
+    });
+
+    // Fallback if no specific assignment: provide the default primary schedule so teacher can view duty hours
+    if (owned.length === 0 && schedules.length > 0) {
+      const fallback = schedules.find(s => s.department === 'Academic & Curriculum') || schedules[0];
+      return [fallback];
+    }
+    return owned;
+  }, [schedules, isTeacher, activeTeacher, currentUser]);
 
   return (
     <div className="space-y-6">
@@ -455,7 +529,7 @@ export const ScheduleManagement: React.FC = () => {
             </button>
           </div>
 
-          {hasPermission('schedules.create') && (
+          {hasPermission('schedules.create') && !isTeacher && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPeriodManageModalOpen(true)}
@@ -487,21 +561,67 @@ export const ScheduleManagement: React.FC = () => {
               </button>
             </div>
           )}
+
+          {isTeacher && (
+            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl text-indigo-900 shadow-2xs">
+              <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+              <div className="text-left">
+                <span className="text-xs font-black block leading-tight">
+                  {activeTeacher?.fullName || currentUser.fullName}
+                </span>
+                <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block">
+                  {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned Schedule Only'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Teacher Owned Schedule Notification Banner */}
+      {isTeacher && (
+        <div className="bg-gradient-to-r from-indigo-50 via-sky-50 to-indigo-50 border border-indigo-200 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-950 shadow-xs print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-600/30 shrink-0">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-sm text-indigo-900">
+                  {isKhmer ? 'កាលវិភាគបង្រៀនផ្ទាល់ខ្លួន' : 'Personal Teacher Timetable & Shift'}
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
+                  {activeTeacher?.teacherId || 'TCH'}
+                </span>
+              </div>
+              <p className="text-xs text-indigo-700 mt-0.5">
+                {isKhmer
+                  ? 'ប្រព័ន្ធត្រូវបានចាក់សោរបង្ហាញតែកាលវិភាគបង្រៀន និងវេនការងារផ្ទាល់ខ្លួនរបស់អ្នកប៉ុណ្ណោះ។'
+                  : 'Locked to your owned teaching roster and assigned duty schedule. Proxy viewing of other faculty schedules is disabled.'}
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-3.5 py-1.5 rounded-xl shrink-0 self-start sm:self-auto">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{isKhmer ? 'សុវត្ថិភាពទិន្នន័យផ្ទាល់ខ្លួន' : 'Owned Schedule Enforced'}</span>
+          </span>
+        </div>
+      )}
 
       {/* Mon-Sat Header Weekly Timetable View */}
       {viewMode === 'weekly_timetable' && (
         <MonSatWeeklyTimetable
-          subjectSchedules={subjectSchedules}
-          teachers={teachers}
-          onEditSchedule={handleOpenEditSubject}
-          onDeleteSchedule={handleDeleteSubject}
-          onAddForSlot={handleOpenAddSubjectForSlot}
-          initialTeacherFilter={selectedTeacherFilter}
-          canEdit={hasPermission('schedules.edit')}
-          canDelete={hasPermission('schedules.delete')}
-          canCreate={hasPermission('schedules.create')}
+          subjectSchedules={isTeacher ? filteredSubjectSchedules : subjectSchedules}
+          teachers={isTeacher && activeTeacher ? [activeTeacher] : teachers}
+          onEditSchedule={hasPermission('schedules.edit') && !isTeacher ? handleOpenEditSubject : undefined}
+          onDeleteSchedule={hasPermission('schedules.delete') && !isTeacher ? handleDeleteSubject : undefined}
+          onAddForSlot={hasPermission('schedules.create') && !isTeacher ? handleOpenAddSubjectForSlot : undefined}
+          initialTeacherFilter={isTeacher && activeTeacher ? activeTeacher.id : selectedTeacherFilter}
+          lockedTeacherId={isTeacher && activeTeacher ? activeTeacher.id : undefined}
+          isTeacherRole={isTeacher}
+          canEdit={hasPermission('schedules.edit') && !isTeacher}
+          canDelete={hasPermission('schedules.delete') && !isTeacher}
+          canCreate={hasPermission('schedules.create') && !isTeacher}
         />
       )}
 
@@ -517,18 +637,31 @@ export const ScheduleManagement: React.FC = () => {
                   {isKhmer ? 'ច្រោះតាមគ្រូ៖' : 'Filter by Teacher:'}
                 </span>
               </div>
-              <select
-                value={selectedTeacherFilter}
-                onChange={e => setSelectedTeacherFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden"
-              >
-                <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Teachers)' : 'All Teachers'}</option>
-                {teachers.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
-                  </option>
-                ))}
-              </select>
+              {isTeacher ? (
+                <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
+                  <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="text-xs font-bold text-indigo-900">
+                    {activeTeacher?.fullName || currentUser.fullName}
+                    {activeTeacher?.khmerName ? ` (${activeTeacher.khmerName})` : ''}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-600 text-white uppercase tracking-wider">
+                    {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned'}
+                  </span>
+                </div>
+              ) : (
+                <select
+                  value={selectedTeacherFilter}
+                  onChange={e => setSelectedTeacherFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-hidden"
+                >
+                  <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Teachers)' : 'All Teachers'}</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="relative w-full sm:w-72">
@@ -630,26 +763,28 @@ export const ScheduleManagement: React.FC = () => {
                       <span className="text-[10px] font-semibold text-slate-400">
                         {isKhmer ? `អនុគ្រោះ៖ ${sub.gracePeriodMinutes || 10} នាទី` : `Grace: ${sub.gracePeriodMinutes || 10}m`}
                       </span>
-                      <div className="flex items-center gap-1">
-                        {hasPermission('schedules.edit') && (
-                          <button
-                            onClick={() => handleOpenEditSubject(sub)}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        {hasPermission('schedules.delete') && (
-                          <button
-                            onClick={() => handleDeleteSubject(sub.id, sub.subject)}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      {!isTeacher && (
+                        <div className="flex items-center gap-1">
+                          {hasPermission('schedules.edit') && (
+                            <button
+                              onClick={() => handleOpenEditSubject(sub)}
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {hasPermission('schedules.delete') && (
+                            <button
+                              onClick={() => handleDeleteSubject(sub.id, sub.subject)}
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -662,137 +797,153 @@ export const ScheduleManagement: React.FC = () => {
       {/* Cards View (General Shifts & Organization Mon-Sat Weekly Grid) */}
       {viewMode === 'cards' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {schedules.map(sch => {
-            return (
-              <div
-                key={sch.id}
-                className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between"
-              >
-                {/* Color Banner Accent */}
-                <div
-                  className="absolute top-0 left-0 right-0 h-1.5"
-                  style={{ backgroundColor: sch.color || '#3B82F6' }}
-                />
+          {isTeacher && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-emerald-900 text-xs font-bold">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                {isKhmer
+                  ? 'វេនការងារផ្លូវការដែលបានកំណត់សម្រាប់អ្នក (កាលវិភាគផ្ទាល់ខ្លួន)៖'
+                  : 'Your assigned work shift schedule (Owned Schedule):'}
+              </span>
+            </div>
+          )}
 
-                <div>
-                  <div className="flex items-start justify-between gap-3">
+          {filteredGeneralSchedules.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
+              <Building className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+              <p className="font-semibold text-sm">
+                {isKhmer ? 'ពុំមានវេនការងារដែលបានកំណត់នៅឡើយទេ' : 'No assigned shift schedule found.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredGeneralSchedules.map(sch => {
+                const isAssigned = isTeacher;
+                return (
+                  <div
+                    key={sch.id}
+                    className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between"
+                  >
+                    {/* Color Banner Accent */}
+                    <div
+                      className="absolute top-0 left-0 right-0 h-1.5"
+                      style={{ backgroundColor: sch.color || '#3B82F6' }}
+                    />
+
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700">
-                          {sch.targetType}
-                        </span>
-                        <span className="text-xs text-indigo-700 font-semibold">
-                          {sch.department}
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-extrabold text-slate-900 mt-1">
-                        {sch.name}
-                      </h3>
-                    </div>
-
-                    {hasPermission('schedules.edit') && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleOpenEdit(sch)}
-                          className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(sch.id, sch.name)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Timing Badges */}
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                        Morning Session
-                      </span>
-                      <span className="text-base font-mono font-black text-slate-900">
-                        {sch.startTime} — {sch.endTime}
-                      </span>
-                    </div>
-
-                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block">
-                        Afternoon Session
-                      </span>
-                      <span className="text-base font-mono font-black text-slate-900">
-                        {sch.afternoonStartTime ? `${sch.afternoonStartTime} — ${sch.afternoonEndTime}` : 'None (Half Day)'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Rules: Grace period & Absence detector */}
-                  <div className="mt-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                        Grace Period:
-                      </span>
-                      <span className="font-bold text-slate-900">{sch.gracePeriodMinutes} minutes allowed</span>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span className="flex items-center gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                        Absence Detection Threshold:
-                      </span>
-                      <span className="font-bold text-slate-900">{sch.absenceDetectionMinutes} minutes past start</span>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        Location:
-                      </span>
-                      <span className="font-semibold text-slate-700">{sch.location}</span>
-                    </div>
-                  </div>
-
-                    {/* Active Days (Mon-Sat standard) */}
-                    <div className="mt-4 pt-4 border-t border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1.5">
-                        Working Days of Week
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        {monToSatDays.map(d => {
-                          const isWorking = sch.daysOfWeek.includes(d.index);
-                          return (
-                            <span
-                              key={d.index}
-                              className={`w-8 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${
-                                isWorking
-                                  ? 'bg-indigo-600 text-white font-extrabold shadow-xs'
-                                  : 'bg-slate-100 text-slate-400'
-                              }`}
-                            >
-                              {isKhmer ? d.km : d.en}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700">
+                              {sch.targetType}
                             </span>
-                          );
-                        })}
+                            <span className="text-xs text-indigo-700 font-semibold">
+                              {sch.department}
+                            </span>
+                            {isAssigned && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                {isKhmer ? 'វេនរបស់អ្នក' : 'Your Shift'}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-lg font-extrabold text-slate-900 mt-1">
+                            {sch.name}
+                          </h3>
+                        </div>
+
+                        {!isTeacher && hasPermission('schedules.edit') && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleOpenEdit(sch)}
+                              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(sch.id, sch.name)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Timing Badges */}
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                            Morning Session
+                          </span>
+                          <span className="text-base font-mono font-black text-slate-900">
+                            {sch.startTime} — {sch.endTime}
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                            Afternoon Session
+                          </span>
+                          <span className="text-base font-mono font-black text-slate-900">
+                            {sch.afternoonStartTime ? `${sch.afternoonStartTime} — ${sch.afternoonEndTime}` : 'None (Half Day)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Rules: Grace period & Absence detector */}
+                      <div className="mt-4 space-y-2 text-xs">
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                            Grace Period:
+                          </span>
+                          <span className="font-bold text-slate-900">{sch.gracePeriodMinutes} minutes allowed</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                            Auto-Absence Flag:
+                          </span>
+                          <span className="font-bold text-slate-900">{sch.absenceDetectionMinutes} min after shift start</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            Assigned Location:
+                          </span>
+                          <span className="font-semibold text-slate-800 truncate max-w-[200px]">{sch.location}</span>
+                        </div>
+                      </div>
+
+                      {/* Applicable Days */}
+                      <div className="mt-4 pt-3 border-t border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1.5">
+                          Active Days
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {monToSatDays.map(d => {
+                            const isSelected = sch.daysOfWeek?.includes(d.index);
+                            return (
+                              <span
+                                key={d.index}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                  isSelected
+                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                    : 'bg-slate-50 text-slate-300'
+                                }`}
+                              >
+                                {isKhmer ? d.km : d.en}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                  <span>Enforces check-in & check-out logs</span>
-                  <span className="text-emerald-600 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Active
-                  </span>
-                </div>
-
-              </div>
-            );
-          })}
-        </div>
-
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {/* Weekly Timetable View for Shifts with Mon-Sat headers */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -822,7 +973,7 @@ export const ScheduleManagement: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {schedules.map(sch => (
+                  {(isTeacher ? filteredGeneralSchedules : schedules).map(sch => (
                     <tr key={sch.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4 font-bold text-slate-900">
                         <div>
@@ -849,23 +1000,31 @@ export const ScheduleManagement: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {hasPermission('schedules.edit') && (
-                            <button
-                              onClick={() => handleOpenEdit(sch)}
-                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                              title={isKhmer ? 'កែប្រែ' : 'Edit'}
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {hasPermission('schedules.delete') && (
-                            <button
-                              onClick={() => handleDelete(sch.id, sch.name)}
-                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title={isKhmer ? 'លុប' : 'Delete'}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                          {isTeacher ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              {isKhmer ? 'វេនផ្ទាល់ខ្លួន' : 'Assigned'}
+                            </span>
+                          ) : (
+                            <>
+                              {hasPermission('schedules.edit') && (
+                                <button
+                                  onClick={() => handleOpenEdit(sch)}
+                                  className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                  title={isKhmer ? 'កែប្រែ' : 'Edit'}
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {hasPermission('schedules.delete') && (
+                                <button
+                                  onClick={() => handleDelete(sch.id, sch.name)}
+                                  className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                  title={isKhmer ? 'លុប' : 'Delete'}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>

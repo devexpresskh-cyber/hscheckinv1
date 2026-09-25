@@ -35,7 +35,15 @@ export const LeaveManagement: React.FC = () => {
   });
 
   const filteredLeaves = leaves.filter(l => {
-    if (!canAccessDepartment(l.department)) return false;
+    if (currentUser.role === 'teacher' || currentUser.role === 'employee') {
+      const isOwned =
+        (currentUser.personId && l.personId === currentUser.personId) ||
+        l.personId === currentUser.id ||
+        l.personName.toLowerCase() === currentUser.fullName.toLowerCase();
+      if (!isOwned) return false;
+    } else {
+      if (!canAccessDepartment(l.department)) return false;
+    }
     if (filterStatus !== 'All' && l.status !== filterStatus) return false;
     return true;
   });

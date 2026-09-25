@@ -22,7 +22,8 @@ import {
   Building,
   ArrowUpRight,
   TrendingUp,
-  MapPin
+  MapPin,
+  BookOpen
 } from 'lucide-react';
 
 export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn?: () => void }> = ({ onNavigate, onOpenCheckIn }) => {
@@ -41,18 +42,28 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
 
   // Filter attendance records
   const filteredAttendance = useMemo(() => {
+    const isTeacher = currentUser.role === 'teacher';
     return allAttendance.filter(record => {
       // Date filter
       if (selectedDate && record.date !== selectedDate) return false;
-      // Department scoping (supervisor restriction)
-      if (!canAccessDepartment(record.department)) return false;
-      // Dropdown department filter
-      if (selectedDept !== 'All' && record.department !== selectedDept) return false;
+      // Teacher sees only owned attendance records
+      if (isTeacher) {
+        const isOwned =
+          (currentUser.personId && record.personId === currentUser.personId) ||
+          record.personId === currentUser.id ||
+          record.personName.toLowerCase() === currentUser.fullName.toLowerCase();
+        if (!isOwned) return false;
+      } else {
+        // Department scoping (supervisor restriction)
+        if (!canAccessDepartment(record.department)) return false;
+        // Dropdown department filter
+        if (selectedDept !== 'All' && record.department !== selectedDept) return false;
+      }
       // Status filter
       if (selectedStatus !== 'All' && record.status !== selectedStatus) return false;
       return true;
     });
-  }, [allAttendance, selectedDate, selectedDept, selectedStatus, canAccessDepartment]);
+  }, [allAttendance, selectedDate, selectedDept, selectedStatus, canAccessDepartment, currentUser]);
 
   // Statistics calculation for the selected date
   const stats = useMemo(() => {
@@ -156,6 +167,15 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
               <span>{isKhmer ? 'ស្វែងរកអវត្តមាន' : 'Detect Absences'}</span>
             </button>
           )}
+
+          <button
+            onClick={() => onNavigate('manual')}
+            className="flex items-center gap-2 px-3 sm:px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all active:scale-95"
+            title={isKhmer ? 'បើកសៀវភៅណែនាំការប្រើប្រាស់ប្រព័ន្ធ (Khmer/English)' : 'Open System User Manual (Khmer/English)'}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+            <span>{isKhmer ? 'សៀវភៅណែនាំ' : 'Manual'}</span>
+          </button>
         </div>
       </div>
 

@@ -18,6 +18,7 @@ import {
   Settings,
   Building,
   HelpCircle,
+  BookOpen,
   X,
   LogOut
 } from 'lucide-react';
@@ -38,6 +39,7 @@ export type NavTab =
   | 'roles'
   | 'audit'
   | 'settings'
+  | 'manual'
   | 'architecture';
 
 interface SidebarProps {
@@ -153,6 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Telegram Bot & Alerts',
       khmer: 'តេឡេក្រាម Bot',
       icon: Send,
+      permission: 'telegram.view',
       badge: 'Bot API',
       section: 'communication'
     },
@@ -190,16 +193,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
       section: 'administration'
     },
     {
+      id: 'manual',
+      label: 'User Manual (Khmer/EN)',
+      khmer: 'សៀវភៅណែនាំប្រព័ន្ធ',
+      icon: BookOpen,
+      badge: 'Guide',
+      section: 'administration'
+    },
+    {
       id: 'architecture',
       label: 'System Architecture',
       khmer: 'ស្ថាបត្យកម្មប្រព័ន្ធ',
       icon: HelpCircle,
+      permission: 'settings.manage',
       section: 'administration'
     }
   ];
 
+  // Restrict teacher and employee from accessing telegram and system settings
+  const isRestrictedStaff = currentUser.role === 'teacher' || currentUser.role === 'employee';
+
   // Filter items by RBAC
   const visibleItems = navItems.filter(item => {
+    // Explicitly disallow teachers and employees from accessing telegram setting and system setting
+    if (isRestrictedStaff && (item.id === 'telegram' || item.id === 'settings' || item.id === 'architecture')) {
+      return false;
+    }
     if (!item.permission) return true;
     return hasPermission(item.permission as any);
   });

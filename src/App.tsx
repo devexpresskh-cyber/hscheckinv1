@@ -19,8 +19,9 @@ import { TelegramCenter } from './components/telegram/TelegramCenter.tsx';
 import { UserManagement } from './components/users/UserManagement.tsx';
 import { AuditLogViewer } from './components/audit/AuditLogViewer.tsx';
 import { SystemSettingsView } from './components/settings/SystemSettingsView.tsx';
+import { SystemUserManual } from './components/manual/SystemUserManual.tsx';
 import { StorageService } from './services/storageService.ts';
-import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Building2 } from 'lucide-react';
+import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Building2, ArrowRight } from 'lucide-react';
 
 const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useNotification();
@@ -67,10 +68,20 @@ const ToastContainer: React.FC = () => {
 };
 
 const MainLayout: React.FC = () => {
+  const { currentUser } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const { isKhmer } = useLanguage();
+
+  const isRestrictedStaff = currentUser.role === 'teacher' || currentUser.role === 'employee';
+
+  // Automatically enforce guard: teacher and employee cannot access telegram setting and system setting
+  React.useEffect(() => {
+    if (isRestrictedStaff && (currentTab === 'telegram' || currentTab === 'settings' || currentTab === 'architecture')) {
+      setCurrentTab('dashboard');
+    }
+  }, [isRestrictedStaff, currentTab]);
 
   const renderContent = () => {
     switch (currentTab) {
@@ -100,6 +111,14 @@ const MainLayout: React.FC = () => {
       case 'holidays':
         return <HolidayManagement />;
       case 'telegram':
+        if (isRestrictedStaff) {
+          return (
+            <Dashboard
+              onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
+              onOpenCheckIn={() => setIsCheckInModalOpen(true)}
+            />
+          );
+        }
         return <TelegramCenter />;
       case 'users':
       case 'roles':
@@ -108,7 +127,17 @@ const MainLayout: React.FC = () => {
         return <AuditLogViewer />;
       case 'settings':
       case 'architecture':
+        if (isRestrictedStaff) {
+          return (
+            <Dashboard
+              onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
+              onOpenCheckIn={() => setIsCheckInModalOpen(true)}
+            />
+          );
+        }
         return <SystemSettingsView />;
+      case 'manual':
+        return <SystemUserManual />;
       default:
         return (
           <Dashboard
@@ -128,6 +157,7 @@ const MainLayout: React.FC = () => {
         isMobileKioskOpen={isCheckInModalOpen}
         onOpenTelegram={() => setCurrentTab('telegram')}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        onOpenManual={() => setCurrentTab('manual')}
       />
 
       {/* Main Body with side-by-side flex layout (Desktop) / Slide-over (Mobile) */}

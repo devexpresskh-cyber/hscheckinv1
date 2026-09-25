@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Teacher, StaffStatus } from '../../types/index.ts';
 import { StorageService } from '../../services/storageService.ts';
-import { X, User, Phone, Mail, Building, Send, Calendar, MapPin, Award, DollarSign } from 'lucide-react';
+import { X, User, Phone, Mail, Building, Send, Calendar, MapPin, Award, DollarSign, Lock, ShieldCheck } from 'lucide-react';
 
 interface TeacherModalProps {
   isOpen: boolean;
@@ -67,7 +67,8 @@ export const TeacherModal: React.FC<TeacherModalProps> = ({
         assignedLocation: initialTeacher.assignedLocation || locations[0]?.name || 'Main Campus - Central Building',
         assignedScheduleId: initialTeacher.assignedScheduleId || schedules[0]?.id || 'sch-standard-fulltime',
         hourlyRate: initialTeacher.hourlyRate !== undefined && initialTeacher.hourlyRate !== null ? initialTeacher.hourlyRate : 20,
-        currency: initialTeacher.currency || 'USD'
+        currency: initialTeacher.currency || 'USD',
+        pinCode: initialTeacher.pinCode || '1234'
       });
     } else {
       setFormData({
@@ -92,7 +93,8 @@ export const TeacherModal: React.FC<TeacherModalProps> = ({
         assignedLocation: locations[0]?.name || 'Main Campus - Central Building',
         assignedScheduleId: schedules[0]?.id || 'sch-standard-fulltime',
         hourlyRate: 20,
-        currency: 'USD'
+        currency: 'USD',
+        pinCode: '1234'
       });
     }
   }, [initialTeacher, isOpen]);
@@ -411,6 +413,42 @@ export const TeacherModal: React.FC<TeacherModalProps> = ({
                   <option value="KHR">KHR (៛) - Khmer Riel</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Anti-Proxy Terminal Security PIN */}
+          <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+              <span className="text-xs font-bold text-amber-900">
+                Kiosk & Terminal Personal Security PIN (លេខកូដសម្ងាត់ការពារការស្កេនជំនួស)
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800/80 leading-relaxed font-medium">
+              This confidential 4-6 digit PIN restricts unauthorized colleagues from clocking in or out as this teacher on public kiosks or shared tablets.
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-600" />
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={formData.pinCode || ''}
+                  onChange={e => setFormData({ ...formData, pinCode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                  placeholder="e.g. 1234"
+                  className="w-full bg-white border border-amber-300 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-black tracking-widest text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const randomPin = String(Math.floor(1000 + Math.random() * 9000));
+                  setFormData({ ...formData, pinCode: randomPin });
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/60 transition-colors"
+              >
+                Generate PIN
+              </button>
             </div>
           </div>
 

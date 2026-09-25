@@ -13,6 +13,7 @@
         "department": { "type": "string" },
         "telegramChatId": { "type": "string" },
         "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "pinCode": { "type": "string" },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "email", "fullName", "role"]
@@ -55,7 +56,8 @@
         "photoUrl": { "type": "string" },
         "status": { "type": "string", "enum": ["Active", "Inactive", "On Leave", "Resigned"] },
         "assignedLocation": { "type": "string" },
-        "assignedScheduleId": { "type": "string" }
+        "assignedScheduleId": { "type": "string" },
+        "pinCode": { "type": "string" }
       },
       "required": ["id", "teacherId", "fullName", "department", "status"]
     },

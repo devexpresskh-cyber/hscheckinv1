@@ -106,6 +106,10 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
     }
   }, [lockedTeacherId, initialTeacherFilter]);
 
+  const lockedTeacher = useMemo(() => {
+    return lockedTeacherId ? teachers.find(t => t.id === lockedTeacherId) : null;
+  }, [lockedTeacherId, teachers]);
+
   // Today day of week (0=Sun, 1=Mon, ..., 6=Sat)
   const todayDayOfWeek = new Date().getDay();
 
@@ -118,21 +122,34 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   }, [includeSunday]);
 
   // Extract unique classes and rooms for filtering
+  const relevantSchedulesForTeacher = useMemo(() => {
+    if (lockedTeacherId && isTeacherRole) {
+      return subjectSchedules.filter(s =>
+        s.teacherId === lockedTeacherId ||
+        (lockedTeacher && (
+          s.teacherName?.toLowerCase() === lockedTeacher.fullName.toLowerCase() ||
+          (s.teacherId && lockedTeacher.teacherId && s.teacherId.toLowerCase() === lockedTeacher.teacherId.toLowerCase())
+        ))
+      );
+    }
+    return subjectSchedules;
+  }, [subjectSchedules, lockedTeacherId, isTeacherRole, lockedTeacher]);
+
   const uniqueClasses = useMemo(() => {
     const set = new Set<string>();
-    subjectSchedules.forEach(s => {
+    relevantSchedulesForTeacher.forEach(s => {
       if (s.gradeClass) set.add(s.gradeClass);
     });
     return Array.from(set).sort();
-  }, [subjectSchedules]);
+  }, [relevantSchedulesForTeacher]);
 
   const uniqueRooms = useMemo(() => {
     const set = new Set<string>();
-    subjectSchedules.forEach(s => {
+    relevantSchedulesForTeacher.forEach(s => {
       if (s.room) set.add(s.room);
     });
     return Array.from(set).sort();
-  }, [subjectSchedules]);
+  }, [relevantSchedulesForTeacher]);
 
   const [periods, setPeriods] = useState<TimetablePeriod[]>(() => StorageService.getPeriods());
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState<boolean>(false);
@@ -183,8 +200,16 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   const filteredSchedules = useMemo(() => {
     const effectiveTeacher = lockedTeacherId || selectedTeacher;
     return subjectSchedules.filter(sub => {
-      if (effectiveTeacher !== 'All' && sub.teacherId !== effectiveTeacher) {
-        return false;
+      if (effectiveTeacher !== 'All') {
+        const matchesTeacher =
+          sub.teacherId === effectiveTeacher ||
+          (lockedTeacher && (
+            sub.teacherName?.toLowerCase() === lockedTeacher.fullName.toLowerCase() ||
+            (sub.teacherId && lockedTeacher.teacherId && sub.teacherId.toLowerCase() === lockedTeacher.teacherId.toLowerCase())
+          ));
+        if (!matchesTeacher) {
+          return false;
+        }
       }
       if (selectedClass !== 'All' && sub.gradeClass !== selectedClass) {
         return false;
@@ -225,8 +250,6 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   const handlePrint = () => {
     window.print();
   };
-
-  const lockedTeacher = lockedTeacherId ? teachers.find(t => t.id === lockedTeacherId) : null;
 
   return (
     <div className="space-y-4">

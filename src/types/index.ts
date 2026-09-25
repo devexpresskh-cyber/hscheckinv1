@@ -56,6 +56,7 @@ export interface UserAccount {
   personId?: string; // Links to Teacher or Employee profile
   avatarUrl?: string;
   createdAt: string;
+  pinCode?: string; // Optional security PIN for PIN login
 }
 
 export type StaffStatus = 'Active' | 'Inactive' | 'On Leave' | 'Resigned';
@@ -66,12 +67,13 @@ export interface Teacher {
   employeeId: string; // e.g. EMP-101
   fullName: string;
   khmerName: string;
-  englishName: string;
+  englishName?: string;
   gender: 'Male' | 'Female' | 'Other';
-  dateOfBirth: string;
+  dateOfBirth?: string;
   phone: string;
   email: string;
-  telegramChatId: string;
+  telegramChatId?: string;
+  telegramUsername?: string;
   department: string;
   position: string;
   subject: string;
@@ -83,6 +85,7 @@ export interface Teacher {
   assignedScheduleId: string;
   hourlyRate?: number; // Base teaching rate per hour (e.g., 20.00)
   currency?: 'USD' | 'KHR'; // default 'USD'
+  pinCode?: string; // 4-digit personal security PIN for attendance terminal
 }
 
 export interface Employee {
@@ -102,6 +105,7 @@ export interface Employee {
   assignedScheduleId: string;
   status: StaffStatus;
   photoUrl: string;
+  pinCode?: string; // 4-digit personal security PIN for attendance terminal
 }
 
 export type ScheduleTargetType = 'Department' | 'Individual' | 'Standard' | 'Special';
@@ -194,10 +198,12 @@ export interface TeacherClassSessionDetail {
 export interface Schedule {
   id: string;
   name: string;
+  khmerName?: string;
   department: string;
   targetType: ScheduleTargetType;
   assignedPersonIds?: string[];
   daysOfWeek: number[]; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  applicableDays?: string[];
   startTime: string; // '07:30'
   endTime: string; // '11:30'
   breakStart?: string; // '12:00'
@@ -209,6 +215,8 @@ export interface Schedule {
   requiredCheckIn: boolean;
   requiredCheckOut: boolean;
   location: string;
+  workLocation?: string;
+  isOvernight?: boolean;
   isActive: boolean;
   color?: string;
 }
@@ -396,4 +404,7 @@ export interface SystemSettings {
   defaultLocationLongitude: number;
   geofenceRadiusMeters: number;
   allowSelfCorrection: boolean;
+  requirePinForKiosk?: boolean; // Restrict terminal check-in with teacher personal PIN
+  allowSwitchStaffInKiosk?: boolean; // Whether staff dropdown is open or locked
+  requireBarcodeScanOnly?: boolean; // Strictly require physical ID barcode scan
 }

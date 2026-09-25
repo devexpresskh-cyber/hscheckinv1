@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Employee, StaffStatus } from '../../types/index.ts';
 import { StorageService } from '../../services/storageService.ts';
-import { X, Send } from 'lucide-react';
+import { X, Send, Lock, ShieldCheck } from 'lucide-react';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -57,7 +57,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         workLocation: initialEmployee.workLocation || locations[0]?.name || 'Main Campus - Central Building',
         assignedScheduleId: initialEmployee.assignedScheduleId || schedules[0]?.id || 'sch-standard-fulltime',
         status: initialEmployee.status || 'Active',
-        photoUrl: initialEmployee.photoUrl || ''
+        photoUrl: initialEmployee.photoUrl || '',
+        pinCode: initialEmployee.pinCode || '1234'
       });
     } else {
       setFormData({
@@ -76,7 +77,8 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         workLocation: locations[0]?.name || 'Main Campus - Central Building',
         assignedScheduleId: schedules[0]?.id || 'sch-standard-fulltime',
         status: 'Active',
-        photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop'
+        photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
+        pinCode: '1234'
       });
     }
   }, [initialEmployee, isOpen]);
@@ -288,6 +290,42 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
                 onChange={e => setFormData({ ...formData, photoUrl: e.target.value })}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
               />
+            </div>
+          </div>
+
+          {/* Anti-Proxy Terminal Security PIN */}
+          <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+              <span className="text-xs font-bold text-amber-900">
+                Kiosk & Terminal Personal Security PIN (លេខកូដសម្ងាត់ការពារការស្កេនជំនួស)
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800/80 leading-relaxed font-medium">
+              Confidential 4-6 digit PIN required before clocking in/out on shared kiosks or terminals.
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Lock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-600" />
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={formData.pinCode || ''}
+                  onChange={e => setFormData({ ...formData, pinCode: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                  placeholder="e.g. 1234"
+                  className="w-full bg-white border border-amber-300 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-black tracking-widest text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const randomPin = String(Math.floor(1000 + Math.random() * 9000));
+                  setFormData({ ...formData, pinCode: randomPin });
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/60 transition-colors"
+              >
+                Generate PIN
+              </button>
             </div>
           </div>
 
