@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health check endpoint for connection verification
+    match /test/connection {
+      allow read: if true;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'planningtks585@gmail.com' ||
+        request.auth.token.email == 'singsabmc@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /teachers/{teacherId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /employees/{employeeId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /subject_schedules/{subjectScheduleId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /attendance_corrections/{correctionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /leave_requests/{leaveId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /holidays/{holidayId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    match /telegram_settings/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /system_settings/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}

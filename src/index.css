@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', 'Kantumruy Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  code, pre {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print optimizations: clean landscape output, full width, table-only display */
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm 6mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset layout constraints for printing */
+  html, body, #root {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide interactive/ambient elements in print */
+  header, 
+  aside, 
+  nav, 
+  button, 
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print\:block {
+    display: block !important;
+  }
+
+  .print\:flex {
+    display: flex !important;
+  }
+
+  .print\:grid {
+    display: grid !important;
+  }
+
+  /* Timetable Table Print Optimization */
+  .timetable-print-wrapper {
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .timetable-print-table {
+    width: 100% !important;
+    min-width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  .timetable-print-table th,
+  .timetable-print-table td {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .timetable-card {
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+

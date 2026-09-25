@@ -1,0 +1,309 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user account with role-based access control",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "fullName": { "type": "string" },
+        "khmerName": { "type": "string" },
+        "role": { "type": "string" },
+        "department": { "type": "string" },
+        "telegramChatId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email", "fullName", "role"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "School teacher profile with academic specializations and schedule assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "khmerName": { "type": "string" },
+        "englishName": { "type": "string" },
+        "gender": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "telegramChatId": { "type": "string" },
+        "department": { "type": "string" },
+        "position": { "type": "string" },
+        "subject": { "type": "string" },
+        "employmentType": { "type": "string" },
+        "joinDate": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive", "On Leave", "Resigned"] },
+        "assignedLocation": { "type": "string" },
+        "assignedScheduleId": { "type": "string" }
+      },
+      "required": ["id", "teacherId", "fullName", "department", "status"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Non-teaching staff profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "khmerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "telegramChatId": { "type": "string" },
+        "department": { "type": "string" },
+        "position": { "type": "string" },
+        "supervisor": { "type": "string" },
+        "employmentType": { "type": "string" },
+        "joinDate": { "type": "string" },
+        "workLocation": { "type": "string" },
+        "assignedScheduleId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive", "On Leave", "Resigned"] },
+        "photoUrl": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "fullName", "department", "status"]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Work shifts, session times, and grace periods for staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "department": { "type": "string" },
+        "targetType": { "type": "string" },
+        "daysOfWeek": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "breakStart": { "type": "string" },
+        "breakEnd": { "type": "string" },
+        "gracePeriodMinutes": { "type": "number" },
+        "requiredCheckIn": { "type": "boolean" },
+        "requiredCheckOut": { "type": "boolean" },
+        "location": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "startTime", "endTime", "gracePeriodMinutes"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily check-in and check-out logs with automated status detection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "personId": { "type": "string" },
+        "personType": { "type": "string" },
+        "personName": { "type": "string" },
+        "department": { "type": "string" },
+        "date": { "type": "string" },
+        "scheduleId": { "type": "string" },
+        "checkInTime": { "type": "string" },
+        "checkOutTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["Present", "Late", "Absent", "Early Leave", "Leave", "Holiday", "Missing Check-out", "Off Day"] },
+        "lateMinutes": { "type": "number" },
+        "earlyLeaveMinutes": { "type": "number" },
+        "overtimeMinutes": { "type": "number" },
+        "ipAddress": { "type": "string" },
+        "deviceInfo": { "type": "string" },
+        "locationLatitude": { "type": "number" },
+        "locationLongitude": { "type": "number" },
+        "locationVerified": { "type": "boolean" },
+        "isCorrected": { "type": "boolean" },
+        "correctionNote": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "personId", "date", "status"]
+    },
+    "AttendanceCorrection": {
+      "title": "AttendanceCorrection",
+      "description": "Requests submitted by staff to correct attendance records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "attendanceId": { "type": "string" },
+        "personId": { "type": "string" },
+        "personName": { "type": "string" },
+        "date": { "type": "string" },
+        "requestedCheckIn": { "type": "string" },
+        "requestedCheckOut": { "type": "string" },
+        "reason": { "type": "string" },
+        "supportingNote": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "reviewedBy": { "type": "string" },
+        "reviewedAt": { "type": "string" },
+        "reviewerNote": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "personId", "date", "reason", "status"]
+    },
+    "LeaveRequest": {
+      "title": "LeaveRequest",
+      "description": "Staff leave applications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "personId": { "type": "string" },
+        "personName": { "type": "string" },
+        "leaveType": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "approvedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "personId", "leaveType", "startDate", "endDate", "status"]
+    },
+    "Holiday": {
+      "title": "Holiday",
+      "description": "Calendar public and organization holidays",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "khmerName": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "name", "date"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System activity logs for security and compliance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "previousValue": { "type": "string" },
+        "newValue": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userName", "action", "timestamp"]
+    },
+    "TelegramSettings": {
+      "title": "TelegramSettings",
+      "description": "Telegram bot configuration and alerts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "botToken": { "type": "string" },
+        "adminChatId": { "type": "string" },
+        "groupChatId": { "type": "string" },
+        "isEnabled": { "type": "boolean" },
+        "notifyCheckIn": { "type": "boolean" },
+        "notifyLate": { "type": "boolean" },
+        "notifyAbsent": { "type": "boolean" },
+        "notifyCheckOut": { "type": "boolean" },
+        "notifyDailySummary": { "type": "boolean" },
+        "notifyReminder": { "type": "boolean" },
+        "reminderMinutesBefore": { "type": "number" }
+      },
+      "required": ["id", "isEnabled"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Global school organization parameters",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationName": { "type": "string" },
+        "khmerOrgName": { "type": "string" },
+        "timezone": { "type": "string" },
+        "defaultGracePeriod": { "type": "number" },
+        "absenceDetectionTime": { "type": "string" },
+        "officeLatitude": { "type": "number" },
+        "officeLongitude": { "type": "number" },
+        "geofenceRadiusMeters": { "type": "number" },
+        "enforceGeofence": { "type": "boolean" }
+      },
+      "required": ["id", "organizationName"]
+    },
+    "TeacherSubjectSchedule": {
+      "title": "TeacherSubjectSchedule",
+      "description": "Individual subject teaching periods for teachers to check in and check out by class timetable",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "khmerTeacherName": { "type": "string" },
+        "subject": { "type": "string" },
+        "khmerSubject": { "type": "string" },
+        "subjectCode": { "type": "string" },
+        "gradeClass": { "type": "string" },
+        "room": { "type": "string" },
+        "dayOfWeek": { "type": "number" },
+        "periodNumber": { "type": "number" },
+        "periodName": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "gracePeriodMinutes": { "type": "number" },
+        "color": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "teacherId", "subject", "startTime", "endTime"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User accounts"
+    },
+    "/teachers/{teacherId}": {
+      "schema": { "$ref": "#/entities/Teacher" },
+      "description": "Teacher profiles"
+    },
+    "/employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "Employee profiles"
+    },
+    "/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/Schedule" },
+      "description": "Duty schedules"
+    },
+    "/subject_schedules/{subjectScheduleId}": {
+      "schema": { "$ref": "#/entities/TeacherSubjectSchedule" },
+      "description": "Teacher subject teaching class schedules"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/Attendance" },
+      "description": "Daily attendance logs"
+    },
+    "/attendance_corrections/{correctionId}": {
+      "schema": { "$ref": "#/entities/AttendanceCorrection" },
+      "description": "Correction requests"
+    },
+    "/leave_requests/{leaveId}": {
+      "schema": { "$ref": "#/entities/LeaveRequest" },
+      "description": "Leave requests"
+    },
+    "/holidays/{holidayId}": {
+      "schema": { "$ref": "#/entities/Holiday" },
+      "description": "Holidays"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "System audit logs"
+    },
+    "/telegram_settings/{id}": {
+      "schema": { "$ref": "#/entities/TelegramSettings" },
+      "description": "Telegram bot settings"
+    },
+    "/system_settings/{id}": {
+      "schema": { "$ref": "#/entities/SystemSettings" },
+      "description": "System settings"
+    }
+  }
+}

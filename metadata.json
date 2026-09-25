@@ -1,0 +1,8 @@
+{
+  "name": "EduTrack - Teacher Schedule \u0026 Employee Check-in System",
+  "description": "Enterprise-grade Teacher Schedule and Employee Attendance Management System featuring RBAC, real-time check-in/out, GPS geofencing, absence detection, Telegram bot alerts, and comprehensive audit logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
