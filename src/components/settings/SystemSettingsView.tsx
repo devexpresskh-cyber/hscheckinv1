@@ -59,13 +59,10 @@ export const SystemSettingsView: React.FC = () => {
     showToast('Downloaded full system backup JSON', 'info');
   };
 
-  const handleResetSeedData = () => {
-    if (window.confirm('Reset all demo data back to factory defaults? Any custom added records will be replaced.')) {
-      StorageService.resetToSeedData();
-      setSettings(StorageService.getSystemSettings());
-      showToast('System reset to initial sample data', 'info');
-      setTimeout(() => window.location.reload(), 600);
-    }
+  const handleRefreshFromCloud = () => {
+    StorageService.refreshFromCloud();
+    setSettings(StorageService.getSystemSettings());
+    showToast('Cache cleared and re-synced with Cloud Firestore', 'success');
   };
 
   return (
@@ -279,11 +276,11 @@ export const SystemSettingsView: React.FC = () => {
 
           <button
             type="button"
-            onClick={handleResetSeedData}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors"
+            onClick={handleRefreshFromCloud}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Reset Demo Data to Initial Seeds</span>
+            <span>Sync & Refresh from Cloud Firestore</span>
           </button>
         </div>
       </div>

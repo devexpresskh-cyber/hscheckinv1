@@ -17,6 +17,20 @@
       },
       "required": ["id", "email", "fullName", "role"]
     },
+    "Role": {
+      "title": "Role",
+      "description": "System role definition with granular permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "isSystem": { "type": "boolean" },
+        "permissions": { "type": "string" }
+      },
+      "required": ["id", "name", "code"]
+    },
     "Teacher": {
       "title": "Teacher",
       "description": "School teacher profile with academic specializations and schedule assignment",
@@ -175,6 +189,76 @@
       },
       "required": ["id", "name", "date"]
     },
+    "Department": {
+      "title": "Department",
+      "description": "School operational and academic departments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "khmerName": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "managerName": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Campuses and work locations for GPS geofencing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "khmerName": { "type": "string" },
+        "address": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "radiusMeters": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "latitude", "longitude"]
+    },
+    "TimetablePeriod": {
+      "title": "TimetablePeriod",
+      "description": "Standard school bell schedule and class periods",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "periodNumber": { "type": "number" },
+        "periodName": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "isBreak": { "type": "boolean" },
+        "session": { "type": "string" }
+      },
+      "required": ["id", "periodNumber", "startTime", "endTime"]
+    },
+    "TeacherSubjectSchedule": {
+      "title": "TeacherSubjectSchedule",
+      "description": "Individual subject teaching periods for teachers to check in and check out by class timetable",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "khmerTeacherName": { "type": "string" },
+        "subject": { "type": "string" },
+        "khmerSubject": { "type": "string" },
+        "subjectCode": { "type": "string" },
+        "gradeClass": { "type": "string" },
+        "room": { "type": "string" },
+        "dayOfWeek": { "type": "number" },
+        "periodNumber": { "type": "number" },
+        "periodName": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "gracePeriodMinutes": { "type": "number" },
+        "color": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "teacherId", "subject", "startTime", "endTime"]
+    },
     "AuditLog": {
       "title": "AuditLog",
       "description": "System activity logs for security and compliance",
@@ -229,37 +313,16 @@
         "enforceGeofence": { "type": "boolean" }
       },
       "required": ["id", "organizationName"]
-    },
-    "TeacherSubjectSchedule": {
-      "title": "TeacherSubjectSchedule",
-      "description": "Individual subject teaching periods for teachers to check in and check out by class timetable",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "teacherId": { "type": "string" },
-        "teacherName": { "type": "string" },
-        "khmerTeacherName": { "type": "string" },
-        "subject": { "type": "string" },
-        "khmerSubject": { "type": "string" },
-        "subjectCode": { "type": "string" },
-        "gradeClass": { "type": "string" },
-        "room": { "type": "string" },
-        "dayOfWeek": { "type": "number" },
-        "periodNumber": { "type": "number" },
-        "periodName": { "type": "string" },
-        "startTime": { "type": "string" },
-        "endTime": { "type": "string" },
-        "gracePeriodMinutes": { "type": "number" },
-        "color": { "type": "string" },
-        "isActive": { "type": "boolean" }
-      },
-      "required": ["id", "teacherId", "subject", "startTime", "endTime"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User accounts"
+    },
+    "/roles/{roleId}": {
+      "schema": { "$ref": "#/entities/Role" },
+      "description": "System role definitions"
     },
     "/teachers/{teacherId}": {
       "schema": { "$ref": "#/entities/Teacher" },
@@ -277,6 +340,10 @@
       "schema": { "$ref": "#/entities/TeacherSubjectSchedule" },
       "description": "Teacher subject teaching class schedules"
     },
+    "/timetable_periods/{periodId}": {
+      "schema": { "$ref": "#/entities/TimetablePeriod" },
+      "description": "Timetable period slots"
+    },
     "/attendance/{attendanceId}": {
       "schema": { "$ref": "#/entities/Attendance" },
       "description": "Daily attendance logs"
@@ -292,6 +359,14 @@
     "/holidays/{holidayId}": {
       "schema": { "$ref": "#/entities/Holiday" },
       "description": "Holidays"
+    },
+    "/departments/{departmentId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "School departments"
+    },
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Campus work locations"
     },
     "/audit_logs/{logId}": {
       "schema": { "$ref": "#/entities/AuditLog" },

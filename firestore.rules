@@ -2,89 +2,81 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default Deny All
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Health check endpoint for connection verification
-    match /test/connection {
-      allow read: if true;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'planningtks585@gmail.com' ||
-        request.auth.token.email == 'singsabmc@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+    match /test/{docId} {
+      allow read, write: if true;
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow read, write: if true;
+    }
+
+    match /roles/{roleId} {
+      allow read, write: if true;
     }
 
     match /teachers/{teacherId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /employees/{employeeId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /schedules/{scheduleId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /subject_schedules/{subjectScheduleId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    match /timetable_periods/{periodId} {
+      allow read, write: if true;
     }
 
     match /attendance/{attendanceId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /attendance_corrections/{correctionId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /leave_requests/{leaveId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /holidays/{holidayId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    match /departments/{departmentId} {
+      allow read, write: if true;
+    }
+
+    match /locations/{locationId} {
+      allow read, write: if true;
     }
 
     match /audit_logs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow read, write: if true;
     }
 
     match /telegram_settings/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    match /telegram_logs/{id} {
+      allow read, write: if true;
     }
 
     match /system_settings/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
+    }
+
+    match /notifications/{id} {
+      allow read, write: if true;
     }
   }
 }

@@ -19,46 +19,44 @@ import {
   AppNotification
 } from '../types/index.ts';
 import {
-  INITIAL_ROLES,
-  INITIAL_USERS,
-  INITIAL_TEACHERS,
-  INITIAL_EMPLOYEES,
-  INITIAL_SCHEDULES,
-  INITIAL_TIMETABLE_PERIODS,
-  INITIAL_TEACHER_SUBJECT_SCHEDULES,
-  INITIAL_ATTENDANCE,
-  INITIAL_HOLIDAYS,
-  INITIAL_DEPARTMENTS,
-  INITIAL_LOCATIONS,
-  INITIAL_TELEGRAM_SETTINGS,
-  INITIAL_SYSTEM_SETTINGS,
-  INITIAL_CORRECTIONS,
-  INITIAL_LEAVE_REQUESTS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_NOTIFICATIONS
-} from '../data/seedData.ts';
+  DEFAULT_ROLES,
+  DEFAULT_USERS,
+  DEFAULT_DEPARTMENTS,
+  DEFAULT_LOCATIONS,
+  DEFAULT_TIMETABLE_PERIODS,
+  DEFAULT_SYSTEM_SETTINGS,
+  DEFAULT_TELEGRAM_SETTINGS
+} from '../data/initialData.ts';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch
+} from 'firebase/firestore';
 
 const STORAGE_KEYS = {
-  ROLES: 'edutrack_roles_v1',
-  USERS: 'edutrack_users_v1',
-  TEACHERS: 'edutrack_teachers_v1',
-  EMPLOYEES: 'edutrack_employees_v1',
-  SCHEDULES: 'edutrack_schedules_v1',
-  PERIODS: 'edutrack_periods_v1',
-  SUBJECT_SCHEDULES: 'edutrack_subject_schedules_v1',
-  ATTENDANCE: 'edutrack_attendance_v1',
-  HOLIDAYS: 'edutrack_holidays_v1',
-  DEPARTMENTS: 'edutrack_departments_v1',
-  LOCATIONS: 'edutrack_locations_v1',
-  TELEGRAM_SETTINGS: 'edutrack_tg_settings_v1',
-  TELEGRAM_LOGS: 'edutrack_tg_logs_v1',
-  SYSTEM_SETTINGS: 'edutrack_sys_settings_v1',
-  CORRECTIONS: 'edutrack_corrections_v1',
-  LEAVE_REQUESTS: 'edutrack_leaves_v1',
-  AUDIT_LOGS: 'edutrack_audit_logs_v1',
-  NOTIFICATIONS: 'edutrack_notifs_v1',
+  ROLES: 'edutrack_roles_v2',
+  USERS: 'edutrack_users_v2',
+  TEACHERS: 'edutrack_teachers_v2',
+  EMPLOYEES: 'edutrack_employees_v2',
+  SCHEDULES: 'edutrack_schedules_v2',
+  PERIODS: 'edutrack_periods_v2',
+  SUBJECT_SCHEDULES: 'edutrack_subject_schedules_v2',
+  ATTENDANCE: 'edutrack_attendance_v2',
+  HOLIDAYS: 'edutrack_holidays_v2',
+  DEPARTMENTS: 'edutrack_departments_v2',
+  LOCATIONS: 'edutrack_locations_v2',
+  TELEGRAM_SETTINGS: 'edutrack_tg_settings_v2',
+  TELEGRAM_LOGS: 'edutrack_tg_logs_v2',
+  SYSTEM_SETTINGS: 'edutrack_sys_settings_v2',
+  CORRECTIONS: 'edutrack_corrections_v2',
+  LEAVE_REQUESTS: 'edutrack_leaves_v2',
+  AUDIT_LOGS: 'edutrack_audit_logs_v2',
+  NOTIFICATIONS: 'edutrack_notifs_v2',
+  HAS_BOOTSTRAPPED: 'edutrack_bootstrapped_v2'
 };
 
 type Listener = () => void;
@@ -78,7 +76,6 @@ function getStored<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) {
-      localStorage.setItem(key, JSON.stringify(fallback));
       return fallback;
     }
     return JSON.parse(raw);
@@ -90,11 +87,232 @@ function getStored<T>(key: string, fallback: T): T {
 function setStored<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-    notifyListeners();
   } catch (e) {
-    console.error(`Error saving to localStorage [${key}]:`, e);
+    console.error(`Error caching to localStorage [${key}]:`, e);
   }
 }
+
+// In-memory cache for synchronous, flicker-free rendering
+let cache = {
+  roles: getStored<RoleDefinition[]>(STORAGE_KEYS.ROLES, DEFAULT_ROLES),
+  users: getStored<UserAccount[]>(STORAGE_KEYS.USERS, DEFAULT_USERS),
+  teachers: getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, []),
+  employees: getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, []),
+  schedules: getStored<Schedule[]>(STORAGE_KEYS.SCHEDULES, []),
+  periods: getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, DEFAULT_TIMETABLE_PERIODS),
+  subjectSchedules: getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, []),
+  attendance: getStored<AttendanceRecord[]>(STORAGE_KEYS.ATTENDANCE, []),
+  holidays: getStored<Holiday[]>(STORAGE_KEYS.HOLIDAYS, []),
+  departments: getStored<Department[]>(STORAGE_KEYS.DEPARTMENTS, DEFAULT_DEPARTMENTS),
+  locations: getStored<WorkLocation[]>(STORAGE_KEYS.LOCATIONS, DEFAULT_LOCATIONS),
+  telegramSettings: getStored<TelegramSettings>(STORAGE_KEYS.TELEGRAM_SETTINGS, DEFAULT_TELEGRAM_SETTINGS),
+  telegramLogs: getStored<TelegramMessageLog[]>(STORAGE_KEYS.TELEGRAM_LOGS, []),
+  systemSettings: getStored<SystemSettings>(STORAGE_KEYS.SYSTEM_SETTINGS, DEFAULT_SYSTEM_SETTINGS),
+  corrections: getStored<AttendanceCorrectionRequest[]>(STORAGE_KEYS.CORRECTIONS, []),
+  leaveRequests: getStored<LeaveRequest[]>(STORAGE_KEYS.LEAVE_REQUESTS, []),
+  auditLogs: getStored<AuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, []),
+  notifications: getStored<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, []),
+  isSyncReady: false
+};
+
+// Initialize real-time listeners to Firestore collections
+let isInitialized = false;
+
+function initFirestoreSync() {
+  if (isInitialized) return;
+  isInitialized = true;
+
+  // 1. Roles
+  onSnapshot(collection(db, 'roles'), snapshot => {
+    if (!snapshot.empty) {
+      cache.roles = snapshot.docs.map(d => d.data() as RoleDefinition);
+      setStored(STORAGE_KEYS.ROLES, cache.roles);
+      notifyListeners();
+    } else {
+      // Bootstrap default roles to Firestore
+      DEFAULT_ROLES.forEach(r => {
+        setDoc(doc(db, 'roles', r.id), r).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `roles/${r.id}`)
+        );
+      });
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'roles'));
+
+  // 2. Users
+  onSnapshot(collection(db, 'users'), snapshot => {
+    if (!snapshot.empty) {
+      cache.users = snapshot.docs.map(d => d.data() as UserAccount);
+      setStored(STORAGE_KEYS.USERS, cache.users);
+      notifyListeners();
+    } else {
+      // Bootstrap default admin users to Firestore
+      DEFAULT_USERS.forEach(u => {
+        setDoc(doc(db, 'users', u.id), u).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `users/${u.id}`)
+        );
+      });
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'users'));
+
+  // 3. Teachers
+  onSnapshot(collection(db, 'teachers'), snapshot => {
+    cache.teachers = snapshot.docs.map(d => d.data() as Teacher);
+    setStored(STORAGE_KEYS.TEACHERS, cache.teachers);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'teachers'));
+
+  // 4. Employees
+  onSnapshot(collection(db, 'employees'), snapshot => {
+    cache.employees = snapshot.docs.map(d => d.data() as Employee);
+    setStored(STORAGE_KEYS.EMPLOYEES, cache.employees);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'employees'));
+
+  // 5. Schedules
+  onSnapshot(collection(db, 'schedules'), snapshot => {
+    cache.schedules = snapshot.docs.map(d => d.data() as Schedule);
+    setStored(STORAGE_KEYS.SCHEDULES, cache.schedules);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'schedules'));
+
+  // 6. Timetable Periods
+  onSnapshot(collection(db, 'timetable_periods'), snapshot => {
+    if (!snapshot.empty) {
+      const list = snapshot.docs.map(d => d.data() as TimetablePeriod);
+      cache.periods = list.sort((a, b) => a.periodNumber - b.periodNumber);
+      setStored(STORAGE_KEYS.PERIODS, cache.periods);
+      notifyListeners();
+    } else {
+      // Bootstrap default timetable periods
+      DEFAULT_TIMETABLE_PERIODS.forEach(p => {
+        setDoc(doc(db, 'timetable_periods', p.id), p).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `timetable_periods/${p.id}`)
+        );
+      });
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'timetable_periods'));
+
+  // 7. Subject Schedules (Class teaching periods)
+  onSnapshot(collection(db, 'subject_schedules'), snapshot => {
+    cache.subjectSchedules = snapshot.docs.map(d => d.data() as TeacherSubjectSchedule);
+    setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, cache.subjectSchedules);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'subject_schedules'));
+
+  // 8. Attendance records
+  onSnapshot(collection(db, 'attendance'), snapshot => {
+    // Ignore summary docs
+    const records = snapshot.docs
+      .filter(d => !d.id.startsWith('summary_'))
+      .map(d => d.data() as AttendanceRecord);
+    cache.attendance = records;
+    setStored(STORAGE_KEYS.ATTENDANCE, cache.attendance);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'attendance'));
+
+  // 9. Attendance Corrections
+  onSnapshot(collection(db, 'attendance_corrections'), snapshot => {
+    cache.corrections = snapshot.docs.map(d => d.data() as AttendanceCorrectionRequest);
+    setStored(STORAGE_KEYS.CORRECTIONS, cache.corrections);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'attendance_corrections'));
+
+  // 10. Leave Requests
+  onSnapshot(collection(db, 'leave_requests'), snapshot => {
+    cache.leaveRequests = snapshot.docs.map(d => d.data() as LeaveRequest);
+    setStored(STORAGE_KEYS.LEAVE_REQUESTS, cache.leaveRequests);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'leave_requests'));
+
+  // 11. Holidays
+  onSnapshot(collection(db, 'holidays'), snapshot => {
+    cache.holidays = snapshot.docs.map(d => d.data() as Holiday);
+    setStored(STORAGE_KEYS.HOLIDAYS, cache.holidays);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'holidays'));
+
+  // 12. Departments
+  onSnapshot(collection(db, 'departments'), snapshot => {
+    if (!snapshot.empty) {
+      cache.departments = snapshot.docs.map(d => d.data() as Department);
+      setStored(STORAGE_KEYS.DEPARTMENTS, cache.departments);
+      notifyListeners();
+    } else {
+      DEFAULT_DEPARTMENTS.forEach(dept => {
+        setDoc(doc(db, 'departments', dept.id), dept).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `departments/${dept.id}`)
+        );
+      });
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'departments'));
+
+  // 13. Locations
+  onSnapshot(collection(db, 'locations'), snapshot => {
+    if (!snapshot.empty) {
+      cache.locations = snapshot.docs.map(d => d.data() as WorkLocation);
+      setStored(STORAGE_KEYS.LOCATIONS, cache.locations);
+      notifyListeners();
+    } else {
+      DEFAULT_LOCATIONS.forEach(loc => {
+        setDoc(doc(db, 'locations', loc.id), loc).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `locations/${loc.id}`)
+        );
+      });
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'locations'));
+
+  // 14. Telegram Settings
+  onSnapshot(doc(db, 'telegram_settings', 'config'), snapshot => {
+    if (snapshot.exists()) {
+      cache.telegramSettings = snapshot.data() as TelegramSettings;
+      setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, cache.telegramSettings);
+      notifyListeners();
+    } else {
+      setDoc(doc(db, 'telegram_settings', 'config'), DEFAULT_TELEGRAM_SETTINGS).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, 'telegram_settings/config')
+      );
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'telegram_settings/config'));
+
+  // 15. Telegram Message Logs
+  onSnapshot(collection(db, 'telegram_logs'), snapshot => {
+    cache.telegramLogs = snapshot.docs.map(d => d.data() as TelegramMessageLog);
+    setStored(STORAGE_KEYS.TELEGRAM_LOGS, cache.telegramLogs);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'telegram_logs'));
+
+  // 16. System Settings
+  onSnapshot(doc(db, 'system_settings', 'config'), snapshot => {
+    if (snapshot.exists()) {
+      cache.systemSettings = snapshot.data() as SystemSettings;
+      setStored(STORAGE_KEYS.SYSTEM_SETTINGS, cache.systemSettings);
+      notifyListeners();
+    } else {
+      setDoc(doc(db, 'system_settings', 'config'), DEFAULT_SYSTEM_SETTINGS).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, 'system_settings/config')
+      );
+    }
+  }, err => handleFirestoreError(err, OperationType.GET, 'system_settings/config'));
+
+  // 17. Audit Logs
+  onSnapshot(collection(db, 'audit_logs'), snapshot => {
+    cache.auditLogs = snapshot.docs.map(d => d.data() as AuditLog);
+    setStored(STORAGE_KEYS.AUDIT_LOGS, cache.auditLogs);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'audit_logs'));
+
+  // 18. Notifications
+  onSnapshot(collection(db, 'notifications'), snapshot => {
+    cache.notifications = snapshot.docs.map(d => d.data() as AppNotification);
+    setStored(STORAGE_KEYS.NOTIFICATIONS, cache.notifications);
+    notifyListeners();
+  }, err => handleFirestoreError(err, OperationType.GET, 'notifications'));
+
+  cache.isSyncReady = true;
+}
+
+// Auto-start sync
+initFirestoreSync();
 
 export const StorageService = {
   subscribe(fn: Listener): () => void {
@@ -104,127 +322,259 @@ export const StorageService = {
     };
   },
 
+  isCloudReady(): boolean {
+    return cache.isSyncReady;
+  },
+
   // Roles
   getRoles(): RoleDefinition[] {
-    return getStored<RoleDefinition[]>(STORAGE_KEYS.ROLES, INITIAL_ROLES);
+    return cache.roles;
   },
   saveRoles(roles: RoleDefinition[]) {
+    cache.roles = roles;
     setStored(STORAGE_KEYS.ROLES, roles);
+    notifyListeners();
+    roles.forEach(r => {
+      setDoc(doc(db, 'roles', r.id), r).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `roles/${r.id}`)
+      );
+    });
   },
 
   // Users
   getUsers(): UserAccount[] {
-    return getStored<UserAccount[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    return cache.users;
   },
   saveUsers(users: UserAccount[]) {
+    cache.users = users;
     setStored(STORAGE_KEYS.USERS, users);
+    notifyListeners();
+    users.forEach(u => {
+      setDoc(doc(db, 'users', u.id), u).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `users/${u.id}`)
+      );
+    });
   },
   addUser(user: UserAccount) {
-    const list = this.getUsers();
-    this.saveUsers([user, ...list]);
+    const list = [user, ...cache.users.filter(u => u.id !== user.id)];
+    cache.users = list;
+    setStored(STORAGE_KEYS.USERS, list);
+    notifyListeners();
+    setDoc(doc(db, 'users', user.id), user).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.id}`)
+    );
   },
   updateUser(id: string, updates: Partial<UserAccount>) {
-    const list = this.getUsers().map(u => u.id === id ? { ...u, ...updates } : u);
-    this.saveUsers(list);
+    const list = cache.users.map(u => (u.id === id ? { ...u, ...updates } : u));
+    cache.users = list;
+    setStored(STORAGE_KEYS.USERS, list);
+    notifyListeners();
+    const updated = list.find(u => u.id === id);
+    if (updated) {
+      setDoc(doc(db, 'users', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `users/${id}`)
+      );
+    }
   },
 
   // Teachers
   getTeachers(): Teacher[] {
-    return getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS);
+    return cache.teachers;
   },
   saveTeachers(teachers: Teacher[]) {
+    cache.teachers = teachers;
     setStored(STORAGE_KEYS.TEACHERS, teachers);
+    notifyListeners();
+    teachers.forEach(t => {
+      setDoc(doc(db, 'teachers', t.id), t).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `teachers/${t.id}`)
+      );
+    });
   },
   addTeacher(teacher: Teacher) {
-    const list = this.getTeachers();
-    this.saveTeachers([teacher, ...list]);
+    const list = [teacher, ...cache.teachers.filter(t => t.id !== teacher.id)];
+    cache.teachers = list;
+    setStored(STORAGE_KEYS.TEACHERS, list);
+    notifyListeners();
+    setDoc(doc(db, 'teachers', teacher.id), teacher).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `teachers/${teacher.id}`)
+    );
   },
   addTeachersBatch(newTeachers: Teacher[], mode: 'append' | 'replace' = 'append') {
+    let finalTeachers: Teacher[];
     if (mode === 'replace') {
-      this.saveTeachers(newTeachers);
-      return;
+      finalTeachers = newTeachers;
+    } else {
+      const map = new Map<string, Teacher>();
+      cache.teachers.forEach(t => map.set(t.id, t));
+      newTeachers.forEach(t => map.set(t.id, t));
+      finalTeachers = Array.from(map.values());
     }
-    const current = this.getTeachers();
-    const map = new Map<string, Teacher>();
-    // index existing
-    current.forEach(t => {
-      map.set(t.id, t);
-      if (t.teacherId) map.set(t.teacherId.toLowerCase(), t);
-    });
-    // add or overwrite
-    newTeachers.forEach(t => {
-      map.set(t.id, t);
-    });
-    // filter unique by id
-    const unique = Array.from(new Set(Array.from(map.values()).map(t => t.id)))
-      .map(id => Array.from(map.values()).find(t => t.id === id)!);
-    this.saveTeachers(unique);
+    cache.teachers = finalTeachers;
+    setStored(STORAGE_KEYS.TEACHERS, finalTeachers);
+    notifyListeners();
+
+    // Use Firestore WriteBatch for high-speed atomic upload
+    try {
+      const batch = writeBatch(db);
+      newTeachers.forEach(t => {
+        batch.set(doc(db, 'teachers', t.id), t);
+      });
+      batch.commit().catch(err => {
+        console.warn('Batch write notice:', err);
+      });
+    } catch (e) {
+      console.warn('Batch write error:', e);
+    }
   },
   updateTeacher(id: string, updates: Partial<Teacher>) {
-    const list = this.getTeachers().map(t => t.id === id ? { ...t, ...updates } : t);
-    this.saveTeachers(list);
+    const list = cache.teachers.map(t => (t.id === id ? { ...t, ...updates } : t));
+    cache.teachers = list;
+    setStored(STORAGE_KEYS.TEACHERS, list);
+    notifyListeners();
+    const updated = list.find(t => t.id === id);
+    if (updated) {
+      setDoc(doc(db, 'teachers', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `teachers/${id}`)
+      );
+    }
   },
   deleteTeacher(id: string) {
-    const list = this.getTeachers().filter(t => t.id !== id);
-    this.saveTeachers(list);
+    const list = cache.teachers.filter(t => t.id !== id);
+    cache.teachers = list;
+    setStored(STORAGE_KEYS.TEACHERS, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'teachers', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `teachers/${id}`)
+    );
   },
 
   // Employees
   getEmployees(): Employee[] {
-    return getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, INITIAL_EMPLOYEES);
+    return cache.employees;
   },
   saveEmployees(employees: Employee[]) {
+    cache.employees = employees;
     setStored(STORAGE_KEYS.EMPLOYEES, employees);
+    notifyListeners();
+    employees.forEach(e => {
+      setDoc(doc(db, 'employees', e.id), e).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `employees/${e.id}`)
+      );
+    });
   },
   addEmployee(employee: Employee) {
-    const list = this.getEmployees();
-    this.saveEmployees([employee, ...list]);
+    const list = [employee, ...cache.employees.filter(e => e.id !== employee.id)];
+    cache.employees = list;
+    setStored(STORAGE_KEYS.EMPLOYEES, list);
+    notifyListeners();
+    setDoc(doc(db, 'employees', employee.id), employee).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `employees/${employee.id}`)
+    );
   },
   updateEmployee(id: string, updates: Partial<Employee>) {
-    const list = this.getEmployees().map(e => e.id === id ? { ...e, ...updates } : e);
-    this.saveEmployees(list);
+    const list = cache.employees.map(e => (e.id === id ? { ...e, ...updates } : e));
+    cache.employees = list;
+    setStored(STORAGE_KEYS.EMPLOYEES, list);
+    notifyListeners();
+    const updated = list.find(e => e.id === id);
+    if (updated) {
+      setDoc(doc(db, 'employees', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `employees/${id}`)
+      );
+    }
   },
   deleteEmployee(id: string) {
-    const list = this.getEmployees().filter(e => e.id !== id);
-    this.saveEmployees(list);
+    const list = cache.employees.filter(e => e.id !== id);
+    cache.employees = list;
+    setStored(STORAGE_KEYS.EMPLOYEES, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'employees', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `employees/${id}`)
+    );
   },
 
   // Schedules
   getSchedules(): Schedule[] {
-    return getStored<Schedule[]>(STORAGE_KEYS.SCHEDULES, INITIAL_SCHEDULES);
+    return cache.schedules;
   },
   saveSchedules(schedules: Schedule[]) {
+    cache.schedules = schedules;
     setStored(STORAGE_KEYS.SCHEDULES, schedules);
+    notifyListeners();
+    schedules.forEach(s => {
+      setDoc(doc(db, 'schedules', s.id), s).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `schedules/${s.id}`)
+      );
+    });
   },
   addSchedule(sch: Schedule) {
-    const list = this.getSchedules();
-    this.saveSchedules([...list, sch]);
+    const list = [...cache.schedules.filter(s => s.id !== sch.id), sch];
+    cache.schedules = list;
+    setStored(STORAGE_KEYS.SCHEDULES, list);
+    notifyListeners();
+    setDoc(doc(db, 'schedules', sch.id), sch).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `schedules/${sch.id}`)
+    );
   },
   updateSchedule(id: string, updates: Partial<Schedule>) {
-    const list = this.getSchedules().map(s => s.id === id ? { ...s, ...updates } : s);
-    this.saveSchedules(list);
+    const list = cache.schedules.map(s => (s.id === id ? { ...s, ...updates } : s));
+    cache.schedules = list;
+    setStored(STORAGE_KEYS.SCHEDULES, list);
+    notifyListeners();
+    const updated = list.find(s => s.id === id);
+    if (updated) {
+      setDoc(doc(db, 'schedules', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `schedules/${id}`)
+      );
+    }
   },
   deleteSchedule(id: string) {
-    const list = this.getSchedules().filter(s => s.id !== id);
-    this.saveSchedules(list);
+    const list = cache.schedules.filter(s => s.id !== id);
+    cache.schedules = list;
+    setStored(STORAGE_KEYS.SCHEDULES, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'schedules', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `schedules/${id}`)
+    );
   },
 
-  // School Timetable Periods (Period Slots)
+  // School Timetable Periods
   getPeriods(): TimetablePeriod[] {
-    return getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, INITIAL_TIMETABLE_PERIODS);
+    return cache.periods;
   },
   savePeriods(periods: TimetablePeriod[]) {
+    cache.periods = periods;
     setStored(STORAGE_KEYS.PERIODS, periods);
+    notifyListeners();
+    periods.forEach(p => {
+      setDoc(doc(db, 'timetable_periods', p.id), p).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `timetable_periods/${p.id}`)
+      );
+    });
   },
   addPeriod(period: TimetablePeriod) {
-    const list = this.getPeriods();
-    this.savePeriods([...list, period]);
+    const list = [...cache.periods.filter(p => p.id !== period.id), period];
+    cache.periods = list.sort((a, b) => a.periodNumber - b.periodNumber);
+    setStored(STORAGE_KEYS.PERIODS, cache.periods);
+    notifyListeners();
+    setDoc(doc(db, 'timetable_periods', period.id), period).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `timetable_periods/${period.id}`)
+    );
   },
   updatePeriod(id: string, updates: Partial<TimetablePeriod>, syncSubjectSchedules = false) {
-    const periods = this.getPeriods();
-    const target = periods.find(p => p.id === id);
-    const updated = periods.map(p => p.id === id ? { ...p, ...updates } : p);
-    this.savePeriods(updated);
+    const target = cache.periods.find(p => p.id === id);
+    const updated = cache.periods.map(p => (p.id === id ? { ...p, ...updates } : p));
+    cache.periods = updated;
+    setStored(STORAGE_KEYS.PERIODS, updated);
+    notifyListeners();
+
+    const currentDoc = updated.find(p => p.id === id);
+    if (currentDoc) {
+      setDoc(doc(db, 'timetable_periods', id), currentDoc, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `timetable_periods/${id}`)
+      );
+    }
 
     if (syncSubjectSchedules && target) {
       const oldNum = target.periodNumber;
@@ -233,38 +583,54 @@ export const StorageService = {
       const newEnd = updates.endTime || target.endTime;
       const newName = updates.periodName || target.periodName;
 
-      const subList = this.getSubjectSchedules().map(sub => {
+      const subList = cache.subjectSchedules.map(sub => {
         if (sub.periodNumber === oldNum) {
-          return {
+          const mod = {
             ...sub,
             periodNumber: newNum,
             periodName: `${newName} (${newStart} - ${newEnd})`,
             startTime: newStart,
             endTime: newEnd
           };
+          setDoc(doc(db, 'subject_schedules', mod.id), mod, { merge: true }).catch(() => {});
+          return mod;
         }
         return sub;
       });
-      this.saveSubjectSchedules(subList);
+      cache.subjectSchedules = subList;
+      setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, subList);
+      notifyListeners();
     }
   },
   deletePeriod(id: string) {
-    const list = this.getPeriods().filter(p => p.id !== id);
-    this.savePeriods(list);
+    const list = cache.periods.filter(p => p.id !== id);
+    cache.periods = list;
+    setStored(STORAGE_KEYS.PERIODS, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'timetable_periods', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `timetable_periods/${id}`)
+    );
   },
   resetPeriodsToDefault() {
-    this.savePeriods(INITIAL_TIMETABLE_PERIODS);
+    this.savePeriods(DEFAULT_TIMETABLE_PERIODS);
   },
 
-  // Teacher Subject Schedules (Period / Timetable)
+  // Teacher Subject Schedules (Class teaching periods)
   getSubjectSchedules(): TeacherSubjectSchedule[] {
-    return getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, INITIAL_TEACHER_SUBJECT_SCHEDULES);
+    return cache.subjectSchedules;
   },
   saveSubjectSchedules(schedules: TeacherSubjectSchedule[]) {
+    cache.subjectSchedules = schedules;
     setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, schedules);
+    notifyListeners();
+    schedules.forEach(s => {
+      setDoc(doc(db, 'subject_schedules', s.id), s).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `subject_schedules/${s.id}`)
+      );
+    });
   },
   getSubjectSchedulesForTeacher(teacherId: string, dayOfWeek?: number): TeacherSubjectSchedule[] {
-    return this.getSubjectSchedules().filter(s => {
+    return cache.subjectSchedules.filter(s => {
       if (s.teacherId !== teacherId || !s.isActive) return false;
       if (dayOfWeek !== undefined) {
         if (s.daysOfWeek && Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
@@ -276,158 +642,304 @@ export const StorageService = {
     });
   },
   getSubjectScheduleById(id: string): TeacherSubjectSchedule | undefined {
-    return this.getSubjectSchedules().find(s => s.id === id);
+    return cache.subjectSchedules.find(s => s.id === id);
   },
   addSubjectSchedule(schedule: TeacherSubjectSchedule) {
-    const list = this.getSubjectSchedules();
-    this.saveSubjectSchedules([...list, schedule]);
+    const list = [...cache.subjectSchedules.filter(s => s.id !== schedule.id), schedule];
+    cache.subjectSchedules = list;
+    setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, list);
+    notifyListeners();
+    setDoc(doc(db, 'subject_schedules', schedule.id), schedule).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `subject_schedules/${schedule.id}`)
+    );
   },
   addSubjectSchedulesBatch(newSchedules: TeacherSubjectSchedule[]) {
-    const list = this.getSubjectSchedules();
-    this.saveSubjectSchedules([...list, ...newSchedules]);
+    const map = new Map<string, TeacherSubjectSchedule>();
+    cache.subjectSchedules.forEach(s => map.set(s.id, s));
+    newSchedules.forEach(s => map.set(s.id, s));
+    const list = Array.from(map.values());
+    cache.subjectSchedules = list;
+    setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, list);
+    notifyListeners();
+
+    try {
+      const batch = writeBatch(db);
+      newSchedules.forEach(s => {
+        batch.set(doc(db, 'subject_schedules', s.id), s);
+      });
+      batch.commit().catch(err => {
+        console.warn('Batch write notice:', err);
+      });
+    } catch (e) {
+      console.warn('Batch error:', e);
+    }
   },
   updateSubjectSchedule(id: string, updates: Partial<TeacherSubjectSchedule>) {
-    const list = this.getSubjectSchedules().map(s => s.id === id ? { ...s, ...updates } : s);
-    this.saveSubjectSchedules(list);
+    const list = cache.subjectSchedules.map(s => (s.id === id ? { ...s, ...updates } : s));
+    cache.subjectSchedules = list;
+    setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, list);
+    notifyListeners();
+    const updated = list.find(s => s.id === id);
+    if (updated) {
+      setDoc(doc(db, 'subject_schedules', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `subject_schedules/${id}`)
+      );
+    }
   },
   deleteSubjectSchedule(id: string) {
-    const list = this.getSubjectSchedules().filter(s => s.id !== id);
-    this.saveSubjectSchedules(list);
+    const list = cache.subjectSchedules.filter(s => s.id !== id);
+    cache.subjectSchedules = list;
+    setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'subject_schedules', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `subject_schedules/${id}`)
+    );
   },
 
   // Attendance
   getAttendance(): AttendanceRecord[] {
-    return getStored<AttendanceRecord[]>(STORAGE_KEYS.ATTENDANCE, INITIAL_ATTENDANCE);
+    return cache.attendance;
   },
   saveAttendance(records: AttendanceRecord[]) {
+    cache.attendance = records;
     setStored(STORAGE_KEYS.ATTENDANCE, records);
-    // Asynchronously replicate to Firestore
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const todayRecords = records.filter(r => r.date === today);
-      setDoc(doc(db, 'attendance', `summary_${today}`), {
-        recordsCount: todayRecords.length,
-        updatedAt: new Date().toISOString()
-      }).catch(err => {
-        handleFirestoreError(err, OperationType.WRITE, `attendance/summary_${today}`);
-      });
-    } catch {
-      // Ignore background firestore sync error
-    }
+    notifyListeners();
+    records.forEach(r => {
+      setDoc(doc(db, 'attendance', r.id), r).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `attendance/${r.id}`)
+      );
+    });
   },
   addAttendanceRecord(record: AttendanceRecord) {
-    const list = this.getAttendance();
-    this.saveAttendance([record, ...list]);
+    const list = [record, ...cache.attendance.filter(r => r.id !== record.id)];
+    cache.attendance = list;
+    setStored(STORAGE_KEYS.ATTENDANCE, list);
+    notifyListeners();
+    setDoc(doc(db, 'attendance', record.id), record).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `attendance/${record.id}`)
+    );
   },
   updateAttendanceRecord(id: string, updates: Partial<AttendanceRecord>) {
-    const list = this.getAttendance().map(r => r.id === id ? { ...r, ...updates } : r);
-    this.saveAttendance(list);
+    const list = cache.attendance.map(r => (r.id === id ? { ...r, ...updates } : r));
+    cache.attendance = list;
+    setStored(STORAGE_KEYS.ATTENDANCE, list);
+    notifyListeners();
+    const updated = list.find(r => r.id === id);
+    if (updated) {
+      setDoc(doc(db, 'attendance', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `attendance/${id}`)
+      );
+    }
   },
 
   // Attendance Corrections
   getCorrections(): AttendanceCorrectionRequest[] {
-    return getStored<AttendanceCorrectionRequest[]>(STORAGE_KEYS.CORRECTIONS, INITIAL_CORRECTIONS);
+    return cache.corrections;
   },
   saveCorrections(items: AttendanceCorrectionRequest[]) {
+    cache.corrections = items;
     setStored(STORAGE_KEYS.CORRECTIONS, items);
+    notifyListeners();
+    items.forEach(c => {
+      setDoc(doc(db, 'attendance_corrections', c.id), c).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `attendance_corrections/${c.id}`)
+      );
+    });
   },
   addCorrection(req: AttendanceCorrectionRequest) {
-    const list = this.getCorrections();
-    this.saveCorrections([req, ...list]);
+    const list = [req, ...cache.corrections.filter(c => c.id !== req.id)];
+    cache.corrections = list;
+    setStored(STORAGE_KEYS.CORRECTIONS, list);
+    notifyListeners();
+    setDoc(doc(db, 'attendance_corrections', req.id), req).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `attendance_corrections/${req.id}`)
+    );
   },
   updateCorrection(id: string, updates: Partial<AttendanceCorrectionRequest>) {
-    const list = this.getCorrections().map(c => c.id === id ? { ...c, ...updates } : c);
-    this.saveCorrections(list);
+    const list = cache.corrections.map(c => (c.id === id ? { ...c, ...updates } : c));
+    cache.corrections = list;
+    setStored(STORAGE_KEYS.CORRECTIONS, list);
+    notifyListeners();
+    const updated = list.find(c => c.id === id);
+    if (updated) {
+      setDoc(doc(db, 'attendance_corrections', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `attendance_corrections/${id}`)
+      );
+    }
   },
 
   // Leave Requests
   getLeaveRequests(): LeaveRequest[] {
-    return getStored<LeaveRequest[]>(STORAGE_KEYS.LEAVE_REQUESTS, INITIAL_LEAVE_REQUESTS);
+    return cache.leaveRequests;
   },
   saveLeaveRequests(requests: LeaveRequest[]) {
+    cache.leaveRequests = requests;
     setStored(STORAGE_KEYS.LEAVE_REQUESTS, requests);
+    notifyListeners();
+    requests.forEach(r => {
+      setDoc(doc(db, 'leave_requests', r.id), r).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `leave_requests/${r.id}`)
+      );
+    });
   },
   addLeaveRequest(req: LeaveRequest) {
-    const list = this.getLeaveRequests();
-    this.saveLeaveRequests([req, ...list]);
+    const list = [req, ...cache.leaveRequests.filter(l => l.id !== req.id)];
+    cache.leaveRequests = list;
+    setStored(STORAGE_KEYS.LEAVE_REQUESTS, list);
+    notifyListeners();
+    setDoc(doc(db, 'leave_requests', req.id), req).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `leave_requests/${req.id}`)
+    );
   },
   updateLeaveRequest(id: string, updates: Partial<LeaveRequest>) {
-    const list = this.getLeaveRequests().map(l => l.id === id ? { ...l, ...updates } : l);
-    this.saveLeaveRequests(list);
+    const list = cache.leaveRequests.map(l => (l.id === id ? { ...l, ...updates } : l));
+    cache.leaveRequests = list;
+    setStored(STORAGE_KEYS.LEAVE_REQUESTS, list);
+    notifyListeners();
+    const updated = list.find(l => l.id === id);
+    if (updated) {
+      setDoc(doc(db, 'leave_requests', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `leave_requests/${id}`)
+      );
+    }
   },
 
   // Holidays
   getHolidays(): Holiday[] {
-    return getStored<Holiday[]>(STORAGE_KEYS.HOLIDAYS, INITIAL_HOLIDAYS);
+    return cache.holidays;
   },
   saveHolidays(holidays: Holiday[]) {
+    cache.holidays = holidays;
     setStored(STORAGE_KEYS.HOLIDAYS, holidays);
+    notifyListeners();
+    holidays.forEach(h => {
+      setDoc(doc(db, 'holidays', h.id), h).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `holidays/${h.id}`)
+      );
+    });
   },
   addHoliday(h: Holiday) {
-    const list = this.getHolidays();
-    this.saveHolidays([...list, h]);
+    const list = [...cache.holidays.filter(item => item.id !== h.id), h];
+    cache.holidays = list;
+    setStored(STORAGE_KEYS.HOLIDAYS, list);
+    notifyListeners();
+    setDoc(doc(db, 'holidays', h.id), h).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `holidays/${h.id}`)
+    );
   },
   deleteHoliday(id: string) {
-    const list = this.getHolidays().filter(h => h.id !== id);
-    this.saveHolidays(list);
+    const list = cache.holidays.filter(h => h.id !== id);
+    cache.holidays = list;
+    setStored(STORAGE_KEYS.HOLIDAYS, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'holidays', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `holidays/${id}`)
+    );
   },
 
   // Departments
   getDepartments(): Department[] {
-    return getStored<Department[]>(STORAGE_KEYS.DEPARTMENTS, INITIAL_DEPARTMENTS);
+    return cache.departments;
   },
   saveDepartments(departments: Department[]) {
+    cache.departments = departments;
     setStored(STORAGE_KEYS.DEPARTMENTS, departments);
+    notifyListeners();
+    departments.forEach(d => {
+      setDoc(doc(db, 'departments', d.id), d).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `departments/${d.id}`)
+      );
+    });
   },
   addDepartment(d: Department) {
-    const list = this.getDepartments();
-    this.saveDepartments([...list, d]);
+    const list = [...cache.departments.filter(item => item.id !== d.id), d];
+    cache.departments = list;
+    setStored(STORAGE_KEYS.DEPARTMENTS, list);
+    notifyListeners();
+    setDoc(doc(db, 'departments', d.id), d).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `departments/${d.id}`)
+    );
   },
   updateDepartment(id: string, updates: Partial<Department>) {
-    const list = this.getDepartments().map(d => d.id === id ? { ...d, ...updates } : d);
-    this.saveDepartments(list);
+    const list = cache.departments.map(d => (d.id === id ? { ...d, ...updates } : d));
+    cache.departments = list;
+    setStored(STORAGE_KEYS.DEPARTMENTS, list);
+    notifyListeners();
+    const updated = list.find(d => d.id === id);
+    if (updated) {
+      setDoc(doc(db, 'departments', id), updated, { merge: true }).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `departments/${id}`)
+      );
+    }
   },
   deleteDepartment(id: string) {
-    const list = this.getDepartments().filter(d => d.id !== id);
-    this.saveDepartments(list);
+    const list = cache.departments.filter(d => d.id !== id);
+    cache.departments = list;
+    setStored(STORAGE_KEYS.DEPARTMENTS, list);
+    notifyListeners();
+    deleteDoc(doc(db, 'departments', id)).catch(err =>
+      handleFirestoreError(err, OperationType.DELETE, `departments/${id}`)
+    );
   },
 
   // Locations
   getLocations(): WorkLocation[] {
-    return getStored<WorkLocation[]>(STORAGE_KEYS.LOCATIONS, INITIAL_LOCATIONS);
+    return cache.locations;
   },
   saveLocations(locations: WorkLocation[]) {
+    cache.locations = locations;
     setStored(STORAGE_KEYS.LOCATIONS, locations);
+    notifyListeners();
+    locations.forEach(l => {
+      setDoc(doc(db, 'locations', l.id), l).catch(err =>
+        handleFirestoreError(err, OperationType.WRITE, `locations/${l.id}`)
+      );
+    });
   },
 
   // Telegram Settings
   getTelegramSettings(): TelegramSettings {
-    return getStored<TelegramSettings>(STORAGE_KEYS.TELEGRAM_SETTINGS, INITIAL_TELEGRAM_SETTINGS);
+    return cache.telegramSettings;
   },
   saveTelegramSettings(settings: TelegramSettings) {
+    cache.telegramSettings = settings;
     setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, settings);
+    notifyListeners();
+    setDoc(doc(db, 'telegram_settings', 'config'), settings, { merge: true }).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, 'telegram_settings/config')
+    );
   },
 
   // Telegram Logs
   getTelegramLogs(): TelegramMessageLog[] {
-    return getStored<TelegramMessageLog[]>(STORAGE_KEYS.TELEGRAM_LOGS, []);
+    return cache.telegramLogs;
   },
   addTelegramLog(log: TelegramMessageLog) {
-    const list = this.getTelegramLogs();
-    setStored(STORAGE_KEYS.TELEGRAM_LOGS, [log, ...list].slice(0, 100)); // retain last 100
+    const list = [log, ...cache.telegramLogs].slice(0, 100);
+    cache.telegramLogs = list;
+    setStored(STORAGE_KEYS.TELEGRAM_LOGS, list);
+    notifyListeners();
+    setDoc(doc(db, 'telegram_logs', log.id), log).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `telegram_logs/${log.id}`)
+    );
   },
 
   // System Settings
   getSystemSettings(): SystemSettings {
-    return getStored<SystemSettings>(STORAGE_KEYS.SYSTEM_SETTINGS, INITIAL_SYSTEM_SETTINGS);
+    return cache.systemSettings;
   },
   saveSystemSettings(settings: SystemSettings) {
+    cache.systemSettings = settings;
     setStored(STORAGE_KEYS.SYSTEM_SETTINGS, settings);
+    notifyListeners();
+    setDoc(doc(db, 'system_settings', 'config'), settings, { merge: true }).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, 'system_settings/config')
+    );
   },
 
   // Audit Logs
   getAuditLogs(): AuditLog[] {
-    return getStored<AuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, INITIAL_AUDIT_LOGS);
+    return cache.auditLogs;
   },
   addAuditLog(entry: Omit<AuditLog, 'id' | 'timestamp'>) {
     const now = new Date();
@@ -437,13 +949,18 @@ export const StorageService = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       timestamp: formatted
     };
-    const list = this.getAuditLogs();
-    setStored(STORAGE_KEYS.AUDIT_LOGS, [log, ...list].slice(0, 200));
+    const list = [log, ...cache.auditLogs].slice(0, 200);
+    cache.auditLogs = list;
+    setStored(STORAGE_KEYS.AUDIT_LOGS, list);
+    notifyListeners();
+    setDoc(doc(db, 'audit_logs', log.id), log).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `audit_logs/${log.id}`)
+    );
   },
 
   // Notifications
   getNotifications(): AppNotification[] {
-    return getStored<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    return cache.notifications;
   },
   addNotification(notif: Omit<AppNotification, 'id' | 'createdAt' | 'isRead'>) {
     const now = new Date();
@@ -454,27 +971,43 @@ export const StorageService = {
       isRead: false,
       createdAt: formatted
     };
-    const list = this.getNotifications();
-    setStored(STORAGE_KEYS.NOTIFICATIONS, [newNotif, ...list].slice(0, 50));
+    const list = [newNotif, ...cache.notifications].slice(0, 50);
+    cache.notifications = list;
+    setStored(STORAGE_KEYS.NOTIFICATIONS, list);
+    notifyListeners();
+    setDoc(doc(db, 'notifications', newNotif.id), newNotif).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `notifications/${newNotif.id}`)
+    );
   },
   markNotificationRead(id: string) {
-    const list = this.getNotifications().map(n => n.id === id ? { ...n, isRead: true } : n);
+    const list = cache.notifications.map(n => (n.id === id ? { ...n, isRead: true } : n));
+    cache.notifications = list;
     setStored(STORAGE_KEYS.NOTIFICATIONS, list);
+    notifyListeners();
+    setDoc(doc(db, 'notifications', id), { isRead: true }, { merge: true }).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `notifications/${id}`)
+    );
   },
   markAllNotificationsRead() {
-    const list = this.getNotifications().map(n => ({ ...n, isRead: true }));
+    const list = cache.notifications.map(n => ({ ...n, isRead: true }));
+    cache.notifications = list;
     setStored(STORAGE_KEYS.NOTIFICATIONS, list);
+    notifyListeners();
+    list.forEach(n => {
+      setDoc(doc(db, 'notifications', n.id), { isRead: true }, { merge: true }).catch(() => {});
+    });
   },
   clearNotifications() {
+    cache.notifications = [];
     setStored(STORAGE_KEYS.NOTIFICATIONS, []);
-  },
-
-  // Factory reset to seed data
-  resetToDefaults() {
-    Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
     notifyListeners();
   },
-  resetToSeedData() {
-    this.resetToDefaults();
+
+  // Clear local storage cache and force refetch from cloud
+  refreshFromCloud() {
+    Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+    isInitialized = false;
+    initFirestoreSync();
+    notifyListeners();
   }
 };

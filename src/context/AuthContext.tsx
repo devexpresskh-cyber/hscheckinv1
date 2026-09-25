@@ -87,13 +87,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (!match) {
           const isSuperAdminEmail =
-            fbUser.email === 'planningtks585@gmail.com' ||
-            fbUser.email === 'singsabmc@gmail.com';
+            fbUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+            fbUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+            fbUser.email?.toLowerCase() === 'singsabmc@gmail.com';
 
           const newUser: UserAccount = {
             id: `usr-google-${fbUser.uid.slice(0, 8)}`,
             email: fbUser.email,
-            fullName: fbUser.displayName || 'Google Faculty Member',
+            fullName: fbUser.displayName || 'Faculty Member',
             khmerName: fbUser.displayName || 'សាស្ត្រាចារ្យ',
             role: isSuperAdminEmail ? 'super_admin' : 'teacher',
             department: isSuperAdminEmail ? 'Administration' : 'Academic & Curriculum',
@@ -163,13 +164,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let match = users.find(u => u.email.toLowerCase() === fbUser.email?.toLowerCase());
         if (!match) {
           const isSuperAdminEmail =
-            fbUser.email === 'planningtks585@gmail.com' ||
-            fbUser.email === 'singsabmc@gmail.com';
+            fbUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+            fbUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+            fbUser.email?.toLowerCase() === 'singsabmc@gmail.com';
 
           const newUser: UserAccount = {
             id: `usr-google-${fbUser.uid.slice(0, 8)}`,
             email: fbUser.email,
-            fullName: fbUser.displayName || 'Google Faculty Member',
+            fullName: fbUser.displayName || 'Faculty Member',
             khmerName: fbUser.displayName || 'សាស្ត្រាចារ្យ',
             role: isSuperAdminEmail ? 'super_admin' : 'teacher',
             department: isSuperAdminEmail ? 'Administration' : 'Academic & Curriculum',

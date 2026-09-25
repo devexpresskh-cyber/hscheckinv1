@@ -54,7 +54,6 @@ export const translations: Translations = {
   'auth.logout': { en: 'Log Out', km: 'ចាកចេញ' },
   'auth.signInGoogle': { en: 'Sign in with Google', km: 'ចូលប្រើតាមរយៈ Google' },
   'auth.orEmail': { en: 'Or sign in with email & password', km: 'ឬចូលប្រើដោយអ៊ីមែល និងពាក្យសម្ងាត់' },
-  'auth.demoAccounts': { en: 'Quick Demo Login', km: 'ចូលប្រើគណនីសាកល្បង' },
   'auth.email': { en: 'Email address or Staff ID', km: 'អាសយដ្ឋានអ៊ីមែល ឬលេខកូដបុគ្គលិក' },
   'auth.password': { en: 'Password', km: 'ពាក្យសម្ងាត់' },
   'auth.confirmLogout': { en: 'Are you sure you want to log out?', km: 'តើអ្នកពិតជាចង់ចាកចេញពីប្រព័ន្ធមែនទេ?' },
