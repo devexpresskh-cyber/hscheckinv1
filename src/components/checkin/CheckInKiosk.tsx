@@ -274,12 +274,46 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     location: 'Main Campus - Central Building'
   };
 
+  // Today's date/day is used to show ONLY the teacher's schedule for the current day.
+  // The filter supports the common schedule field names used by different data versions.
+  const todayDate = new Date();
+  const todayStr = todayDate.toISOString().split('T')[0];
+  const todayDayIndex = todayDate.getDay();
+  const todayDayName = todayDate.toLocaleDateString('en-US', { weekday: 'long' });
+  const todayDayShortName = todayDate.toLocaleDateString('en-US', { weekday: 'short' });
+
   const isTeacher = activeStaff?.type === 'teacher';
   const teacherSubjectSchedules = isTeacher && activeStaff
-    ? StorageService.getSubjectSchedulesForTeacher(activeStaff.id)
+    ? StorageService.getSubjectSchedulesForTeacher(activeStaff.id).filter((sub: any) => {
+        // Prefer an explicit calendar date when one exists.
+        const scheduleDate = sub.date ?? sub.scheduledDate ?? sub.scheduleDate;
+        if (scheduleDate) {
+          return String(scheduleDate).slice(0, 10) === todayStr;
+        }
+
+        // Otherwise match the recurring day-of-week field.
+        const dayValue = sub.dayOfWeek ?? sub.day ?? sub.weekDay ?? sub.weekday;
+
+        // If this schedule has no day field, keep it for backward compatibility.
+        // The AttendanceEngine still performs the final date/time validation.
+        if (dayValue === undefined || dayValue === null || dayValue === '') {
+          return true;
+        }
+
+        if (typeof dayValue === 'number') {
+          return dayValue === todayDayIndex;
+        }
+
+        const normalizedDay = String(dayValue).trim().toLowerCase();
+        return [
+          String(todayDayIndex),
+          todayDayName.toLowerCase(),
+          todayDayShortName.toLowerCase(),
+          todayDayName.slice(0, 3).toLowerCase()
+        ].includes(normalizedDay);
+      })
     : [];
 
-  const todayStr = new Date().toISOString().split('T')[0];
   const effectiveTime = useCustomTime && customTimeInput
     ? customTimeInput
     : AttendanceEngine.getCurrentTimeString();
