@@ -410,8 +410,8 @@ export const DepartmentManagement: React.FC = () => {
                     teachers.filter(t => t.department === selectedDeptForStaff.name).map(t => (
                       <div key={t.id} className="p-3.5 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          {t.photoUrl ? (
-                            <img src={t.photoUrl} alt={t.fullName} className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200" />
+                          {t.photoUrl && t.photoUrl.trim() ? (
+                            <img src={t.photoUrl.trim()} alt={t.fullName} className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200" />
                           ) : (
                             <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
                               {t.fullName.charAt(0)}

@@ -93,6 +93,8 @@ export const DEFAULT_USERS: UserAccount[] = [
     khmerName: 'អភិបាលប្រព័ន្ធកំពូល',
     role: 'super_admin',
     department: 'Administration',
+    phone: '+855 12 888 999',
+    pinCode: '1234',
     status: 'Active',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
     createdAt: new Date().toISOString()
@@ -104,6 +106,8 @@ export const DEFAULT_USERS: UserAccount[] = [
     khmerName: 'អ្នកគ្រប់គ្រងផែនការ',
     role: 'super_admin',
     department: 'Administration',
+    phone: '+855 12 777 666',
+    pinCode: '1234',
     status: 'Active',
     avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop',
     createdAt: new Date().toISOString()
@@ -115,6 +119,8 @@ export const DEFAULT_USERS: UserAccount[] = [
     khmerName: 'នាយកសាលា',
     role: 'super_admin',
     department: 'Administration',
+    phone: '+855 12 555 444',
+    pinCode: '1234',
     status: 'Active',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
     createdAt: new Date().toISOString()
@@ -126,6 +132,7 @@ export const DEFAULT_USERS: UserAccount[] = [
     khmerName: 'សុខ ចិន្តា',
     role: 'teacher',
     department: 'Academic & Curriculum',
+    phone: '+855 12 345 678',
     personId: 'tch-001',
     status: 'Active',
     pinCode: '1234',
@@ -139,6 +146,7 @@ export const DEFAULT_USERS: UserAccount[] = [
     khmerName: 'ចាន់ បូរី',
     role: 'teacher',
     department: 'Academic & Curriculum',
+    phone: '+855 11 987 654',
     personId: 'tch-002',
     status: 'Active',
     pinCode: '1234',
@@ -152,6 +160,7 @@ export const DEFAULT_USERS: UserAccount[] = [
     khmerName: 'កែវ ពិសិដ្ឋ',
     role: 'teacher',
     department: 'Academic & Curriculum',
+    phone: '+855 92 888 777',
     personId: 'tch-003',
     status: 'Active',
     pinCode: '1234',
@@ -435,16 +444,16 @@ export const DEFAULT_TIMETABLE_PERIODS: TimetablePeriod[] = [
 
 export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettings = {
   id: 'tg-default',
-  botToken: '',
-  botUsername: '',
-  adminChatId: '',
-  groupChatId: '',
-  isEnabled: false,
+  botToken: '8662747303:AAFC0F7-WDiUe80ZjFVMZKDf2zZbXKCAIfg',
+  botUsername: '@hschoolsiamreap_bot',
+  adminChatId: '-5252354054',
+  groupChatId: '-5171679529',
+  isEnabled: true,
   notifyCheckIn: true,
   notifyLate: true,
   notifyAbsent: true,
   notifyCheckOut: true,
-  notifyDailySummary: false,
+  notifyDailySummary: true,
   notifyReminder: true,
   reminderMinutesBefore: 15,
   summaryTime: '17:30'
@@ -452,12 +461,13 @@ export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettings = {
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   id: 'sys-default',
-  organizationName: 'Phnom Penh Academy',
-  khmerOrgName: 'សាលាអន្តរជាតិភ្នំពេញ',
-  tagline: 'Phnom Penh International Academy',
+  organizationName: 'Heart School',
+  khmerOrgName: 'សាលា ហាថ',
+  tagline: 'Heart School - Excellence in Education',
   timezone: 'Asia/Phnom Penh',
   workingDays: [1, 2, 3, 4, 5, 6],
   defaultGracePeriod: 15,
+  defaultGracePeriodMinutes: 30,
   absenceDetectionMinutes: 60,
   defaultLocationLatitude: 11.5564,
   defaultLocationLongitude: 104.9282,
@@ -465,6 +475,6 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   enforceGeofence: false,
   allowSelfCorrection: true,
   requirePinForKiosk: true,
-  allowSwitchStaffInKiosk: true,
+  allowSwitchStaffInKiosk: false,
   requireBarcodeScanOnly: false
 };

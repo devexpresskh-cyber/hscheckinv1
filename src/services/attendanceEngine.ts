@@ -389,6 +389,7 @@ export const AttendanceEngine = {
     TelegramService.sendCheckInAlert({
       name: params.personName,
       khmerName: params.khmerName,
+      personType: params.personType === 'teacher' ? 'Teacher' : 'Employee',
       department: params.department,
       time: currentTime,
       scheduled: scheduledStartTime,
@@ -495,6 +496,8 @@ export const AttendanceEngine = {
     // Telegram Notification
     TelegramService.sendCheckOutAlert({
       name: params.personName,
+      khmerName: existing.khmerName,
+      personType: existing.personType === 'teacher' ? 'Teacher' : 'Employee',
       department: existing.department,
       checkOutTime: currentTime,
       workingTime: workingTimeText,

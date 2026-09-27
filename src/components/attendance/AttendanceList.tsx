@@ -240,11 +240,15 @@ export const AttendanceList: React.FC = () => {
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-emerald-600" />
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Attendance Records & Corrections
+              {currentUser.role === 'employee'
+                ? (isKhmer ? 'ប្រវត្តិវត្តមានបុគ្គលិក (Staff Check-in History)' : 'Staff Check-in History')
+                : 'Attendance Records & Corrections'}
             </h2>
           </div>
           <p className="text-xs text-slate-500 font-khmer mt-0.5">
-            បញ្ជីកត់ត្រាវត្តមានប្រចាំថ្ងៃ ការគណនាការយឺតយ៉ាវ និងការអនុម័តកែសម្រួលម៉ោង
+            {currentUser.role === 'employee'
+              ? (isKhmer ? `កំណត់ត្រាស្កេនចូល-ចេញផ្ទាល់ខ្លួនរបស់ ${currentUser.fullName}` : `Personal check-in and check-out records for ${currentUser.fullName}`)
+              : 'បញ្ជីកត់ត្រាវត្តមានប្រចាំថ្ងៃ ការគណនាការយឺតយ៉ាវ និងការអនុម័តកែសម្រួលម៉ោង'}
           </p>
         </div>
 
@@ -257,7 +261,7 @@ export const AttendanceList: React.FC = () => {
                 activeTab === 'daily' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
               }`}
             >
-              Daily Roster
+              {currentUser.role === 'employee' ? (isKhmer ? 'ប្រវត្តិវត្តមាន' : 'History Log') : 'Daily Roster'}
             </button>
             <button
               onClick={() => setActiveTab('corrections')}
@@ -347,6 +351,24 @@ export const AttendanceList: React.FC = () => {
                   className="bg-transparent border-0 text-slate-800 text-xs font-bold focus:outline-hidden"
                 />
               </div>
+
+              {selectedDate ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate('')}
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+                >
+                  {isKhmer ? 'មើលទាំងអស់ (All)' : 'All Dates'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                  className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors"
+                >
+                  {isKhmer ? 'ថ្ងៃនេះ (Today)' : 'Today'}
+                </button>
+              )}
 
               {currentUser.role !== 'teacher' && currentUser.role !== 'employee' && (
                 <select

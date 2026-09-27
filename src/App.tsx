@@ -20,6 +20,7 @@ import { UserManagement } from './components/users/UserManagement.tsx';
 import { AuditLogViewer } from './components/audit/AuditLogViewer.tsx';
 import { SystemSettingsView } from './components/settings/SystemSettingsView.tsx';
 import { SystemUserManual } from './components/manual/SystemUserManual.tsx';
+import { EmployeeStaffCalendar } from './components/schedules/EmployeeStaffCalendar.tsx';
 import { StorageService } from './services/storageService.ts';
 import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Building2, ArrowRight } from 'lucide-react';
 
@@ -69,21 +70,37 @@ const ToastContainer: React.FC = () => {
 
 const MainLayout: React.FC = () => {
   const { currentUser } = useAuth();
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const isEmployee = currentUser.role === 'employee';
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isEmployee ? 'schedules' : 'dashboard'));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const { isKhmer } = useLanguage();
 
-  const isRestrictedStaff = currentUser.role === 'teacher' || currentUser.role === 'employee';
+  const isRestrictedStaff = currentUser.role === 'teacher' || isEmployee;
 
-  // Automatically enforce guard: teacher and employee cannot access telegram setting and system setting
+  // Automatically enforce guard: employee only sees staff Calendar and staff check-in history
   React.useEffect(() => {
+    if (isEmployee) {
+      if (currentTab !== 'schedules' && currentTab !== 'attendance') {
+        setCurrentTab('schedules');
+      }
+      return;
+    }
+
     if (isRestrictedStaff && (currentTab === 'telegram' || currentTab === 'settings' || currentTab === 'architecture')) {
       setCurrentTab('dashboard');
     }
-  }, [isRestrictedStaff, currentTab]);
+  }, [isEmployee, isRestrictedStaff, currentTab]);
 
   const renderContent = () => {
+    // If logged in as Employee, strictly allow ONLY Staff Calendar and Staff Check-in History
+    if (isEmployee) {
+      if (currentTab === 'attendance') {
+        return <AttendanceList />;
+      }
+      return <EmployeeStaffCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
+    }
+
     switch (currentTab) {
       case 'dashboard':
         return (

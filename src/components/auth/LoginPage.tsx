@@ -16,7 +16,9 @@ import {
   Languages,
   KeyRound,
   Search,
-  ChevronRight
+  ChevronRight,
+  Phone,
+  Smartphone
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -24,11 +26,17 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { loginWithGoogle, loginWithCredentials, loginWithPin, authError, setAuthError, isLoading } = useAuth();
+  const { loginWithGoogle, loginWithCredentials, loginWithPin, loginWithPhone, authError, setAuthError, isLoading } = useAuth();
   const { isKhmer, toggleLanguage, language } = useLanguage();
 
-  // Mode: 'pin' for dedicated teacher PIN authentication, 'standard' for password & Google
-  const [authMode, setAuthMode] = useState<'pin' | 'standard'>('pin');
+  // Mode: 'phone' for phone number + PIN (No Google phone auth), 'pin' for Staff ID + PIN, 'standard' for password & Google
+  const [authMode, setAuthMode] = useState<'phone' | 'pin' | 'standard'>('phone');
+
+  // Phone Number Login States
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phonePin, setPhonePin] = useState('');
+  const [showPhonePin, setShowPhonePin] = useState(false);
+  const [isPhoneSubmitting, setIsPhoneSubmitting] = useState(false);
 
   // Standard Login States
   const [identifier, setIdentifier] = useState('');
@@ -73,11 +81,47 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     );
   });
 
+  // Handle Phone Number + PIN Login (No SMS OTP / Google phone auth required)
+  const handlePhoneSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError(null);
+
+    const targetPhone = phoneNumber.trim();
+
+    if (!targetPhone) {
+      setAuthError(
+        isKhmer
+          ? 'សូមបញ្ចូលលេខទូរស័ព្ទរបស់អ្នក (Phone Number)'
+          : 'Please enter your registered phone number'
+      );
+      return;
+    }
+
+    if (!phonePin.trim() || phonePin.length < 4) {
+      setAuthError(
+        isKhmer
+          ? 'សូមបញ្ចូលលេខកូដសម្ងាត់ PIN ៤ ខ្ទង់របស់អ្នក'
+          : 'Please enter your 4-digit PIN'
+      );
+      return;
+    }
+
+    setIsPhoneSubmitting(true);
+    try {
+      const success = await loginWithPhone(targetPhone, phonePin);
+      if (success) {
+        onLoginSuccess?.();
+      }
+    } finally {
+      setIsPhoneSubmitting(false);
+    }
+  };
+
   // Handle Standard Credential Login
   const handleStandardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) {
-      setAuthError(isKhmer ? 'សូមបញ្ចូលអ៊ីមែល ឬលេខសម្គាល់បុគ្គលិក' : 'Please enter an email or staff ID');
+      setAuthError(isKhmer ? 'សូមបញ្ចូលអ៊ីមែល លេខទូរស័ព្ទ ឬលេខសម្គាល់បុគ្គលិក' : 'Please enter an email, phone number, or staff ID');
       return;
     }
 
@@ -109,13 +153,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     if (e) e.preventDefault();
     setAuthError(null);
 
-    const targetId = selectedTeacher ? selectedTeacher.teacherId : manualTeacherId.trim();
+    const targetId = manualTeacherId.trim();
 
     if (!targetId) {
       setAuthError(
         isKhmer
-          ? 'សូមជ្រើសរើសគ្រូបង្រៀន ឬបញ្ចូលលេខកូដគ្រូ (Teacher ID)'
-          : 'Please select a teacher or enter your Teacher ID'
+          ? 'សូមបញ្ចូលលេខសម្គាល់គ្រូ បុគ្គលិក ឬលេខទូរស័ព្ទ (Staff ID or Phone)'
+          : 'Please enter your Teacher ID, Staff ID, or Phone Number'
       );
       return;
     }
@@ -135,8 +179,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       } else if (!authError) {
         setAuthError(
           isKhmer
-            ? 'លេខកូដសម្ងាត់ PIN មិនត្រឹមត្រូវ។ សូមសាកល្បងលេខកូដ 1234'
-            : 'Incorrect PIN. Default testing PIN is 1234.'
+            ? 'លេខកូដសម្ងាត់ PIN មិនត្រឹមត្រូវ។ សូមពិនិត្យលេខសម្ងាត់របស់អ្នកម្តងទៀត។'
+            : 'Incorrect PIN. Please check your PIN code.'
         );
       }
     } finally {
@@ -200,24 +244,37 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </p>
 
             {/* Mode Switcher Tabs */}
-            <div className="mt-5 grid grid-cols-2 p-1.5 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold">
+            <div className="mt-5 grid grid-cols-3 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('phone');
+                  setAuthError(null);
+                }}
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all ${
+                  authMode === 'phone'
+                    ? 'bg-white text-emerald-700 shadow-sm border border-slate-200/60 font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="truncate">{isKhmer ? 'លេខទូរស័ព្ទ' : 'Phone & PIN'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode('pin');
                   setAuthError(null);
                 }}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl transition-all ${
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all ${
                   authMode === 'pin'
                     ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60 font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <KeyRound className="w-4 h-4 text-indigo-600" />
-                <span>{isKhmer ? 'ចូលតាមលេខ PIN គ្រូ' : 'Teacher PIN Login'}</span>
-                <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] bg-indigo-100 text-indigo-700">
-                  Fast
-                </span>
+                <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="truncate">{isKhmer ? 'លេខកូដគ្រូ' : 'Staff ID & PIN'}</span>
               </button>
 
               <button
@@ -226,14 +283,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   setAuthMode('standard');
                   setAuthError(null);
                 }}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl transition-all ${
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all ${
                   authMode === 'standard'
                     ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60 font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Mail className="w-4 h-4 text-slate-500" />
-                <span>{isKhmer ? 'Google / អ៊ីមែល' : 'Password / Google'}</span>
+                <Mail className="w-3.5 h-3.5 text-slate-500" />
+                <span className="truncate">{isKhmer ? 'Google / Email' : 'Email & Google'}</span>
               </button>
             </div>
           </div>
@@ -257,89 +314,126 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* TAB 1: TEACHER PIN LOGIN */}
-            {authMode === 'pin' && (
-              <form onSubmit={handlePinSubmit} className="space-y-5 animate-in fade-in-50 duration-200">
+            {/* TAB 1: PHONE NUMBER & PIN LOGIN */}
+            {authMode === 'phone' && (
+              <form onSubmit={handlePhoneSubmit} className="space-y-4 animate-in fade-in-50 duration-200">
                 
-                {/* Search / Select Teacher */}
-                <div className="space-y-2.5">
-                  {teachers.length > 3 && (
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={teacherSearch}
-                        onChange={e => setTeacherSearch(e.target.value)}
-                        placeholder={isKhmer ? 'ស្វែងរកតាមឈ្មោះ ឬលេខកូដគ្រូ...' : 'Filter by name or Teacher ID...'}
-                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
-                      />
+                {/* Phone Number Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isKhmer ? 'លេខទូរស័ព្ទដែលបានចុះឈ្មោះ (Phone Number)៖' : 'Registered Phone Number:'}</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">e.g. 012 345 678</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-500 font-bold text-xs select-none pointer-events-none border-r border-slate-200 pr-2">
+                      <span>🇰🇭</span>
+                      <span className="font-mono text-slate-700">+855</span>
                     </div>
-                  )}
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={e => setPhoneNumber(e.target.value)}
+                      placeholder="012 345 678 / 12 345 678"
+                      className="w-full pl-22 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none bg-slate-50 focus:bg-white transition-colors"
+                      autoComplete="tel"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {isKhmer ? 'គាំទ្រលេខទូរស័ព្ទ Smart, Cellcard, Metfone គ្រប់ប្រព័ន្ធ (មិនប្រើ Google Phone Auth)' : 'Supports all Cambodian mobile operators directly without SMS wait.'}
+                  </p>
+                </div>
 
-                  {/* Manual Teacher ID Entry */}
-                  <div className="pt-1">
-                    <details className="text-xs group" open={!selectedTeacher}>
-                      <summary className="text-[11px] text-indigo-600 font-bold cursor-pointer hover:underline list-none flex items-center gap-1">
-                        <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" />
-                        <span>{isKhmer ? 'បញ្ចូលលេខកូដគ្រូ (Teacher ID)' : 'Teacher ID'}</span>
-                      </summary>
-                      <div className="mt-2 relative">
-                        <input
-                          type="text"
-                          value={manualTeacherId}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setManualTeacherId(val);
-                            const found = teachers.find(
-                              t => t.teacherId.toLowerCase() === val.trim().toLowerCase()
-                            );
-                            setSelectedTeacher(found || null);
-                          }}
-                          placeholder="e.g. TCH-2026-001"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none uppercase"
-                        />
-                      </div>
-                    </details>
+                {/* PIN Code Direct Input Field */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{isKhmer ? 'លេខកូដសម្ងាត់ PIN (៤ ខ្ទង់)៖' : '4-Digit Security PIN:'}</span>
+                    </span>
+                  </label>
+
+                  <div className="relative">
+                    <input
+                      type={showPhonePin ? 'text' : 'password'}
+                      maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      autoComplete="current-password"
+                      value={phonePin}
+                      onChange={e => setPhonePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="••••"
+                      className="w-full text-center py-2.5 sm:py-3 px-10 text-xl font-mono font-black tracking-[0.3em] rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all bg-slate-50 focus:bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPhonePin(!showPhonePin)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    >
+                      {showPhonePin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 
-                {/* Selected Teacher Banner */}
-                {selectedTeacher && (
-                  <div className="p-3 rounded-2xl bg-indigo-600 text-white flex items-center justify-between shadow-sm shadow-indigo-600/20">
-                    <div className="flex items-center gap-3">
-                      {selectedTeacher.photoUrl && (
-                        <img
-                          src={selectedTeacher.photoUrl}
-                          alt=""
-                          className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/30"
-                        />
-                      )}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-sm tracking-tight">{selectedTeacher.fullName}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-white/20 text-indigo-100">
-                            {selectedTeacher.teacherId}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-indigo-100 font-medium">
-                          {selectedTeacher.khmerName} {selectedTeacher.subject ? `• ${selectedTeacher.subject}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white text-indigo-700 px-2 py-1 rounded-lg">
-                      Ready
+                {/* Submit Phone Button */}
+                <button
+                  type="submit"
+                  disabled={isPhoneSubmitting || isLoading || phonePin.length < 4 || !phoneNumber.trim()}
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 transition-all duration-200 hover:shadow-lg active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPhoneSubmitting ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Phone className="w-4 h-4" />
+                      <span>{isKhmer ? 'ចូលប្រើប្រព័ន្ធដោយលេខទូរស័ព្ទ' : 'Sign In with Phone Number'}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+                
+                <div className="pt-1 text-center">
+                  <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-medium inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{isKhmer ? 'ចូលដោយផ្ទាល់ជាមួយ PIN ដោយមិនបាច់រង់ចាំ SMS' : 'Direct PIN authentication (No Google Phone Auth needed)'}</span>
+                  </span>
+                </div>
+              </form>
+            )}
+
+            {/* TAB 2: TEACHER & STAFF PIN LOGIN */}
+            {authMode === 'pin' && (
+              <form onSubmit={handlePinSubmit} className="space-y-4 animate-in fade-in-50 duration-200">
+                
+                {/* Staff / Teacher ID Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>{isKhmer ? 'លេខសម្គាល់គ្រូ បុគ្គលិក ឬលេខទូរស័ព្ទ៖' : 'Teacher ID, Staff ID, or Phone:'}</span>
                     </span>
-                  </div>
-                )}
+                    <span className="text-[10px] text-slate-400 font-mono">TCH / EMP / Phone</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={manualTeacherId}
+                    onChange={e => setManualTeacherId(e.target.value)}
+                    placeholder="e.g. 012 345 678, TCH-2026-001 or EMP-201"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none uppercase bg-slate-50 focus:bg-white transition-colors"
+                    autoComplete="username"
+                  />
+                </div>
 
                 {/* PIN Code Direct Input Field */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
                       <Lock className="w-3.5 h-3.5 text-amber-600" />
                       <span>{isKhmer ? 'លេខកូដសម្ងាត់ PIN (៤ ខ្ទង់)៖' : '4-Digit Security PIN:'}</span>
-                    </label>
-                  </div>
+                    </span>
+                  </label>
 
                   <div className="relative">
                     <input
@@ -351,7 +445,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       value={pinDigits}
                       onChange={e => setPinDigits(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="••••"
-                      className="w-full text-center py-3 px-10 text-xl font-mono font-black tracking-[0.4em] rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all bg-slate-50 focus:bg-white"
+                      className="w-full text-center py-2.5 sm:py-3 px-10 text-xl font-mono font-black tracking-[0.3em] rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all bg-slate-50 focus:bg-white"
                     />
                     <button
                       type="button"
@@ -367,22 +461,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <button
                   type="submit"
                   disabled={isPinSubmitting || isLoading || pinDigits.length < 4}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/30 transition-all duration-200 hover:shadow-xl active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/30 transition-all duration-200 hover:shadow-lg active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isPinSubmitting ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <KeyRound className="w-4 h-4" />
-                      <span>
-                        {selectedTeacher
-                          ? isKhmer
-                            ? `ចូលប្រើជាគ្រូ ${selectedTeacher.fullName}`
-                            : `Sign In as ${selectedTeacher.fullName}`
-                          : isKhmer
-                          ? 'ចូលប្រើប្រព័ន្ធតាមរយៈ PIN'
-                          : 'Sign In with PIN'}
-                      </span>
+                      <span>{isKhmer ? 'ចូលប្រើប្រព័ន្ធ' : 'Sign In with PIN'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -447,7 +533,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <form onSubmit={handleStandardSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      {isKhmer ? 'អ៊ីមែល ឬលេខសម្គាល់បុគ្គលិក' : 'Email Address or Staff ID'}
+                      {isKhmer ? 'អ៊ីមែល លេខទូរស័ព្ទ ឬលេខសម្គាល់បុគ្គលិក' : 'Email, Phone Number, or Staff ID'}
                     </label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -455,7 +541,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                         type="text"
                         value={identifier}
                         onChange={e => setIdentifier(e.target.value)}
-                        placeholder="teacher@school.edu / TCH-2026-001"
+                        placeholder="012 345 678 / teacher@school.edu / TCH-2026-001"
                         className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-xs sm:text-sm font-medium transition-colors"
                       />
                     </div>

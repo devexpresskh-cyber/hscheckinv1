@@ -25,18 +25,28 @@ import {
   Palette,
   Sparkles,
   Upload,
-  Sliders
+  Sliders,
+  LogIn,
+  LogOut
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
 import { MonSatWeeklyTimetable } from './MonSatWeeklyTimetable.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
+import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 
 export const ScheduleManagement: React.FC = () => {
   const { currentUser, hasPermission } = useAuth();
   const { showToast } = useNotification();
   const { t, isKhmer } = useLanguage();
 
-  const [viewMode, setViewMode] = useState<'weekly_timetable' | 'subject_schedules' | 'cards'>('weekly_timetable');
+  const isTeacher = currentUser.role === 'teacher';
+  const todayDayIndex = new Date().getDay();
+  const [selectedDay, setSelectedDay] = useState<number>(todayDayIndex);
+
+  const [viewMode, setViewMode] = useState<'daily_schedule' | 'weekly_timetable' | 'subject_schedules' | 'cards'>(
+    () => (isTeacher ? 'daily_schedule' : 'weekly_timetable')
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
@@ -57,8 +67,6 @@ export const ScheduleManagement: React.FC = () => {
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState(false);
 
   // Identify teacher role and matching profile for owned-only schedule access
-  const isTeacher = currentUser.role === 'teacher';
-
   const activeTeacher = useMemo(() => {
     if (!currentUser) return null;
     // 1. By linked personId
@@ -469,14 +477,91 @@ export const ScheduleManagement: React.FC = () => {
       }
       return false;
     });
-
-    // Fallback if no specific assignment: provide the default primary schedule so teacher can view duty hours
-    if (owned.length === 0 && schedules.length > 0) {
-      const fallback = schedules.find(s => s.department === 'Academic & Curriculum') || schedules[0];
-      return [fallback];
-    }
-    return owned;
+    return owned.length > 0 ? owned : schedules.slice(0, 1);
   }, [schedules, isTeacher, activeTeacher, currentUser]);
+
+  const [attendanceList, setAttendanceList] = useState(() => StorageService.getAttendance());
+  useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setAttendanceList(StorageService.getAttendance());
+    });
+    return unsub;
+  }, []);
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  // Filter daily classes for the selected day
+  const dailyClasses = useMemo(() => {
+    return filteredSubjectSchedules
+      .filter(sub => {
+        if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
+          return sub.daysOfWeek.includes(selectedDay);
+        }
+        return sub.dayOfWeek === selectedDay;
+      })
+      .sort((a, b) => {
+        if (a.periodNumber !== b.periodNumber) return a.periodNumber - b.periodNumber;
+        return a.startTime.localeCompare(b.startTime);
+      });
+  }, [filteredSubjectSchedules, selectedDay]);
+
+  const weekDayTabs = [
+    { index: 1, shortEn: 'Mon', shortKm: 'ចន្ទ', fullEn: 'Monday', fullKm: 'ថ្ងៃចន្ទ' },
+    { index: 2, shortEn: 'Tue', shortKm: 'អង្គារ', fullEn: 'Tuesday', fullKm: 'ថ្ងៃអង្គារ' },
+    { index: 3, shortEn: 'Wed', shortKm: 'ពុធ', fullEn: 'Wednesday', fullKm: 'ថ្ងៃពុធ' },
+    { index: 4, shortEn: 'Thu', shortKm: 'ព្រហ', fullEn: 'Thursday', fullKm: 'ថ្ងៃព្រហស្បតិ៍' },
+    { index: 5, shortEn: 'Fri', shortKm: 'សុក្រ', fullEn: 'Friday', fullKm: 'ថ្ងៃសុក្រ' },
+    { index: 6, shortEn: 'Sat', shortKm: 'សៅរ៍', fullEn: 'Saturday', fullKm: 'ថ្ងៃសៅរ៍' },
+    { index: 0, shortEn: 'Sun', shortKm: 'អាទិត្យ', fullEn: 'Sunday', fullKm: 'ថ្ងៃអាទិត្យ' }
+  ];
+
+  const handleTeacherClassCheckIn = (sub: TeacherSubjectSchedule) => {
+    const targetTeacherId = activeTeacher?.id || currentUser.personId || currentUser.id;
+    const targetTeacherName = activeTeacher?.fullName || currentUser.fullName;
+    const targetTeacherKhmer = activeTeacher?.khmerName || currentUser.khmerName;
+    const targetDept = activeTeacher?.department || currentUser.department || 'Academic';
+
+    const result = AttendanceEngine.processCheckIn({
+      personId: targetTeacherId,
+      personName: targetTeacherName,
+      khmerName: targetTeacherKhmer,
+      personType: 'teacher',
+      department: targetDept,
+      subjectScheduleId: sub.id,
+      customTime: AttendanceEngine.getCurrentTimeString()
+    });
+
+    if (result.success) {
+      confetti({ particleCount: 40, spread: 50 });
+      showToast(
+        isKhmer ? `ស្កេនចូលជោគជ័យសម្រាប់មុខវិជ្ជា ${sub.khmerSubject || sub.subject}` : result.message,
+        'success'
+      );
+    } else {
+      showToast(result.message, 'error');
+    }
+  };
+
+  const handleTeacherClassCheckOut = (sub: TeacherSubjectSchedule) => {
+    const targetTeacherId = activeTeacher?.id || currentUser.personId || currentUser.id;
+    const targetTeacherName = activeTeacher?.fullName || currentUser.fullName;
+
+    const result = AttendanceEngine.processCheckOut({
+      personId: targetTeacherId,
+      personName: targetTeacherName,
+      subjectScheduleId: sub.id,
+      customTime: AttendanceEngine.getCurrentTimeString()
+    });
+
+    if (result.success) {
+      showToast(
+        isKhmer ? `ស្កេនចេញជោគជ័យសម្រាប់មុខវិជ្ជា ${sub.khmerSubject || sub.subject}` : result.message,
+        'success'
+      );
+    } else {
+      showToast(result.message, 'error');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -501,13 +586,22 @@ export const ScheduleManagement: React.FC = () => {
           {/* View Toggle */}
           <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200">
             <button
+              onClick={() => setViewMode('daily_schedule')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                viewMode === 'daily_schedule' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ (Daily)' : 'Daily Schedule'}</span>
+            </button>
+            <button
               onClick={() => setViewMode('weekly_timetable')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 viewMode === 'weekly_timetable' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>{isKhmer ? 'កាលវិភាគសប្តាហ៍ (ចន្ទ-សៅរ៍)' : 'Weekly Timetable (Mon–Sat)'}</span>
+              <span>{isKhmer ? 'កាលវិភាគពេញមួយសប្តាហ៍' : 'Weekly Timetable'}</span>
             </button>
             <button
               onClick={() => setViewMode('subject_schedules')}
@@ -518,15 +612,17 @@ export const ScheduleManagement: React.FC = () => {
               <BookOpen className="w-3.5 h-3.5" />
               <span>{isKhmer ? 'កាតមុខវិជ្ជា' : 'Subject Cards'}</span>
             </button>
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'cards' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <Building className="w-3.5 h-3.5" />
-              <span>{isKhmer ? 'វេនទូទៅ' : 'General Shifts'}</span>
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  viewMode === 'cards' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <Building className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'វេនទូទៅ' : 'General Shifts'}</span>
+              </button>
+            )}
           </div>
 
           {hasPermission('schedules.create') && !isTeacher && (
@@ -605,6 +701,205 @@ export const ScheduleManagement: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>{isKhmer ? 'សុវត្ថិភាពទិន្នន័យផ្ទាល់ខ្លួន' : 'Owned Schedule Enforced'}</span>
           </span>
+        </div>
+      )}
+
+      {/* Daily Schedule View (Default for Teacher Account) */}
+      {viewMode === 'daily_schedule' && (
+        <div className="space-y-4">
+          
+          {/* Day Selector Navigation Pills */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-3 sm:p-4 shadow-xs">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  {isKhmer ? 'ជ្រើសរើសថ្ងៃបង្រៀន (Select Day):' : 'Select Day of Week:'}
+                </span>
+              </div>
+              <span className="text-xs text-indigo-700 font-bold bg-indigo-50 px-2.5 py-1 rounded-xl">
+                {dailyClasses.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes Scheduled'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {weekDayTabs.map(tab => {
+                const isSelected = selectedDay === tab.index;
+                const isToday = tab.index === todayDayIndex;
+                const countForDay = filteredSubjectSchedules.filter(s =>
+                  s.daysOfWeek && s.daysOfWeek.length > 0 ? s.daysOfWeek.includes(tab.index) : s.dayOfWeek === tab.index
+                ).length;
+
+                return (
+                  <button
+                    key={tab.index}
+                    type="button"
+                    onClick={() => setSelectedDay(tab.index)}
+                    className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all relative ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-md shadow-indigo-600/25 ring-2 ring-indigo-500/20'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                        {isKhmer ? tab.shortKm : tab.shortEn}
+                      </span>
+                      {isToday && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isSelected ? 'bg-white text-indigo-800' : 'bg-indigo-100 text-indigo-800'
+                        }`}>
+                          {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
+                        </span>
+                      )}
+                    </div>
+                    <div className={`text-[10px] ${isSelected ? 'text-indigo-100' : 'text-slate-500'} font-medium`}>
+                      {countForDay} {isKhmer ? 'ម៉ោង' : 'classes'}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Classes for Selected Day */}
+          <div className="space-y-3">
+            {dailyClasses.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center mb-3">
+                  <Calendar className="w-6 h-6" />
+                </div>
+                <h4 className="font-black text-base text-slate-900">
+                  {isKhmer ? 'មិនមានម៉ោងបង្រៀនសម្រាប់ថ្ងៃនេះទេ' : 'No Classes Scheduled for This Day'}
+                </h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                  {isKhmer
+                    ? 'អ្នកមិនមានកាលវិភាគបង្រៀនសម្រាប់ថ្ងៃនេះឡើយ។ អ្នកអាចជ្រើសរើសថ្ងៃផ្សេងទៀតដើម្បីពិនិត្យ។'
+                    : 'You do not have any teaching sessions on this day. Use the day switcher above to view other days.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {dailyClasses.map(sub => {
+                  // Find attendance record for this class today
+                  const isClassToday = selectedDay === todayDayIndex;
+                  const todayRec = attendanceList.find(
+                    a =>
+                      (a.personId === (activeTeacher?.id || currentUser.id) ||
+                        a.personName.toLowerCase() === currentUser.fullName.toLowerCase()) &&
+                      a.date === todayStr &&
+                      a.subjectScheduleId === sub.id
+                  );
+
+                  const isCheckedIn = Boolean(todayRec?.checkInTime);
+                  const isCheckedOut = Boolean(todayRec?.checkOutTime);
+                  const isLate = todayRec?.status === 'Late';
+
+                  return (
+                    <div
+                      key={sub.id}
+                      className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs hover:shadow-md transition-shadow relative overflow-hidden"
+                      style={{ borderLeftWidth: '6px', borderLeftColor: sub.color || '#4F46E5' }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className="px-2.5 py-1 rounded-xl text-xs font-black text-white"
+                            style={{ backgroundColor: sub.color || '#4F46E5' }}
+                          >
+                            {isKhmer ? `ម៉ោងទី ${sub.periodNumber}` : sub.periodName}
+                          </span>
+                          <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-500" />
+                            {sub.startTime} - {sub.endTime}
+                          </span>
+                        </div>
+
+                        {/* Status Badge if checking today */}
+                        {isClassToday && (
+                          <div>
+                            {isCheckedOut ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                                <span>{isKhmer ? `ចប់ម៉ោង (${todayRec?.checkOutTime})` : `Out: ${todayRec?.checkOutTime}`}</span>
+                              </span>
+                            ) : isCheckedIn ? (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold ${
+                                isLate ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              }`}>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>{isKhmer ? `ស្កេនចូលម៉ោង ${todayRec?.checkInTime}` : `In: ${todayRec?.checkInTime}`}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600">
+                                {isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1 mb-3">
+                        <h4 className="font-black text-base text-slate-900">
+                          {sub.subject}
+                        </h4>
+                        {sub.khmerSubject && (
+                          <p className="text-xs font-semibold text-indigo-700">
+                            {sub.khmerSubject}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-600 font-medium">
+                        <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl font-bold text-slate-800">
+                          {sub.gradeClass}
+                        </span>
+                        <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl font-bold text-slate-700 flex items-center gap-1">
+                          <Building className="w-3 h-3 text-slate-400" />
+                          {sub.room}
+                        </span>
+                        {sub.subjectCode && (
+                          <span className="font-mono text-[11px] text-slate-400">
+                            {sub.subjectCode}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quick Attendance Action Buttons for Today */}
+                      {isClassToday && (
+                        <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
+                          {!isCheckedIn ? (
+                            <button
+                              type="button"
+                              onClick={() => handleTeacherClassCheckIn(sub)}
+                              className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-98"
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              <span>{isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class'}</span>
+                            </button>
+                          ) : !isCheckedOut ? (
+                            <button
+                              type="button"
+                              onClick={() => handleTeacherClassCheckOut(sub)}
+                              className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-black shadow-sm transition-all active:scale-98"
+                            >
+                              <LogOut className="w-3.5 h-3.5" />
+                              <span>{isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class'}</span>
+                            </button>
+                          ) : (
+                            <div className="w-full text-center text-xs font-bold text-slate-500 py-1">
+                              ✓ {isKhmer ? 'បានកត់ត្រាវត្តមានសម្រាប់ម៉ោងនេះរួចរាល់' : 'Class Attendance Completed'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 
@@ -736,9 +1031,9 @@ export const ScheduleManagement: React.FC = () => {
 
                       {/* Assigned Teacher */}
                       <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-slate-100">
-                        {teacher?.photoUrl ? (
+                        {teacher?.photoUrl?.trim() ? (
                           <img
-                            src={teacher.photoUrl}
+                            src={teacher.photoUrl.trim()}
                             alt={teacher.fullName}
                             className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
                           />

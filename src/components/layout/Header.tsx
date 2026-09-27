@@ -164,19 +164,21 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {/* Mobile Kiosk Toggle */}
-          <button
-            onClick={onToggleMobileKiosk}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border shrink-0 ${
-              isMobileKioskOpen
-                ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-            }`}
-            title={isKhmer ? 'បើកផ្ទាំងស្កេនវត្តមានលើទូរស័ព្ទដៃ' : 'Open phone-sized check-in terminal'}
-          >
-            <Smartphone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span className="hidden md:inline">{t('header.kiosk', 'Mobile Check-in')}</span>
-          </button>
+          {/* Mobile Kiosk Toggle (Hidden for employees to enforce only Staff Calendar and History) */}
+          {currentUser.role !== 'employee' && (
+            <button
+              onClick={onToggleMobileKiosk}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border shrink-0 ${
+                isMobileKioskOpen
+                  ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+              title={isKhmer ? 'បើកផ្ទាំងស្កេនវត្តមានលើទូរស័ព្ទដៃ' : 'Open phone-sized check-in terminal'}
+            >
+              <Smartphone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span className="hidden md:inline">{t('header.kiosk', 'Mobile Check-in')}</span>
+            </button>
+          )}
 
           {/* Absence Detector Scanner Button */}
           {hasPermission('attendance.edit') && (
@@ -282,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-1.5 sm:gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl hover:bg-slate-100 border border-slate-200 transition-colors"
             >
               <img
-                src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'}
+                src={currentUser.avatarUrl?.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'}
                 alt={currentUser.fullName}
                 className="w-7 h-7 rounded-lg object-cover ring-1 ring-slate-300 shrink-0"
               />
@@ -309,7 +311,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="p-3 bg-gradient-to-br from-indigo-50/80 to-slate-50 rounded-xl border border-indigo-100/60 mb-2">
                   <div className="flex items-center gap-2.5">
                     <img
-                      src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'}
+                      src={currentUser.avatarUrl?.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'}
                       alt=""
                       className="w-10 h-10 rounded-xl object-cover ring-2 ring-indigo-200 shrink-0"
                     />

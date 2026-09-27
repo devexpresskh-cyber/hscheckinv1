@@ -3,6 +3,7 @@ import { UserAccount, UserRole, Permission, RoleDefinition } from '../types/inde
 import { StorageService } from '../services/storageService.ts';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { phoneNumbersMatch, normalizePhoneNumber } from '../utils/phoneUtils.ts';
 
 interface AuthContextType {
   currentUser: UserAccount;
@@ -19,6 +20,7 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithCredentials: (identifier: string, password?: string) => Promise<boolean>;
   loginWithPin: (identifier: string, pin: string) => Promise<boolean>;
+  loginWithPhone: (phone: string, pin: string) => Promise<boolean>;
   authError: string | null;
   setAuthError: (err: string | null) => void;
 }
@@ -260,24 +262,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithCredentials = async (identifier: string, _password?: string): Promise<boolean> => {
     setIsLoading(true);
     setAuthError(null);
-    const trimmed = identifier.trim().toLowerCase();
+    const rawTrimmed = identifier.trim();
+    const trimmed = rawTrimmed.toLowerCase();
     
-    // 1. Find matching existing user
+    // 1. Find matching existing user (by email, id, personId, phone, or name)
     let matched = users.find(u => 
       u.email.toLowerCase() === trimmed ||
       u.id.toLowerCase() === trimmed ||
       (u.personId && u.personId.toLowerCase() === trimmed) ||
+      (u.phone && phoneNumbersMatch(rawTrimmed, u.phone)) ||
+      (u.phoneNumber && phoneNumbersMatch(rawTrimmed, u.phoneNumber)) ||
       u.fullName.toLowerCase() === trimmed ||
       u.fullName.toLowerCase().startsWith(trimmed)
     );
 
-    // 2. If not found in user list, check teachers directly by Teacher ID, Email, or Name
+    // 2. If not found in user list, check teachers directly by Teacher ID, Phone, Email, or Name
     if (!matched) {
       const allTeachers = StorageService.getTeachers();
       const matchedTeacher = allTeachers.find(t => 
         t.teacherId.toLowerCase() === trimmed ||
         t.id.toLowerCase() === trimmed ||
         (t.employeeId && t.employeeId.toLowerCase() === trimmed) ||
+        (t.phone && phoneNumbersMatch(rawTrimmed, t.phone)) ||
         (t.email && t.email.toLowerCase() === trimmed) ||
         t.fullName.toLowerCase() === trimmed ||
         t.fullName.toLowerCase().includes(trimmed) ||
@@ -292,6 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           khmerName: matchedTeacher.khmerName,
           role: 'teacher',
           department: matchedTeacher.department,
+          phone: matchedTeacher.phone,
           personId: matchedTeacher.id,
           status: 'Active',
           avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
@@ -307,6 +314,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const matchedEmployee = allEmployees.find(e => 
         e.employeeId.toLowerCase() === trimmed ||
         e.id.toLowerCase() === trimmed ||
+        (e.phone && phoneNumbersMatch(rawTrimmed, e.phone)) ||
         (e.email && e.email.toLowerCase() === trimmed) ||
         e.fullName.toLowerCase() === trimmed ||
         e.fullName.toLowerCase().includes(trimmed) ||
@@ -321,6 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           khmerName: matchedEmployee.khmerName,
           role: 'employee',
           department: matchedEmployee.department,
+          phone: matchedEmployee.phone,
           personId: matchedEmployee.id,
           status: 'Active',
           avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
@@ -347,7 +356,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } else {
       setIsLoading(false);
-      setAuthError('Account not found with this email or staff ID. Please verify your credentials or contact the administrator.');
+      setAuthError('Account not found with this email, phone number, or staff ID. Please verify your credentials or contact the administrator.');
       return false;
     }
   };
@@ -355,7 +364,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithPin = async (identifier: string, pin: string): Promise<boolean> => {
     setIsLoading(true);
     setAuthError(null);
-    const trimmedId = identifier.trim().toLowerCase();
+    const rawTrimmedId = identifier.trim();
+    const trimmedId = rawTrimmedId.toLowerCase();
     const trimmedPin = pin.trim();
 
     if (!trimmedPin) {
@@ -364,50 +374,116 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
+    const allUsers = StorageService.getUsers();
     const allTeachers = StorageService.getTeachers();
+    const allEmployees = StorageService.getEmployees();
 
-    // 1. Locate the specific teacher by ID, code, email, or name
-    let matchedTeacher: (typeof allTeachers)[0] | undefined;
+    // Check if matching an administrator or system user by phone, email, or id
     if (trimmedId) {
-      matchedTeacher = allTeachers.find(t =>
-        t.teacherId.toLowerCase() === trimmedId ||
-        t.id.toLowerCase() === trimmedId ||
-        (t.employeeId && t.employeeId.toLowerCase() === trimmedId) ||
-        (t.email && t.email.toLowerCase() === trimmedId) ||
-        t.fullName.toLowerCase() === trimmedId ||
-        t.fullName.toLowerCase().includes(trimmedId) ||
-        (t.khmerName && t.khmerName.toLowerCase().includes(trimmedId))
+      const foundUser = allUsers.find(
+        u =>
+          (u.phone && phoneNumbersMatch(rawTrimmedId, u.phone)) ||
+          (u.phoneNumber && phoneNumbersMatch(rawTrimmedId, u.phoneNumber)) ||
+          u.email.toLowerCase() === trimmedId ||
+          u.id.toLowerCase() === trimmedId
       );
-    } else {
-      // If no identifier provided, check if exactly one active teacher has this PIN
-      const teachersWithPin = allTeachers.filter(t => (t.pinCode || '1234') === trimmedPin);
-      if (teachersWithPin.length === 1) {
-        matchedTeacher = teachersWithPin[0];
-      } else if (teachersWithPin.length > 1) {
+
+      if (foundUser) {
+        const requiredPin = foundUser.pinCode || '1234';
+        if (trimmedPin !== requiredPin) {
+          setIsLoading(false);
+          setAuthError(`Incorrect PIN for account ${foundUser.fullName}. Please enter the correct PIN code.`);
+          return false;
+        }
+
+        setCurrentUser(foundUser);
+        setIsAuthenticated(true);
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(foundUser));
+        localStorage.setItem(AUTH_STATUS_KEY, 'true');
+        StorageService.addAuditLog({
+          userId: foundUser.id,
+          userName: foundUser.fullName,
+          userRole: foundUser.role,
+          action: 'PIN Login',
+          target: `Signed in as ${foundUser.fullName} (${foundUser.role})`,
+          ipAddress: '127.0.0.1'
+        });
         setIsLoading(false);
-        setAuthError('Multiple teachers share this default PIN. Please select your teacher profile or enter your Teacher ID.');
+        return true;
+      }
+    }
+
+    // 1. Locate specific teacher or employee
+    let matchedPerson:
+      | { type: 'teacher'; data: (typeof allTeachers)[0] }
+      | { type: 'employee'; data: (typeof allEmployees)[0] }
+      | undefined;
+
+    if (trimmedId) {
+      const foundTeacher = allTeachers.find(
+        t =>
+          t.teacherId.toLowerCase() === trimmedId ||
+          t.id.toLowerCase() === trimmedId ||
+          (t.employeeId && t.employeeId.toLowerCase() === trimmedId) ||
+          (t.phone && phoneNumbersMatch(rawTrimmedId, t.phone)) ||
+          (t.email && t.email.toLowerCase() === trimmedId) ||
+          t.fullName.toLowerCase() === trimmedId ||
+          t.fullName.toLowerCase().includes(trimmedId) ||
+          (t.khmerName && t.khmerName.toLowerCase().includes(trimmedId))
+      );
+      if (foundTeacher) {
+        matchedPerson = { type: 'teacher', data: foundTeacher };
+      } else {
+        const foundEmployee = allEmployees.find(
+          e =>
+            e.employeeId.toLowerCase() === trimmedId ||
+            e.id.toLowerCase() === trimmedId ||
+            (e.phone && phoneNumbersMatch(rawTrimmedId, e.phone)) ||
+            (e.email && e.email.toLowerCase() === trimmedId) ||
+            e.fullName.toLowerCase() === trimmedId ||
+            e.fullName.toLowerCase().includes(trimmedId) ||
+            (e.khmerName && e.khmerName.toLowerCase().includes(trimmedId))
+        );
+        if (foundEmployee) {
+          matchedPerson = { type: 'employee', data: foundEmployee };
+        }
+      }
+    } else {
+      // If no identifier provided, check if exactly one active person has this PIN
+      const teachersWithPin = allTeachers.filter(t => (t.pinCode || '1234') === trimmedPin);
+      const employeesWithPin = allEmployees.filter(e => (e.pinCode || '1234') === trimmedPin);
+      const totalMatches = teachersWithPin.length + employeesWithPin.length;
+      if (totalMatches === 1) {
+        if (teachersWithPin.length === 1) {
+          matchedPerson = { type: 'teacher', data: teachersWithPin[0] };
+        } else {
+          matchedPerson = { type: 'employee', data: employeesWithPin[0] };
+        }
+      } else if (totalMatches > 1) {
+        setIsLoading(false);
+        setAuthError('Multiple accounts share this default PIN. Please enter your Teacher ID, Staff ID, or Phone Number.');
         return false;
       }
     }
 
-    if (!matchedTeacher) {
+    if (!matchedPerson) {
       setIsLoading(false);
-      setAuthError('Teacher account not found. Please select your profile or enter your Teacher ID (e.g. TCH-2026-001).');
+      setAuthError('Staff or Teacher account not found. Please enter your Phone Number, Teacher ID, or Staff ID.');
       return false;
     }
 
     // 2. Validate PIN code
-    const requiredPin = matchedTeacher.pinCode || '1234';
+    const requiredPin = matchedPerson.data.pinCode || '1234';
     if (trimmedPin !== requiredPin) {
       setIsLoading(false);
-      setAuthError(`Incorrect PIN for ${matchedTeacher.fullName}. Please enter the correct PIN code or contact administrator.`);
+      setAuthError(`Incorrect PIN for ${matchedPerson.data.fullName}. Please enter the correct PIN code.`);
       StorageService.addAuditLog({
         userId: 'kiosk_login',
-        userName: 'Teacher PIN Login',
-        userRole: 'teacher',
+        userName: 'PIN Login',
+        userRole: matchedPerson.type,
         action: 'FAILED_PIN_LOGIN',
-        target: `${matchedTeacher.fullName} [${matchedTeacher.teacherId}]`,
-        details: `Failed PIN attempt for teacher ${matchedTeacher.fullName}`,
+        target: `${matchedPerson.data.fullName}`,
+        details: `Failed PIN attempt for ${matchedPerson.data.fullName}`,
         ipAddress: '127.0.0.1'
       });
       return false;
@@ -415,34 +491,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Find or create UserAccount
     const updatedUsers = StorageService.getUsers();
-    let matchedUser = updatedUsers.find(u =>
-      (u.personId && u.personId === matchedTeacher!.id) ||
-      (matchedTeacher!.email && u.email.toLowerCase() === matchedTeacher!.email.toLowerCase()) ||
-      u.fullName.toLowerCase() === matchedTeacher!.fullName.toLowerCase()
+    const pData = matchedPerson.data;
+    let matchedUser = updatedUsers.find(
+      u =>
+        (u.personId && u.personId === pData.id) ||
+        (pData.phone && u.phone && phoneNumbersMatch(pData.phone, u.phone)) ||
+        (pData.email && u.email.toLowerCase() === pData.email.toLowerCase()) ||
+        u.fullName.toLowerCase() === pData.fullName.toLowerCase()
     );
 
     if (!matchedUser) {
       matchedUser = {
-        id: `usr-${matchedTeacher.id}`,
-        email: matchedTeacher.email || `${matchedTeacher.teacherId.toLowerCase()}@edutrack.edu.kh`,
-        fullName: matchedTeacher.fullName,
-        khmerName: matchedTeacher.khmerName,
-        role: 'teacher',
-        department: matchedTeacher.department,
-        personId: matchedTeacher.id,
-        pinCode: matchedTeacher.pinCode || '1234',
+        id: `usr-${pData.id}`,
+        email: pData.email || `${('teacherId' in pData ? pData.teacherId : pData.employeeId).toLowerCase()}@edutrack.edu`,
+        fullName: pData.fullName,
+        khmerName: pData.khmerName,
+        role: matchedPerson.type,
+        department: pData.department,
+        phone: pData.phone,
+        personId: pData.id,
+        pinCode: pData.pinCode || '1234',
         status: 'Active',
-        avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
+        avatarUrl: pData.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
         createdAt: new Date().toISOString()
       };
       StorageService.addUser(matchedUser);
     } else {
-      if (matchedUser.role !== 'teacher' || matchedUser.personId !== matchedTeacher.id || !matchedUser.pinCode) {
+      if (matchedUser.role !== matchedPerson.type || matchedUser.personId !== pData.id || !matchedUser.pinCode || !matchedUser.phone) {
         matchedUser = {
           ...matchedUser,
-          role: 'teacher',
-          personId: matchedTeacher.id,
-          pinCode: matchedTeacher.pinCode || '1234'
+          role: matchedPerson.type,
+          personId: pData.id,
+          phone: pData.phone || matchedUser.phone,
+          pinCode: pData.pinCode || '1234'
         };
         StorageService.updateUser(matchedUser.id, matchedUser);
       }
@@ -456,14 +537,199 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     StorageService.addAuditLog({
       userId: matchedUser.id,
       userName: matchedUser.fullName,
-      userRole: 'teacher',
-      action: 'Teacher PIN Login',
-      target: `Teacher ${matchedTeacher.fullName} [${matchedTeacher.teacherId}] authenticated via PIN`,
+      userRole: matchedPerson.type,
+      action: 'Staff PIN Login',
+      target: `Signed in via PIN as ${matchedPerson.data.fullName}`,
       ipAddress: '127.0.0.1'
     });
 
     setIsLoading(false);
     return true;
+  };
+
+  // Direct Phone Number Login with Security PIN (No Google Phone Auth required)
+  const loginWithPhone = async (phone: string, pin: string): Promise<boolean> => {
+    setIsLoading(true);
+    setAuthError(null);
+    const trimmedPhone = phone.trim();
+    const trimmedPin = pin.trim();
+
+    if (!trimmedPhone) {
+      setIsLoading(false);
+      setAuthError('Please enter your registered phone number (សូមបញ្ចូលលេខទូរស័ព្ទ)');
+      return false;
+    }
+
+    if (!trimmedPin) {
+      setIsLoading(false);
+      setAuthError('Please enter your 4-digit security PIN (សូមបញ្ចូលលេខកូដសម្ងាត់ PIN)');
+      return false;
+    }
+
+    const allUsers = StorageService.getUsers();
+    const allTeachers = StorageService.getTeachers();
+    const allEmployees = StorageService.getEmployees();
+
+    // 1. Check if matches any registered system user (Super Admin, HR, Manager)
+    const matchedUser = allUsers.find(
+      u =>
+        (u.phone && phoneNumbersMatch(trimmedPhone, u.phone)) ||
+        (u.phoneNumber && phoneNumbersMatch(trimmedPhone, u.phoneNumber))
+    );
+
+    if (matchedUser) {
+      const requiredPin = matchedUser.pinCode || '1234';
+      if (trimmedPin !== requiredPin) {
+        setIsLoading(false);
+        setAuthError(`Incorrect PIN for account ${matchedUser.fullName}. Please check your PIN code.`);
+        return false;
+      }
+
+      setCurrentUser(matchedUser);
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedUser));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+      StorageService.addAuditLog({
+        userId: matchedUser.id,
+        userName: matchedUser.fullName,
+        userRole: matchedUser.role,
+        action: 'Phone Login',
+        target: `Signed in via Phone (${trimmedPhone}) as ${matchedUser.fullName}`,
+        ipAddress: '127.0.0.1'
+      });
+      setIsLoading(false);
+      return true;
+    }
+
+    // 2. Check if matches any registered teacher
+    const matchedTeacher = allTeachers.find(
+      t => t.phone && phoneNumbersMatch(trimmedPhone, t.phone)
+    );
+
+    if (matchedTeacher) {
+      const requiredPin = matchedTeacher.pinCode || '1234';
+      if (trimmedPin !== requiredPin) {
+        setIsLoading(false);
+        setAuthError(`Incorrect PIN for Teacher ${matchedTeacher.fullName}. Please check your PIN code.`);
+        return false;
+      }
+
+      let userAcc = allUsers.find(
+        u =>
+          u.personId === matchedTeacher.id ||
+          (matchedTeacher.phone && u.phone && phoneNumbersMatch(matchedTeacher.phone, u.phone)) ||
+          (matchedTeacher.email && u.email.toLowerCase() === matchedTeacher.email.toLowerCase())
+      );
+
+      if (!userAcc) {
+        userAcc = {
+          id: `usr-${matchedTeacher.id}`,
+          email: matchedTeacher.email || `${matchedTeacher.teacherId.toLowerCase()}@edutrack.edu`,
+          fullName: matchedTeacher.fullName,
+          khmerName: matchedTeacher.khmerName,
+          role: 'teacher',
+          department: matchedTeacher.department,
+          phone: matchedTeacher.phone,
+          personId: matchedTeacher.id,
+          pinCode: matchedTeacher.pinCode || '1234',
+          status: 'Active',
+          avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
+          createdAt: new Date().toISOString()
+        };
+        StorageService.addUser(userAcc);
+      } else {
+        if (!userAcc.phone || userAcc.phone !== matchedTeacher.phone || !userAcc.pinCode) {
+          userAcc = {
+            ...userAcc,
+            phone: matchedTeacher.phone,
+            pinCode: matchedTeacher.pinCode || userAcc.pinCode || '1234'
+          };
+          StorageService.updateUser(userAcc.id, userAcc);
+        }
+      }
+
+      setCurrentUser(userAcc);
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userAcc));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+      StorageService.addAuditLog({
+        userId: userAcc.id,
+        userName: userAcc.fullName,
+        userRole: 'teacher',
+        action: 'Phone Login',
+        target: `Signed in via Phone (${trimmedPhone}) as ${userAcc.fullName}`,
+        ipAddress: '127.0.0.1'
+      });
+      setIsLoading(false);
+      return true;
+    }
+
+    // 3. Check if matches any registered employee
+    const matchedEmployee = allEmployees.find(
+      e => e.phone && phoneNumbersMatch(trimmedPhone, e.phone)
+    );
+
+    if (matchedEmployee) {
+      const requiredPin = matchedEmployee.pinCode || '1234';
+      if (trimmedPin !== requiredPin) {
+        setIsLoading(false);
+        setAuthError(`Incorrect PIN for Staff ${matchedEmployee.fullName}. Please check your PIN code.`);
+        return false;
+      }
+
+      let userAcc = allUsers.find(
+        u =>
+          u.personId === matchedEmployee.id ||
+          (matchedEmployee.phone && u.phone && phoneNumbersMatch(matchedEmployee.phone, u.phone)) ||
+          (matchedEmployee.email && u.email.toLowerCase() === matchedEmployee.email.toLowerCase())
+      );
+
+      if (!userAcc) {
+        userAcc = {
+          id: `usr-${matchedEmployee.id}`,
+          email: matchedEmployee.email || `${matchedEmployee.employeeId.toLowerCase()}@edutrack.edu`,
+          fullName: matchedEmployee.fullName,
+          khmerName: matchedEmployee.khmerName,
+          role: 'employee',
+          department: matchedEmployee.department,
+          phone: matchedEmployee.phone,
+          personId: matchedEmployee.id,
+          pinCode: matchedEmployee.pinCode || '1234',
+          status: 'Active',
+          avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
+          createdAt: new Date().toISOString()
+        };
+        StorageService.addUser(userAcc);
+      } else {
+        if (!userAcc.phone || userAcc.phone !== matchedEmployee.phone || !userAcc.pinCode) {
+          userAcc = {
+            ...userAcc,
+            phone: matchedEmployee.phone,
+            pinCode: matchedEmployee.pinCode || userAcc.pinCode || '1234'
+          };
+          StorageService.updateUser(userAcc.id, userAcc);
+        }
+      }
+
+      setCurrentUser(userAcc);
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userAcc));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+      StorageService.addAuditLog({
+        userId: userAcc.id,
+        userName: userAcc.fullName,
+        userRole: 'employee',
+        action: 'Phone Login',
+        target: `Signed in via Phone (${trimmedPhone}) as ${userAcc.fullName}`,
+        ipAddress: '127.0.0.1'
+      });
+      setIsLoading(false);
+      return true;
+    }
+
+    setIsLoading(false);
+    setAuthError('No account found registered with this phone number. Please check your number or contact the administration.');
+    return false;
   };
 
   const logout = async () => {
@@ -508,6 +774,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         loginWithCredentials,
         loginWithPin,
+        loginWithPhone,
         authError,
         setAuthError
       }}

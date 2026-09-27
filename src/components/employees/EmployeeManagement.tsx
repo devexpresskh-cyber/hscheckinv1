@@ -228,11 +228,17 @@ export const EmployeeManagement: React.FC = () => {
                     <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={emp.photoUrl}
-                            alt=""
-                            className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200"
-                          />
+                          {emp.photoUrl && emp.photoUrl.trim() ? (
+                            <img
+                              src={emp.photoUrl.trim()}
+                              alt=""
+                              className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 font-bold text-sm flex items-center justify-center ring-1 ring-slate-200 shrink-0">
+                              {emp.fullName.charAt(0)}
+                            </div>
+                          )}
                           <div>
                             <span className="font-extrabold text-slate-900 block leading-tight">
                               {emp.fullName}
@@ -356,11 +362,17 @@ export const EmployeeManagement: React.FC = () => {
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden">
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img
-                  src={selectedEmpForHistory.photoUrl}
-                  alt=""
-                  className="w-12 h-12 rounded-xl object-cover"
-                />
+                {selectedEmpForHistory.photoUrl && selectedEmpForHistory.photoUrl.trim() ? (
+                  <img
+                    src={selectedEmpForHistory.photoUrl.trim()}
+                    alt=""
+                    className="w-12 h-12 rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-slate-800 text-white font-bold text-base flex items-center justify-center shrink-0">
+                    {selectedEmpForHistory.fullName.charAt(0)}
+                  </div>
+                )}
                 <div>
                   <h3 className="font-bold text-base">{selectedEmpForHistory.fullName}</h3>
                   <p className="text-xs text-slate-300 font-khmer">

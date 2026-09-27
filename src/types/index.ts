@@ -51,6 +51,8 @@ export interface UserAccount {
   khmerName: string;
   role: UserRole;
   department: string;
+  phone?: string;
+  phoneNumber?: string;
   telegramChatId?: string;
   status: 'Active' | 'Inactive';
   personId?: string; // Links to Teacher or Employee profile

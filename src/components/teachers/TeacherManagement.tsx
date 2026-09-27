@@ -310,11 +310,17 @@ export const TeacherManagement: React.FC = () => {
                       {/* Teacher Profile & Name */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={teacher.photoUrl}
-                            alt=""
-                            className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200"
-                          />
+                          {teacher.photoUrl && teacher.photoUrl.trim() ? (
+                            <img
+                              src={teacher.photoUrl.trim()}
+                              alt=""
+                              className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 font-bold text-sm flex items-center justify-center ring-1 ring-slate-200 shrink-0">
+                              {teacher.fullName.charAt(0)}
+                            </div>
+                          )}
                           <div>
                             <span className="font-extrabold text-slate-900 block leading-tight">
                               {teacher.fullName}
@@ -484,11 +490,17 @@ export const TeacherManagement: React.FC = () => {
             
             <div className="bg-indigo-900 text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img
-                  src={selectedTeacherForHistory.photoUrl}
-                  alt=""
-                  className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-300"
-                />
+                {selectedTeacherForHistory.photoUrl && selectedTeacherForHistory.photoUrl.trim() ? (
+                  <img
+                    src={selectedTeacherForHistory.photoUrl.trim()}
+                    alt=""
+                    className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-300"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-indigo-800 text-white font-bold text-base flex items-center justify-center ring-2 ring-indigo-300 shrink-0">
+                    {selectedTeacherForHistory.fullName.charAt(0)}
+                  </div>
+                )}
                 <div>
                   <h3 className="font-bold text-base">{selectedTeacherForHistory.fullName}</h3>
                   <p className="text-xs text-indigo-200 font-khmer">

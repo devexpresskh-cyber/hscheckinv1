@@ -211,10 +211,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   // Restrict teacher and employee from accessing telegram and system settings
-  const isRestrictedStaff = currentUser.role === 'teacher' || currentUser.role === 'employee';
+  const isEmployee = currentUser.role === 'employee';
+  const isRestrictedStaff = currentUser.role === 'teacher' || isEmployee;
 
   // Filter items by RBAC
-  const visibleItems = navItems.filter(item => {
+  const visibleItems = navItems.map(item => {
+    // Customize labels for employee account
+    if (isEmployee) {
+      if (item.id === 'schedules') {
+        return {
+          ...item,
+          label: 'Staff Calendar',
+          khmer: 'ប្រតិទិនការងារបុគ្គលិក',
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'attendance') {
+        return {
+          ...item,
+          label: 'Staff Check-in History',
+          khmer: 'ប្រវត្តិវត្តមានបុគ្គលិក',
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'kiosk') {
+        return {
+          ...item,
+          label: 'Check-in Terminal',
+          khmer: 'ចំណុចស្កេនវត្តមាន',
+          section: 'overview' as const
+        };
+      }
+    }
+    return item;
+  }).filter(item => {
+    // If logged in as an Employee, strictly show ONLY Staff Calendar and Staff Check-in History
+    if (isEmployee) {
+      return item.id === 'schedules' || item.id === 'attendance';
+    }
+
     // Explicitly disallow teachers and employees from accessing telegram setting and system setting
     if (isRestrictedStaff && (item.id === 'telegram' || item.id === 'settings' || item.id === 'architecture')) {
       return false;
@@ -232,6 +267,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const getSectionTitle = (secKey: string) => {
+    if (isEmployee) {
+      return isKhmer ? 'ផតថលបុគ្គលិក (STAFF PORTAL)' : 'STAFF WORK PORTAL';
+    }
     switch (secKey) {
       case 'overview':
         return t('section.overview', 'OVERVIEW');

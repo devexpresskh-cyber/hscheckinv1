@@ -566,11 +566,17 @@ export const TeachingWageReport: React.FC = () => {
                     {/* Teacher profile */}
                     <td className="p-3.5 pl-5">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={summary.photoUrl}
-                          alt={summary.teacherName}
-                          className="w-9 h-9 rounded-2xl object-cover border border-slate-200 shrink-0"
-                        />
+                        {summary.photoUrl && summary.photoUrl.trim() ? (
+                          <img
+                            src={summary.photoUrl.trim()}
+                            alt={summary.teacherName}
+                            className="w-9 h-9 rounded-2xl object-cover border border-slate-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-2xl bg-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-center border border-slate-200 shrink-0">
+                            {summary.teacherName.charAt(0)}
+                          </div>
+                        )}
                         <div>
                           <div className="font-black text-slate-900">{summary.teacherName}</div>
                           <div className="text-[10px] text-slate-400 font-khmer">
@@ -713,11 +719,17 @@ export const TeachingWageReport: React.FC = () => {
               {/* Teacher Profile Summary Card */}
               <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  <img
-                    src={selectedTeacherForDetail.photoUrl}
-                    alt={selectedTeacherForDetail.teacherName}
-                    className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-xs"
-                  />
+                  {selectedTeacherForDetail.photoUrl && selectedTeacherForDetail.photoUrl.trim() ? (
+                    <img
+                      src={selectedTeacherForDetail.photoUrl.trim()}
+                      alt={selectedTeacherForDetail.teacherName}
+                      className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-xs"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 font-black text-lg flex items-center justify-center border border-slate-200 shadow-xs shrink-0">
+                      {selectedTeacherForDetail.teacherName.charAt(0)}
+                    </div>
+                  )}
                   <div>
                     <h4 className="text-base font-black text-slate-900">
                       {selectedTeacherForDetail.teacherName}

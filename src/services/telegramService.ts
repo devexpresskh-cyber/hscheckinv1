@@ -10,20 +10,26 @@ export const TelegramService = {
   }): Promise<{ success: boolean; statusText: string; error?: string }> {
     const settings = StorageService.getTelegramSettings();
     const now = new Date().toISOString();
+    const targetChatId = (params.chatId || '').trim();
+    const botToken = (settings.botToken || '').trim();
+
+    if (!targetChatId) {
+      return { success: false, statusText: 'Missing Chat ID' };
+    }
 
     // Check if token exists and format looks valid (e.g. 123456:ABC-DEF...)
-    const hasLiveToken = settings.botToken && settings.botToken.includes(':') && !settings.botToken.startsWith('7394819280');
+    const hasLiveToken = botToken.length > 10 && botToken.includes(':');
 
     let sendStatus: TelegramMessageLog['status'] = 'Simulated';
     let errorMessage: string | undefined = undefined;
 
     if (hasLiveToken && settings.isEnabled) {
       try {
-        const response = await fetch(`https://api.telegram.org/bot${settings.botToken}/sendMessage`, {
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: params.chatId,
+            chat_id: targetChatId,
             text: params.text,
             parse_mode: 'HTML'
           })
@@ -48,7 +54,7 @@ export const TelegramService = {
     // Save log entry
     const log: TelegramMessageLog = {
       id: `tg-log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      chatId: params.chatId,
+      chatId: targetChatId,
       type: params.type,
       message: params.text,
       status: sendStatus,
@@ -74,10 +80,11 @@ export const TelegramService = {
     };
   },
 
-  // 1. Check-in Alert
+  // 1. Check-in Alert (Sent to Telegram group for Teachers and Employees)
   sendCheckInAlert(data: {
     name: string;
     khmerName?: string;
+    personType?: string;
     department: string;
     time: string;
     scheduled: string;
@@ -86,23 +93,60 @@ export const TelegramService = {
     subjectInfo?: string;
   }) {
     const settings = StorageService.getTelegramSettings();
-    if (!settings.isEnabled) return;
+    if (!settings.isEnabled || settings.notifyCheckIn === false) return;
 
-    const subjectLine = data.subjectInfo ? `\n<b>Class Session:</b> ${data.subjectInfo}` : '';
+    const groupChatId = (settings.groupChatId || '').trim();
+    const adminChatId = (settings.adminChatId || '').trim();
+    const isTeacher = data.personType?.toLowerCase() === 'teacher';
+    const roleTag = isTeacher ? 'Teacher / គ្រូបង្រៀន' : 'Employee (Staff) / បុគ្គលិក';
+    const subjectLine = data.subjectInfo ? `\n📚 <b>Class Session:</b> ${data.subjectInfo}` : '';
+    const isLate = data.status === 'Late';
 
-    if (data.status === 'Late' && settings.notifyLate) {
-      const msg = `⚠️ <b>Late Arrival Alert</b>\n\n<b>Name:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n<b>Department:</b> ${data.department}${subjectLine}\n<b>Scheduled:</b> ${data.scheduled}\n<b>Check-in:</b> ${data.time}\n<b>Late:</b> ${data.lateMinutes} minutes\n<b>System:</b> EduTrack School Attendance`;
+    let msg = '';
+    if (isLate) {
+      msg = `⚠️ <b>[${roleTag}] វត្តមានមកយឺត (Late Check-in)</b>\n\n` +
+        `👤 <b>Name / ឈ្មោះ:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
+        `🏷️ <b>Role:</b> ${isTeacher ? 'Teacher' : 'Staff Employee'}\n` +
+        `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
+        `⏰ <b>Check-in Time / ម៉ោងស្កេនចូល:</b> ${data.time}\n` +
+        `📋 <b>Scheduled Shift:</b> ${data.scheduled}\n` +
+        `⏳ <b>Lateness / យឺត:</b> ${data.lateMinutes} mins\n` +
+        `🏫 <b>School:</b> Heart School`;
+    } else {
+      msg = `✅ <b>[${roleTag}] វត្តមានចូលបម្រើការ (Check-in)</b>\n\n` +
+        `👤 <b>Name / ឈ្មោះ:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
+        `🏷️ <b>Role:</b> ${isTeacher ? 'Teacher' : 'Staff Employee'}\n` +
+        `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
+        `⏰ <b>Check-in Time / ម៉ោងស្កេនចូល:</b> ${data.time}\n` +
+        `📋 <b>Scheduled Shift:</b> ${data.scheduled}\n` +
+        `📊 <b>Status:</b> Present (On-time / ទាន់ពេល)\n` +
+        `🏫 <b>School:</b> Heart School`;
+    }
+
+    // 1. Prioritize Telegram Group
+    if (groupChatId) {
       this.dispatchMessage({
-        chatId: settings.adminChatId,
+        chatId: groupChatId,
         text: msg,
-        type: 'late'
+        type: isLate ? 'late' : 'checkin'
       });
-    } else if (settings.notifyCheckIn) {
-      const msg = `✅ <b>Attendance Check-in</b>\n\n<b>Name:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n<b>Department:</b> ${data.department}${subjectLine}\n<b>Time:</b> ${data.time}\n<b>Status:</b> ${data.status}\n<b>System:</b> EduTrack School Attendance`;
+    }
+
+    // 2. Also notify admin if configured and distinct from group
+    if (adminChatId && adminChatId !== groupChatId) {
       this.dispatchMessage({
-        chatId: settings.groupChatId || settings.adminChatId,
+        chatId: adminChatId,
         text: msg,
-        type: 'checkin'
+        type: isLate ? 'late' : 'checkin'
+      });
+    }
+
+    // Fallback if only adminChatId is set
+    if (!groupChatId && adminChatId) {
+      this.dispatchMessage({
+        chatId: adminChatId,
+        text: msg,
+        type: isLate ? 'late' : 'checkin'
       });
     }
   },
@@ -110,6 +154,8 @@ export const TelegramService = {
   // 2. Absence Alert
   sendAbsenceAlert(data: {
     name: string;
+    khmerName?: string;
+    personType?: string;
     department: string;
     date: string;
     subjectInfo?: string;
@@ -117,19 +163,41 @@ export const TelegramService = {
     const settings = StorageService.getTelegramSettings();
     if (!settings.isEnabled || !settings.notifyAbsent) return;
 
-    const subjectLine = data.subjectInfo ? `\n<b>Class Session:</b> ${data.subjectInfo}` : '';
-    const msg = `🚨 <b>Absence Alert</b>\n\n<b>Name:</b> ${data.name}\n<b>Department:</b> ${data.department}${subjectLine}\n<b>Date:</b> ${data.date}\n<b>Status:</b> No check-in detected by deadline.\n<b>Action:</b> Contact staff or record approved leave.\n<b>System:</b> EduTrack School Attendance`;
+    const groupChatId = (settings.groupChatId || '').trim();
+    const adminChatId = (settings.adminChatId || '').trim();
+    const roleTag = data.personType || (data.subjectInfo ? 'Teacher' : 'Staff');
 
-    this.dispatchMessage({
-      chatId: settings.adminChatId,
-      text: msg,
-      type: 'absence'
-    });
+    const subjectLine = data.subjectInfo ? `\n<b>Class Session:</b> ${data.subjectInfo}` : '';
+    const msg = `🚨 <b>[${roleTag}] Absence Alert</b>\n\n` +
+      `👤 <b>Name:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
+      `🏷️ <b>Role:</b> ${roleTag}\n` +
+      `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
+      `📅 <b>Date:</b> ${data.date}\n` +
+      `⚠️ <b>Status:</b> No check-in detected by deadline.\n` +
+      `🏫 <b>System:</b> EduTrack School Attendance`;
+
+    const targetChat = groupChatId || adminChatId;
+    if (targetChat) {
+      this.dispatchMessage({
+        chatId: targetChat,
+        text: msg,
+        type: 'absence'
+      });
+    }
+    if (adminChatId && groupChatId && adminChatId !== groupChatId) {
+      this.dispatchMessage({
+        chatId: adminChatId,
+        text: msg,
+        type: 'absence'
+      });
+    }
   },
 
-  // 3. Check-out Alert
+  // 3. Check-out Alert (Sent to Telegram group for Teachers and Employees)
   sendCheckOutAlert(data: {
     name: string;
+    khmerName?: string;
+    personType?: string;
     department: string;
     checkOutTime: string;
     workingTime: string;
@@ -138,23 +206,55 @@ export const TelegramService = {
     subjectInfo?: string;
   }) {
     const settings = StorageService.getTelegramSettings();
-    if (!settings.isEnabled || !settings.notifyCheckOut) return;
+    if (!settings.isEnabled || settings.notifyCheckOut === false) return;
 
-    const subjectLine = data.subjectInfo ? `\n<b>Class Session:</b> ${data.subjectInfo}` : '';
+    const groupChatId = (settings.groupChatId || '').trim();
+    const adminChatId = (settings.adminChatId || '').trim();
+    const isTeacher = data.personType?.toLowerCase() === 'teacher';
+    const roleTag = isTeacher ? 'Teacher / គ្រូបង្រៀន' : 'Employee (Staff) / បុគ្គលិក';
+
+    const subjectLine = data.subjectInfo ? `\n📚 <b>Class Session:</b> ${data.subjectInfo}` : '';
     let extraInfo = '';
     if (data.earlyLeaveMinutes > 0) {
-      extraInfo = `\n<b>Notice:</b> Early Leave (${data.earlyLeaveMinutes} minutes before period end)`;
+      extraInfo = `\n⚠️ <b>Early Leave / ចេញមុនម៉ោង:</b> ${data.earlyLeaveMinutes} mins`;
     } else if (data.overtimeMinutes > 0) {
-      extraInfo = `\n<b>Overtime:</b> +${data.overtimeMinutes} minutes`;
+      extraInfo = `\n⭐ <b>Overtime / ថែមម៉ោង:</b> +${data.overtimeMinutes} mins`;
     }
 
-    const msg = `👋 <b>Check-out Recorded</b>\n\n<b>Name:</b> ${data.name}\n<b>Department:</b> ${data.department}${subjectLine}\n<b>Check-out:</b> ${data.checkOutTime}\n<b>Duration:</b> ${data.workingTime}${extraInfo}\n<b>System:</b> EduTrack School Attendance`;
+    const msg = `👋 <b>[${roleTag}] វត្តមានស្កេនចេញ (Check-out)</b>\n\n` +
+      `👤 <b>Name / ឈ្មោះ:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
+      `🏷️ <b>Role:</b> ${isTeacher ? 'Teacher' : 'Staff Employee'}\n` +
+      `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
+      `⏰ <b>Check-out Time / ម៉ោងស្កេនចេញ:</b> ${data.checkOutTime}\n` +
+      `⌛ <b>Working Duration / រយៈពេលបម្រើការ:</b> ${data.workingTime}${extraInfo}\n` +
+      `🏫 <b>School:</b> Heart School`;
 
-    this.dispatchMessage({
-      chatId: settings.groupChatId || settings.adminChatId,
-      text: msg,
-      type: 'checkout'
-    });
+    // 1. Prioritize Telegram Group
+    if (groupChatId) {
+      this.dispatchMessage({
+        chatId: groupChatId,
+        text: msg,
+        type: 'checkout'
+      });
+    }
+
+    // 2. Also dispatch to admin chat if distinct
+    if (adminChatId && adminChatId !== groupChatId) {
+      this.dispatchMessage({
+        chatId: adminChatId,
+        text: msg,
+        type: 'checkout'
+      });
+    }
+
+    // Fallback if only adminChatId is set
+    if (!groupChatId && adminChatId) {
+      this.dispatchMessage({
+        chatId: adminChatId,
+        text: msg,
+        type: 'checkout'
+      });
+    }
   },
 
   // 4. Admin Daily Attendance Summary

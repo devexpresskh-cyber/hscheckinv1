@@ -765,11 +765,17 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 p-4 sm:p-6 rounded-2xl bg-indigo-50/50 border border-indigo-100">
               
               <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                <img
-                  src={activeStaff.photo}
-                  alt={activeStaff.name}
-                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover ring-2 ring-indigo-200 shadow-sm shrink-0"
-                />
+                {activeStaff.photo && activeStaff.photo.trim() ? (
+                  <img
+                    src={activeStaff.photo.trim()}
+                    alt={activeStaff.name}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover ring-2 ring-indigo-200 shadow-sm shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-indigo-600 text-white font-black text-xl flex items-center justify-center ring-2 ring-indigo-200 shadow-sm shrink-0">
+                    {activeStaff.name.charAt(0)}
+                  </div>
+                )}
                 <div className="min-w-0 truncate">
                   <div className="flex items-center gap-2">
                     <h3 className="text-base sm:text-lg font-extrabold text-slate-900 leading-tight truncate">
@@ -1366,11 +1372,17 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
               
               {/* Staff Target Card */}
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                <img
-                  src={activeStaff.photo}
-                  alt={activeStaff.name}
-                  className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-200 shrink-0"
-                />
+                {activeStaff.photo && activeStaff.photo.trim() ? (
+                  <img
+                    src={activeStaff.photo.trim()}
+                    alt={activeStaff.name}
+                    className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-200 shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white font-black text-base flex items-center justify-center ring-2 ring-indigo-200 shrink-0">
+                    {activeStaff.name.charAt(0)}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-xs font-black text-slate-900 truncate">

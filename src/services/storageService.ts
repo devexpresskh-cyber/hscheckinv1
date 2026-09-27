@@ -212,14 +212,19 @@ function initFirestoreSync() {
       setStored(STORAGE_KEYS.PERIODS, cache.periods);
       notifyListeners();
     } else {
-      // Bootstrap default timetable periods
-      DEFAULT_TIMETABLE_PERIODS.forEach(p => {
+      // Check if localStorage already has saved custom periods before bootstrapping defaults
+      const stored = getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, []);
+      const periodsToSave = stored && stored.length > 0 ? stored : DEFAULT_TIMETABLE_PERIODS;
+      cache.periods = periodsToSave.sort((a, b) => a.periodNumber - b.periodNumber);
+      setStored(STORAGE_KEYS.PERIODS, cache.periods);
+      periodsToSave.forEach(p => {
         setDoc(doc(db, 'timetable_periods', p.id), p).catch(err =>
-          handleFirestoreError(err, OperationType.WRITE, `timetable_periods/${p.id}`)
+          console.warn('Timetable period bootstrap notice:', err)
         );
       });
+      notifyListeners();
     }
-  }, err => handleFirestoreError(err, OperationType.GET, 'timetable_periods'));
+  }, err => console.warn('Timetable periods sync notice:', err));
 
   // 7. Subject Schedules (Class teaching periods)
   onSnapshot(collection(db, 'subject_schedules'), snapshot => {
@@ -297,18 +302,26 @@ function initFirestoreSync() {
       setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, cache.telegramSettings);
       notifyListeners();
     } else {
-      setDoc(doc(db, 'telegram_settings', 'config'), DEFAULT_TELEGRAM_SETTINGS).catch(err =>
-        handleFirestoreError(err, OperationType.WRITE, 'telegram_settings/config')
+      // Do not wipe out custom settings! Check localStorage first before falling back to defaults
+      const stored = getStored<TelegramSettings>(STORAGE_KEYS.TELEGRAM_SETTINGS, DEFAULT_TELEGRAM_SETTINGS);
+      const toPersist = (stored && (stored.botToken || stored.adminChatId || stored.groupChatId || stored.isEnabled))
+        ? stored
+        : DEFAULT_TELEGRAM_SETTINGS;
+      cache.telegramSettings = toPersist;
+      setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, toPersist);
+      setDoc(doc(db, 'telegram_settings', 'config'), toPersist, { merge: true }).catch(err =>
+        console.warn('Telegram settings bootstrap notice:', err)
       );
+      notifyListeners();
     }
-  }, err => handleFirestoreError(err, OperationType.GET, 'telegram_settings/config'));
+  }, err => console.warn('Telegram settings sync notice:', err));
 
   // 15. Telegram Message Logs
   onSnapshot(collection(db, 'telegram_logs'), snapshot => {
     cache.telegramLogs = snapshot.docs.map(d => d.data() as TelegramMessageLog);
     setStored(STORAGE_KEYS.TELEGRAM_LOGS, cache.telegramLogs);
     notifyListeners();
-  }, err => handleFirestoreError(err, OperationType.GET, 'telegram_logs'));
+  }, err => console.warn('Telegram logs sync notice:', err));
 
   // 16. System Settings
   onSnapshot(doc(db, 'system_settings', 'config'), snapshot => {
@@ -317,11 +330,17 @@ function initFirestoreSync() {
       setStored(STORAGE_KEYS.SYSTEM_SETTINGS, cache.systemSettings);
       notifyListeners();
     } else {
-      setDoc(doc(db, 'system_settings', 'config'), DEFAULT_SYSTEM_SETTINGS).catch(err =>
-        handleFirestoreError(err, OperationType.WRITE, 'system_settings/config')
+      // Do not wipe out custom settings! Check localStorage first before falling back to defaults
+      const stored = getStored<SystemSettings>(STORAGE_KEYS.SYSTEM_SETTINGS, DEFAULT_SYSTEM_SETTINGS);
+      const toPersist = (stored && stored.organizationName) ? stored : DEFAULT_SYSTEM_SETTINGS;
+      cache.systemSettings = toPersist;
+      setStored(STORAGE_KEYS.SYSTEM_SETTINGS, toPersist);
+      setDoc(doc(db, 'system_settings', 'config'), toPersist, { merge: true }).catch(err =>
+        console.warn('System settings bootstrap notice:', err)
       );
+      notifyListeners();
     }
-  }, err => handleFirestoreError(err, OperationType.GET, 'system_settings/config'));
+  }, err => console.warn('System settings sync notice:', err));
 
   // 17. Audit Logs
   onSnapshot(collection(db, 'audit_logs'), snapshot => {
@@ -611,12 +630,23 @@ export const StorageService = {
     return cache.periods;
   },
   savePeriods(periods: TimetablePeriod[]) {
-    cache.periods = periods;
-    setStored(STORAGE_KEYS.PERIODS, periods);
+    const oldPeriods = cache.periods;
+    cache.periods = periods.sort((a, b) => a.periodNumber - b.periodNumber);
+    setStored(STORAGE_KEYS.PERIODS, cache.periods);
     notifyListeners();
+
+    // 1. Delete removed periods from Firestore
+    const newIdSet = new Set(periods.map(p => p.id));
+    oldPeriods.forEach(oldP => {
+      if (!newIdSet.has(oldP.id)) {
+        deleteDoc(doc(db, 'timetable_periods', oldP.id)).catch(() => {});
+      }
+    });
+
+    // 2. Persist current periods
     periods.forEach(p => {
-      setDoc(doc(db, 'timetable_periods', p.id), p).catch(err =>
-        handleFirestoreError(err, OperationType.WRITE, `timetable_periods/${p.id}`)
+      setDoc(doc(db, 'timetable_periods', p.id), p, { merge: true }).catch(err =>
+        console.warn(`Failed to write timetable period ${p.id}:`, err)
       );
     });
   },
@@ -972,9 +1002,9 @@ export const StorageService = {
     cache.telegramSettings = settings;
     setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, settings);
     notifyListeners();
-    setDoc(doc(db, 'telegram_settings', 'config'), settings, { merge: true }).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, 'telegram_settings/config')
-    );
+    setDoc(doc(db, 'telegram_settings', 'config'), settings, { merge: true }).catch(err => {
+      console.warn('Notice: telegram settings saved locally, cloud sync pending:', err);
+    });
   },
 
   // Telegram Logs
@@ -987,7 +1017,7 @@ export const StorageService = {
     setStored(STORAGE_KEYS.TELEGRAM_LOGS, list);
     notifyListeners();
     setDoc(doc(db, 'telegram_logs', log.id), log).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, `telegram_logs/${log.id}`)
+      console.warn('Failed to log telegram message to cloud:', err)
     );
   },
 
@@ -999,9 +1029,9 @@ export const StorageService = {
     cache.systemSettings = settings;
     setStored(STORAGE_KEYS.SYSTEM_SETTINGS, settings);
     notifyListeners();
-    setDoc(doc(db, 'system_settings', 'config'), settings, { merge: true }).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, 'system_settings/config')
-    );
+    setDoc(doc(db, 'system_settings', 'config'), settings, { merge: true }).catch(err => {
+      console.warn('Notice: system settings saved locally, cloud sync pending:', err);
+    });
   },
 
   // Audit Logs

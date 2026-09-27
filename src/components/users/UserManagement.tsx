@@ -59,6 +59,8 @@ export const UserManagement: React.FC = () => {
     email: '',
     fullName: '',
     khmerName: '',
+    phone: '',
+    pinCode: '1234',
     role: 'teacher',
     department: 'Mathematics & Science',
     status: 'Active',
@@ -171,6 +173,8 @@ export const UserManagement: React.FC = () => {
       email: '',
       fullName: '',
       khmerName: '',
+      phone: '',
+      pinCode: '1234',
       role: 'teacher',
       department: 'Mathematics & Science',
       status: 'Active',
@@ -483,9 +487,9 @@ export const UserManagement: React.FC = () => {
                           )}
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2.5">
-                              {u.avatarUrl ? (
+                              {u.avatarUrl && u.avatarUrl.trim() ? (
                                 <img
-                                  src={u.avatarUrl}
+                                  src={u.avatarUrl.trim()}
                                   alt={u.fullName}
                                   className="w-8 h-8 rounded-xl object-cover border border-slate-200 shadow-2xs"
                                 />
@@ -514,8 +518,14 @@ export const UserManagement: React.FC = () => {
                           <td className="py-3 px-4 font-semibold text-slate-700">
                             {u.department || '—'}
                           </td>
-                          <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                            {u.email}
+                          <td className="py-3 px-4 font-mono text-[11px]">
+                            <div className="font-semibold text-slate-700">{u.email}</div>
+                            {u.phone && (
+                              <div className="text-[10px] text-emerald-700 font-bold mt-0.5 flex items-center gap-1 font-sans">
+                                <span>📱</span>
+                                <span>{u.phone}</span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 px-4">
                             <span
@@ -859,6 +869,30 @@ export const UserManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <label className="block font-bold text-slate-700 mb-1">Phone Number (ទូរស័ព្ទ)</label>
+                  <input
+                    type="tel"
+                    value={editingUser.phone || ''}
+                    onChange={e => setEditingUser({ ...editingUser, phone: e.target.value })}
+                    placeholder="+855 12 345 678"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Security PIN (លេខសម្ងាត់)</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={editingUser.pinCode || '1234'}
+                    onChange={e => setEditingUser({ ...editingUser, pinCode: e.target.value.replace(/\D/g, '') })}
+                    placeholder="1234"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono tracking-widest font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="block font-bold text-slate-700 mb-1">System Role *</label>
                   <select
                     value={editingUser.role}
@@ -970,6 +1004,30 @@ export const UserManagement: React.FC = () => {
                   placeholder="chandara@school.edu.kh"
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Phone Number (ទូរស័ព្ទ)</label>
+                  <input
+                    type="tel"
+                    value={newUserData.phone || ''}
+                    onChange={e => setNewUserData({ ...newUserData, phone: e.target.value })}
+                    placeholder="+855 12 345 678"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Security PIN (លេខសម្ងាត់)</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={newUserData.pinCode || '1234'}
+                    onChange={e => setNewUserData({ ...newUserData, pinCode: e.target.value.replace(/\D/g, '') })}
+                    placeholder="1234"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono tracking-widest font-bold"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

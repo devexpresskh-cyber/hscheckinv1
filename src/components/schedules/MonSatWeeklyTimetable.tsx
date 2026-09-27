@@ -812,9 +812,9 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
 
                                       {/* Teacher Name & Avatar */}
                                       <div className="mt-2 pt-2 border-t border-slate-100 print:border-slate-300 print:mt-1.5 print:pt-1 flex items-center gap-1.5">
-                                        {teacher?.photoUrl ? (
+                                        {teacher?.photoUrl?.trim() ? (
                                           <img
-                                            src={teacher.photoUrl}
+                                            src={teacher.photoUrl.trim()}
                                             alt={cls.teacherName}
                                             className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
                                           />
