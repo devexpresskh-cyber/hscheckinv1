@@ -5,6 +5,7 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext.tsx';
 import { LoginPage } from './components/auth/LoginPage.tsx';
 import { Header } from './components/layout/Header.tsx';
 import { Sidebar, NavTab } from './components/layout/Sidebar.tsx';
+import { BottomNavigation } from './components/layout/BottomNavigation.tsx';
 import { Dashboard } from './components/dashboard/Dashboard.tsx';
 import { CheckInKiosk } from './components/checkin/CheckInKiosk.tsx';
 import { TeacherManagement } from './components/teachers/TeacherManagement.tsx';
@@ -30,7 +31,7 @@ const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none print:hidden">
+    <div className="fixed bottom-20 md:bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none print:hidden">
       {toasts.map(toast => {
         const icons = {
           success: <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />,
@@ -192,13 +193,24 @@ const MainLayout: React.FC = () => {
         />
 
         {/* Main Content Viewport: min-w-0 ensures no horizontal overflow, w-full for full-width layout */}
-        <main className="flex-1 min-w-0 h-full overflow-y-auto p-3 sm:p-5 lg:p-6 print:p-0 print:overflow-visible print:h-auto print:block">
+        <main className="flex-1 min-w-0 h-full overflow-y-auto p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block">
           <div className="w-full">
             {renderContent()}
           </div>
         </main>
 
       </div>
+
+      {/* Mobile App Native-Style Bottom Navigation Menu */}
+      <BottomNavigation
+        currentTab={currentTab}
+        onSelectTab={(tab: NavTab) => {
+          setCurrentTab(tab);
+          setIsMobileMenuOpen(false);
+        }}
+        onOpenCheckInModal={() => setIsCheckInModalOpen(true)}
+        onOpenFullMenu={() => setIsMobileMenuOpen(true)}
+      />
 
       {/* Quick Check-in Floating Modal with scroll protection */}
       {isCheckInModalOpen && (
