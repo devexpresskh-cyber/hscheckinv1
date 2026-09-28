@@ -22,6 +22,7 @@ import {
   X,
   LogOut
 } from 'lucide-react';
+import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 
 export type NavTab =
   | 'dashboard'
@@ -216,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Filter items by RBAC
   const visibleItems = navItems.map(item => {
-    // Customize labels for employee account
+    // Customize labels for employee and teacher accounts
     if (isEmployee) {
       if (item.id === 'schedules') {
         return {
@@ -239,6 +240,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ...item,
           label: 'Check-in Terminal',
           khmer: 'ចំណុចស្កេនវត្តមាន',
+          section: 'overview' as const
+        };
+      }
+    }
+    if (currentUser.role === 'teacher') {
+      if (item.id === 'schedules') {
+        return {
+          ...item,
+          label: 'Teaching Timetable',
+          khmer: 'កាលវិភាគបង្រៀន',
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'attendance') {
+        return {
+          ...item,
+          label: 'My Attendance History',
+          khmer: 'ប្រវត្តិវត្តមានរបស់ខ្ញុំ',
           section: 'overview' as const
         };
       }
@@ -338,6 +357,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* Install Mobile App Shortcut in Sidebar */}
+      <div className="px-3 pt-2 pb-1 shrink-0">
+        <PWAInstallButton variant="sidebar" />
       </div>
 
       {/* Current User Session Bar at bottom of sidebar */}

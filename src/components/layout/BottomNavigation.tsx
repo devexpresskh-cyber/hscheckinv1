@@ -24,6 +24,7 @@ import {
   Building,
   History
 } from 'lucide-react';
+import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 
 interface BottomNavigationProps {
   currentTab: NavTab;
@@ -339,6 +340,11 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Install App to Mobile Home Screen */}
+              <div className="pt-2 border-t border-slate-100">
+                <PWAInstallButton variant="login" />
+              </div>
 
               {/* Logout Action in Sheet */}
               <div className="pt-2 border-t border-slate-100">

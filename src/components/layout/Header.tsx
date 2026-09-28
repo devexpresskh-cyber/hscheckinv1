@@ -94,11 +94,11 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs print:hidden">
-      <div className="flex items-center justify-between px-3 sm:px-6 h-16 max-w-full">
+    <header className="shrink-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs print:hidden">
+      <div className="flex items-center justify-between px-3 sm:px-6 h-16 max-w-full gap-2 sm:gap-4 overflow-visible">
         
         {/* Left: Mobile Menu Button & Organization Branding */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
           {/* Hamburger toggle on mobile */}
           <button
             onClick={onToggleMobileMenu}
@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Building2 className="w-5 h-5" />
           </div>
 
-          <div className="min-w-0 truncate">
+          <div className="min-w-0 truncate max-w-[160px] xs:max-w-[210px] sm:max-w-xs md:max-w-sm lg:max-w-none">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <h1 className="font-bold text-slate-900 text-xs sm:text-base leading-tight truncate">
                 {isKhmer ? systemSettings.khmerOrgName : systemSettings.organizationName}
@@ -138,24 +138,24 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right: Actions, Language Switcher, Scanner, Notifications, Role Switcher */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           
           {/* User Manual quick button */}
           {onOpenManual && (
             <button
               onClick={onOpenManual}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 transition-colors"
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 transition-colors"
               title={isKhmer ? 'សៀវភៅណែនាំការប្រើប្រាស់ប្រព័ន្ធ (Khmer/English)' : 'System User Manual (Khmer/English)'}
             >
               <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden xl:inline">{isKhmer ? 'សៀវភៅណែនាំ' : 'Manual'}</span>
+              <span>{isKhmer ? 'សៀវភៅណែនាំ' : 'Manual'}</span>
             </button>
           )}
 
           {/* Language Switcher Pill Button */}
           <button
             onClick={toggleLanguage}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all bg-indigo-50/70 hover:bg-indigo-100/80 text-indigo-900 border-indigo-200 shadow-xs"
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all bg-indigo-50/70 hover:bg-indigo-100/80 text-indigo-900 border-indigo-200 shadow-xs shrink-0"
             title={language === 'km' ? 'Switch to English' : 'ប្តូរជាភាសាខ្មែរ'}
           >
             <Languages className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -164,11 +164,11 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {/* Mobile Kiosk Toggle (Hidden for employees to enforce only Staff Calendar and History) */}
+          {/* Mobile Kiosk Toggle (Hidden on mobile phones since bottom navigation provides primary check-in kiosk button) */}
           {currentUser.role !== 'employee' && (
             <button
               onClick={onToggleMobileKiosk}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border shrink-0 ${
+              className={`hidden md:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border shrink-0 ${
                 isMobileKioskOpen
                   ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
                   : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
@@ -176,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
               title={isKhmer ? 'បើកផ្ទាំងស្កេនវត្តមានលើទូរស័ព្ទដៃ' : 'Open phone-sized check-in terminal'}
             >
               <Smartphone className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span className="hidden md:inline">{t('header.kiosk', 'Mobile Check-in')}</span>
+              <span>{t('header.kiosk', 'Mobile Check-in')}</span>
             </button>
           )}
 
@@ -185,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={handleRunAbsenceScanner}
               disabled={isScanning}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/70 transition-colors shrink-0"
+              className="hidden 2xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/70 transition-colors shrink-0"
               title={isKhmer ? 'ស្វែងរកគ្រូ ឬបុគ្គលិកអវត្តមាន និងមិនបានស្កេនចេញ' : "Runs automated absence & late scanner on today's rosters"}
             >
               <Sparkles className={`w-3.5 h-3.5 text-amber-600 shrink-0 ${isScanning ? 'animate-spin' : ''}`} />
@@ -197,11 +197,11 @@ export const Header: React.FC<HeaderProps> = ({
           {currentUser.role !== 'teacher' && currentUser.role !== 'employee' && hasPermission('telegram.view') && (
             <button
               onClick={onOpenTelegram}
-              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shrink-0"
+              className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 transition-colors shrink-0"
               title={isKhmer ? 'ការជូនដំណឹងតេឡេក្រាម' : 'Telegram Alerts configured and active'}
             >
               <div className="w-2 h-2 rounded-full bg-sky-500 animate-ping shrink-0" />
-              <span className="hidden md:inline">{t('header.telegram', 'Telegram')}:</span>
+              <span className="hidden xl:inline">{t('header.telegram', 'Telegram')}:</span>
               <span className="font-semibold">{telegramSettings.isEnabled ? t('header.active', 'Active') : t('header.muted', 'Muted')}</span>
             </button>
           )}

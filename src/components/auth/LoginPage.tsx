@@ -19,6 +19,7 @@ import {
   Phone,
   Smartphone
 } from 'lucide-react';
+import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 
 interface LoginPageProps {
   onLoginSuccess?: () => void;
@@ -609,6 +610,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <span>{systemSettings.organizationName} • Academic Year 2026-2027</span>
           </div>
 
+        </div>
+
+        {/* Install Mobile App Quick Prompt */}
+        <div className="mt-4">
+          <PWAInstallButton variant="login" />
         </div>
       </div>
 

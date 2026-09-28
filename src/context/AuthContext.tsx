@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { UserAccount, UserRole, Permission, RoleDefinition } from '../types/index.ts';
 import { StorageService } from '../services/storageService.ts';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
@@ -72,6 +72,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return sanitizedAdmin;
   });
 
+  const currentUserRef = useRef<UserAccount>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
       const savedStatus = localStorage.getItem(AUTH_STATUS_KEY);
@@ -97,62 +102,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const authStatus = localStorage.getItem(AUTH_STATUS_KEY);
       if (authStatus !== 'true') return;
 
-      const currentStillExists = updatedUsers.find(u => u.id === currentUser.id);
+      // Always read the active session from localStorage first, then fallback to currentUserRef
+      let activeUser = currentUserRef.current;
+      const savedUserStr = localStorage.getItem(CURRENT_USER_KEY);
+      if (savedUserStr) {
+        try {
+          const parsed = JSON.parse(savedUserStr);
+          if (parsed && parsed.id) {
+            activeUser = parsed;
+          }
+        } catch {}
+      }
+
+      if (!activeUser || !activeUser.id) return;
+
+      const isTeacher =
+        activeUser.role === 'teacher' ||
+        activeUser.personId?.startsWith('tch-') ||
+        activeUser.id?.includes('tch-');
+
+      const isEmployee =
+        activeUser.role === 'employee' ||
+        activeUser.personId?.startsWith('emp-') ||
+        activeUser.id?.includes('emp-');
+
+      const currentStillExists = updatedUsers.find(u => u.id === activeUser.id);
       if (currentStillExists) {
-        // If current user is a teacher, strictly guarantee their role remains 'teacher'
-        if (currentUser.role === 'teacher' || currentUser.personId?.startsWith('tch-')) {
-          setCurrentUser({
+        if (isTeacher) {
+          const preservedTeacher: UserAccount = {
             ...currentStillExists,
             role: 'teacher',
-            personId: currentUser.personId || currentStillExists.personId
-          });
+            personId: activeUser.personId || currentStillExists.personId
+          };
+          setCurrentUser(preservedTeacher);
+          currentUserRef.current = preservedTeacher;
+          localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(preservedTeacher));
+        } else if (isEmployee) {
+          const preservedEmployee: UserAccount = {
+            ...currentStillExists,
+            role: 'employee',
+            personId: activeUser.personId || currentStillExists.personId
+          };
+          setCurrentUser(preservedEmployee);
+          currentUserRef.current = preservedEmployee;
+          localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(preservedEmployee));
         } else {
           setCurrentUser(currentStillExists);
+          currentUserRef.current = currentStillExists;
         }
       } else {
         // Current user is not in updatedUsers.
         // If currentUser is a teacher, keep their teacher profile! NEVER fallback to super_admin!
-        if (currentUser.role === 'teacher' || currentUser.personId?.startsWith('tch-')) {
+        if (isTeacher) {
           const teachers = StorageService.getTeachers();
           const teacher = teachers.find(
-            t => t.id === currentUser.personId || t.id === currentUser.id.replace(/^usr-/, '')
+            t => t.id === activeUser.personId || t.id === activeUser.id.replace(/^usr-/, '')
           );
           if (teacher) {
             const preservedTeacherUser: UserAccount = {
-              ...currentUser,
+              ...activeUser,
               role: 'teacher',
               personId: teacher.id,
               fullName: teacher.fullName,
               khmerName: teacher.khmerName,
               department: teacher.department,
-              phone: teacher.phone || currentUser.phone
+              phone: teacher.phone || activeUser.phone
             };
             setCurrentUser(preservedTeacherUser);
+            currentUserRef.current = preservedTeacherUser;
             localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(preservedTeacherUser));
           }
-        } else if (currentUser.role === 'employee' || currentUser.personId?.startsWith('emp-')) {
+        } else if (isEmployee) {
           const employees = StorageService.getEmployees();
           const employee = employees.find(
-            e => e.id === currentUser.personId || e.id === currentUser.id.replace(/^usr-/, '')
+            e => e.id === activeUser.personId || e.id === activeUser.id.replace(/^usr-/, '')
           );
           if (employee) {
             const preservedEmployeeUser: UserAccount = {
-              ...currentUser,
+              ...activeUser,
               role: 'employee',
               personId: employee.id,
               fullName: employee.fullName,
               khmerName: employee.khmerName,
               department: employee.department,
-              phone: employee.phone || currentUser.phone
+              phone: employee.phone || activeUser.phone
             };
             setCurrentUser(preservedEmployeeUser);
+            currentUserRef.current = preservedEmployeeUser;
             localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(preservedEmployeeUser));
           }
         }
       }
     });
     return unsub;
-  }, [currentUser.id, currentUser.role, currentUser.personId]);
+  }, []);
 
   // Listen to Firebase Auth state
   useEffect(() => {
@@ -174,7 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (savedUserStr && fbUser) {
         try {
           const parsed = JSON.parse(savedUserStr);
-          if (parsed && !parsed.id?.startsWith('usr-google-') && parsed.email?.toLowerCase() !== fbUser.email?.toLowerCase()) {
+          if (parsed && (parsed.role === 'teacher' || parsed.role === 'employee' || !parsed.id?.startsWith('usr-google-'))) {
             signOut(auth).catch(() => {});
             setIsLoading(false);
             return;
@@ -187,20 +230,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let match = updatedUsers.find(u => u.email.toLowerCase() === fbUser.email?.toLowerCase());
 
         if (!match) {
-          const isSuperAdminEmail =
-            fbUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
-            fbUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
-            fbUser.email?.toLowerCase() === 'singsabmc@gmail.com';
-
           const matchedTeacher = StorageService.getTeachers().find(t => t.email?.toLowerCase() === fbUser.email?.toLowerCase());
           const matchedEmployee = StorageService.getEmployees().find(e => e.email?.toLowerCase() === fbUser.email?.toLowerCase());
+
+          const isSuperAdminEmail =
+            !matchedTeacher &&
+            (fbUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+             fbUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+             fbUser.email?.toLowerCase() === 'singsabmc@gmail.com');
 
           const newUser: UserAccount = {
             id: `usr-google-${fbUser.uid.slice(0, 8)}`,
             email: fbUser.email,
             fullName: fbUser.displayName || matchedTeacher?.fullName || 'Faculty Member',
             khmerName: fbUser.displayName || matchedTeacher?.khmerName || 'សាស្ត្រាចារ្យ',
-            role: isSuperAdminEmail ? 'super_admin' : (matchedTeacher ? 'teacher' : (matchedEmployee ? 'employee' : 'teacher')),
+            role: matchedTeacher ? 'teacher' : (matchedEmployee ? 'employee' : (isSuperAdminEmail ? 'super_admin' : 'teacher')),
             department: isSuperAdminEmail ? 'Administration' : (matchedTeacher?.department || 'Academic & Curriculum'),
             personId: matchedTeacher?.id || matchedEmployee?.id || undefined,
             status: 'Active',
@@ -218,6 +262,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         setCurrentUser(match);
+        currentUserRef.current = match;
         setIsAuthenticated(true);
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(match));
         localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -228,7 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const currentRole = React.useMemo(() => {
+  const currentRole = useMemo(() => {
     // If the active user is a teacher or tied to a teacher profile, guarantee teacher role definition
     if (currentUser.role === 'teacher' || currentUser.personId?.startsWith('tch-') || currentUser.id?.includes('tch-')) {
       const teacherRole = roles.find(r => r.code === 'teacher');
@@ -276,6 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
     }
     setCurrentUser(user);
+    currentUserRef.current = user;
     setIsAuthenticated(true);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
     localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -337,6 +383,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         setCurrentUser(match);
+        currentUserRef.current = match;
         setIsAuthenticated(true);
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(match));
         localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -421,6 +468,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setCurrentUser(matched);
+      currentUserRef.current = matched;
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matched));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -484,6 +532,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setCurrentUser(matched);
+      currentUserRef.current = matched;
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matched));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -528,6 +577,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setCurrentUser(matchedAdmin);
+      currentUserRef.current = matchedAdmin;
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedAdmin));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -636,6 +686,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 role: 'teacher'
               };
               setCurrentUser(safeTeacherUser);
+              currentUserRef.current = safeTeacherUser;
               setIsAuthenticated(true);
               localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(safeTeacherUser));
               localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -658,18 +709,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return false;
             }
 
-            // Ensure non-admin users don't get super_admin
+            // In Teacher PIN portal, if matched to teacher or employee profile, enforce their staff role
+            const matchedTeacherProfile = allTeachers.find(
+              t => t.id === foundUser.personId || (t.email && foundUser.email && t.email.toLowerCase() === foundUser.email.toLowerCase())
+            );
             const isSuperAdminEmail =
-              foundUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
-              foundUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
-              foundUser.email?.toLowerCase() === 'singsabmc@gmail.com';
+              !matchedTeacherProfile &&
+              (foundUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+               foundUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+               foundUser.email?.toLowerCase() === 'singsabmc@gmail.com');
 
             const validatedUser: UserAccount = {
               ...foundUser,
-              role: isSuperAdminEmail ? 'super_admin' : (foundUser.role === 'super_admin' ? 'teacher' : foundUser.role)
+              role: matchedTeacherProfile ? 'teacher' : (isSuperAdminEmail ? 'super_admin' : (foundUser.role === 'super_admin' ? 'teacher' : foundUser.role)),
+              personId: matchedTeacherProfile ? matchedTeacherProfile.id : foundUser.personId
             };
 
             setCurrentUser(validatedUser);
+            currentUserRef.current = validatedUser;
             setIsAuthenticated(true);
             localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(validatedUser));
             localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -767,6 +824,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Set active state FIRST before triggering any StorageService listeners
     setCurrentUser(matchedUser);
+    currentUserRef.current = matchedUser;
     setIsAuthenticated(true);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedUser));
     localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -871,6 +929,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Set active user state FIRST
       setCurrentUser(userAcc);
+      currentUserRef.current = userAcc;
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userAcc));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -942,6 +1001,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Set active user state FIRST
       setCurrentUser(userAcc);
+      currentUserRef.current = userAcc;
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userAcc));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -991,9 +1051,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
 
       const isSuperAdminEmail =
-        matchedUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
-        matchedUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
-        matchedUser.email?.toLowerCase() === 'singsabmc@gmail.com';
+        !isTeacher &&
+        (matchedUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+         matchedUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+         matchedUser.email?.toLowerCase() === 'singsabmc@gmail.com');
 
       const effectiveUser: UserAccount = {
         ...matchedUser,
@@ -1001,6 +1062,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       setCurrentUser(effectiveUser);
+      currentUserRef.current = effectiveUser;
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(effectiveUser));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
@@ -1049,6 +1111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? { ...defaultAdmin, personId: undefined }
       : defaultAdmin;
     setCurrentUser(sanitizedAdmin);
+    currentUserRef.current = sanitizedAdmin;
     setIsAuthenticated(false);
     setAuthError(null);
     setIsLoading(false);

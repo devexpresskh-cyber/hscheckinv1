@@ -95,7 +95,7 @@ export const AttendanceEngine = {
     subjectSchedule: TeacherSubjectSchedule,
     currentTimeStr: string,
     dateStr?: string,
-    earlyBufferMinutes: number = 30
+    earlyBufferMinutes: number = 0 // Strictly 0: Do not allow teacher to check in before schedule
   ): {
     isValid: boolean;
     reason?: 'day_mismatch' | 'too_early' | 'too_late';
@@ -129,27 +129,28 @@ export const AttendanceEngine = {
     const sStart = this.timeToMinutes(subjectSchedule.startTime);
     const sEnd = this.timeToMinutes(subjectSchedule.endTime);
     const cur = this.timeToMinutes(currentTimeStr);
-    const allowedEarlyMins = sStart - earlyBufferMinutes;
 
-    if (cur < allowedEarlyMins) {
+    // Strict rule: Do not allow teacher to check in before schedule
+    if (cur < sStart) {
       const waitMins = sStart - cur;
       return {
         isValid: false,
         reason: 'too_early',
         startsInMinutes: waitMins,
-        message: `Cannot scan in: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) has not started yet (Current time: ${currentTimeStr}). Scan-in opens ${earlyBufferMinutes}m before class at ${this.minutesToTime(allowedEarlyMins)}.`,
-        khmerMessage: `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ មិនទាន់ដល់ម៉ោងបង្រៀនមុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" (${subjectSchedule.startTime} - ${subjectSchedule.endTime}) នៅឡើយទេ។ ការស្កេនចូលនឹងបើកនៅម៉ោង ${this.minutesToTime(allowedEarlyMins)}។`
+        message: `Cannot scan in: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) has not started yet (Current time: ${currentTimeStr}). Starts in ${waitMins} minute(s). Teachers are not allowed to check in before schedule.`,
+        khmerMessage: `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ មិនទាន់ដល់ម៉ោងបង្រៀនមុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" (${subjectSchedule.startTime} - ${subjectSchedule.endTime}) នៅឡើយទេ (នៅសល់ ${waitMins} នាទី)។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចូលមុនម៉ោងកាលវិភាគឡើយ។`
       };
     }
 
+    // Strict rule: Do not allow teacher to check in overtime / after schedule end-time
     if (cur >= sEnd) {
       const pastMins = cur - sEnd;
       return {
         isValid: false,
         reason: 'too_late',
         endedMinutesAgo: pastMins,
-        message: `Cannot scan in: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) has reached or exceeded its end-time (${subjectSchedule.endTime}). Current time (${currentTimeStr}) is over end-time. Teachers are strictly prohibited from scanning in over schedule end-time.`,
-        khmerMessage: `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបង្រៀនមុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" បានដល់ ឬហួសម៉ោងបញ្ចប់ ${subjectSchedule.endTime} រួចហើយ (ម៉ោងបច្ចុប្បន្ន៖ ${currentTimeStr})។`
+        message: `Cannot scan in: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) ended at ${subjectSchedule.endTime} (ended ${pastMins}m ago). Teachers are strictly prohibited from checking in overtime / after schedule end-time.`,
+        khmerMessage: `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបង្រៀនមុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" បានចប់នៅម៉ោង ${subjectSchedule.endTime} រួចហើយ (ម៉ោងបច្ចុប្បន្ន៖ ${currentTimeStr})។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចូលពេលហួសម៉ោងកាលវិភាគ ឬថែមម៉ោងឡើយ។`
       };
     }
 
@@ -176,7 +177,7 @@ export const AttendanceEngine = {
   },
 
   // Determine early leave & overtime on check-out
-  evaluateCheckOutStatus(checkOutTimeStr: string, scheduledEndTimeStr: string): {
+  evaluateCheckOutStatus(checkOutTimeStr: string, scheduledEndTimeStr: string, isTeacher: boolean = false): {
     earlyLeaveMinutes: number;
     overtimeMinutes: number;
   } {
@@ -191,7 +192,8 @@ export const AttendanceEngine = {
     } else if (checkOutMins > scheduledEndMins) {
       return {
         earlyLeaveMinutes: 0,
-        overtimeMinutes: checkOutMins - scheduledEndMins
+        // Overtime is disabled for teachers
+        overtimeMinutes: isTeacher ? 0 : checkOutMins - scheduledEndMins
       };
     }
     return { earlyLeaveMinutes: 0, overtimeMinutes: 0 };
@@ -273,15 +275,29 @@ export const AttendanceEngine = {
     const scheduledEndTime = subjectSchedule ? subjectSchedule.endTime : schedule.endTime;
     const gracePeriod = subjectSchedule?.gracePeriodMinutes || schedule.gracePeriodMinutes || systemSettings.defaultGracePeriod;
 
-    // Strict Universal Validation: Do not allow teacher or staff to scan in if over scheduled end-time
+    const scheduledStartMins = this.timeToMinutes(scheduledStartTime);
     const scheduledEndMins = this.timeToMinutes(scheduledEndTime);
+
+    // Strict Universal Validation: Do not allow teacher to check in BEFORE schedule
+    if (params.personType === 'teacher' && currentMins < scheduledStartMins) {
+      const waitMins = scheduledStartMins - currentMins;
+      const targetLabel = subjectSchedule
+        ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
+        : `shift "${schedule.name}" (${schedule.startTime} - ${schedule.endTime})`;
+      return {
+        success: false,
+        message: `Check-in denied: Current time (${currentTime}) is before scheduled start time (${scheduledStartTime}) for ${targetLabel}. Starts in ${waitMins} minute(s). Teachers are not allowed to check in before schedule.`
+      };
+    }
+
+    // Strict Universal Validation: Do not allow teacher or staff to scan in if over scheduled end-time or overtime
     if (currentMins >= scheduledEndMins) {
       const targetLabel = subjectSchedule
         ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
         : `shift "${schedule.name}" (${schedule.startTime} - ${schedule.endTime})`;
       return {
         success: false,
-        message: `Check-in denied: Current time (${currentTime}) is over the scheduled end-time (${scheduledEndTime}) for ${targetLabel}. Scanning in over end-time is strictly prohibited.`
+        message: `Check-in denied: Current time (${currentTime}) is over the scheduled end-time (${scheduledEndTime}) for ${targetLabel}. Checking in overtime or after schedule end-time is strictly prohibited.`
       };
     }
 
@@ -448,14 +464,46 @@ export const AttendanceEngine = {
       };
     }
 
+    const isTeacher = existing.personType === 'teacher' || Boolean(existing.subjectScheduleId);
+    const checkOutMins = this.timeToMinutes(currentTime);
+    const scheduledEndMins = this.timeToMinutes(existing.scheduledEnd);
+
+    // Strict Universal Validation: Do not allow teacher to check out BEFORE schedule or OVERTIME
+    if (isTeacher) {
+      // 1. Check out before schedule
+      if (checkOutMins < scheduledEndMins) {
+        const earlyMins = scheduledEndMins - checkOutMins;
+        const targetLabel = existing.subject
+          ? `"${existing.subject}" (${existing.periodName || 'class'}: ${existing.scheduledStart} - ${existing.scheduledEnd})`
+          : `scheduled session (${existing.scheduledStart} - ${existing.scheduledEnd})`;
+        return {
+          success: false,
+          message: `Check-out denied: Current time (${currentTime}) is before scheduled end-time (${existing.scheduledEnd}) for ${targetLabel}. Class ends in ${earlyMins} minute(s). Teachers are strictly prohibited from checking out before schedule.`
+        };
+      }
+
+      // 2. Check out overtime (exceeding allowable checkout departure window)
+      const maxCheckoutGrace = 15; // 15-minute allowable checkout departure window
+      if (checkOutMins > scheduledEndMins + maxCheckoutGrace) {
+        const overtimeMins = checkOutMins - scheduledEndMins;
+        const targetLabel = existing.subject
+          ? `"${existing.subject}" (${existing.periodName || 'class'})`
+          : 'scheduled session';
+        return {
+          success: false,
+          message: `Check-out denied: Current time (${currentTime}) is ${overtimeMins} minute(s) past the scheduled end-time (${existing.scheduledEnd}) for ${targetLabel}. Overtime check-out is strictly prohibited for teachers.`
+        };
+      }
+    }
+
     const { earlyLeaveMinutes, overtimeMinutes } = this.evaluateCheckOutStatus(
       currentTime,
-      existing.scheduledEnd
+      existing.scheduledEnd,
+      isTeacher
     );
 
     // Calculate working / teaching duration
     const checkInMins = this.timeToMinutes(existing.checkInTime);
-    const checkOutMins = this.timeToMinutes(currentTime);
     const totalWorkingMins = Math.max(0, checkOutMins - checkInMins);
     const hours = Math.floor(totalWorkingMins / 60);
     const mins = totalWorkingMins % 60;

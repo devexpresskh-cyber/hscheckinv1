@@ -23,6 +23,9 @@ import { SystemSettingsView } from './components/settings/SystemSettingsView.tsx
 import { SystemUserManual } from './components/manual/SystemUserManual.tsx';
 import { EmployeeStaffCalendar } from './components/schedules/EmployeeStaffCalendar.tsx';
 import { StorageService } from './services/storageService.ts';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator.tsx';
+import { FirstLoginInstallModal } from './components/pwa/FirstLoginInstallModal.tsx';
+import { TeacherScheduleAlertBanner } from './components/schedules/TeacherScheduleAlertBanner.tsx';
 import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Building2, ArrowRight } from 'lucide-react';
 
 const ToastContainer: React.FC = () => {
@@ -72,14 +75,16 @@ const ToastContainer: React.FC = () => {
 const MainLayout: React.FC = () => {
   const { currentUser } = useAuth();
   const isEmployee = currentUser.role === 'employee';
-  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isEmployee ? 'schedules' : 'dashboard'));
+  const isTeacher = currentUser.role === 'teacher';
+  // Both Teacher and Employee land directly on their Schedules / Teaching Timetable, not the admin dashboard
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isTeacher || isEmployee ? 'schedules' : 'dashboard'));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const { isKhmer } = useLanguage();
 
-  const isRestrictedStaff = currentUser.role === 'teacher' || isEmployee;
+  const isRestrictedStaff = isTeacher || isEmployee;
 
-  // Automatically enforce guard: employee only sees staff Calendar and staff check-in history
+  // Automatically enforce guard: employee only sees staff Calendar and check-in history, teacher lands on teaching schedule
   React.useEffect(() => {
     if (isEmployee) {
       if (currentTab !== 'schedules' && currentTab !== 'attendance') {
@@ -88,10 +93,22 @@ const MainLayout: React.FC = () => {
       return;
     }
 
-    if (isRestrictedStaff && (currentTab === 'telegram' || currentTab === 'settings' || currentTab === 'architecture')) {
-      setCurrentTab('dashboard');
+    if (isTeacher) {
+      if (
+        currentTab === 'telegram' ||
+        currentTab === 'settings' ||
+        currentTab === 'architecture' ||
+        currentTab === 'users' ||
+        currentTab === 'roles' ||
+        currentTab === 'audit' ||
+        currentTab === 'teachers' ||
+        currentTab === 'employees' ||
+        currentTab === 'departments'
+      ) {
+        setCurrentTab('schedules');
+      }
     }
-  }, [isEmployee, isRestrictedStaff, currentTab]);
+  }, [isEmployee, isTeacher, currentTab]);
 
   const renderContent = () => {
     // If logged in as Employee, strictly allow ONLY Staff Calendar and Staff Check-in History
@@ -195,6 +212,8 @@ const MainLayout: React.FC = () => {
         {/* Main Content Viewport: min-w-0 ensures no horizontal overflow, w-full for full-width layout */}
         <main className="flex-1 min-w-0 h-full overflow-y-auto p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block">
           <div className="w-full">
+            {/* Real-time Schedule Alert & Countdown Widget */}
+            <TeacherScheduleAlertBanner onOpenCheckIn={() => setIsCheckInModalOpen(true)} />
             {renderContent()}
           </div>
         </main>
@@ -233,8 +252,14 @@ const MainLayout: React.FC = () => {
         </div>
       )}
 
+      {/* Popup Alert on Home Screen at First Logged-in for App Installation */}
+      <FirstLoginInstallModal />
+
       {/* Global Notifications */}
       <ToastContainer />
+
+      {/* PWA Offline Connectivity Indicator */}
+      <OfflineIndicator />
 
     </div>
   );
@@ -272,6 +297,7 @@ const AppContent: React.FC = () => {
       <>
         <LoginPage />
         <ToastContainer />
+        <OfflineIndicator />
       </>
     );
   }

@@ -121,19 +121,29 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-              {isKhmer ? 'ឆ្នាំសិក្សា ២០២៦-២០២៧' : 'Academic Year 2026-2027'}
+              {currentUser.role === 'teacher'
+                ? (isKhmer ? 'ផតថលគ្រូបង្រៀន • សកម្ម' : 'Faculty Teacher Portal • Active')
+                : (isKhmer ? 'ឆ្នាំសិក្សា ២០២៦-២០២៧' : 'Academic Year 2026-2027')}
             </span>
             <span className="text-xs text-slate-400">
-              {isKhmer ? 'ឆមាសទី ១ • តាមដានពេលវេលាជាក់ស្តែង' : 'Term 1 • Live Monitoring'}
+              {currentUser.role === 'teacher'
+                ? (isKhmer ? 'កាលវិភាគបង្រៀន និងវត្តមានផ្ទាល់ខ្លួន' : 'Personal Teaching Schedule & Attendance')
+                : (isKhmer ? 'ឆមាសទី ១ • តាមដានពេលវេលាជាក់ស្តែង' : 'Term 1 • Live Monitoring')}
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
-            {isKhmer ? 'ផ្ទាំងគ្រប់គ្រងវត្តមាន និងកាលវិភាគ' : 'Attendance & Schedule Dashboard'}
+            {currentUser.role === 'teacher'
+              ? (isKhmer ? `ស្វាគមន៍សាស្រ្តាចារ្យ ${currentUser.khmerName || currentUser.fullName}` : `Welcome, ${currentUser.fullName}`)
+              : (isKhmer ? 'ផ្ទាំងគ្រប់គ្រងវត្តមាន និងកាលវិភាគ' : 'Attendance & Schedule Dashboard')}
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
-            {isKhmer
-              ? 'តាមដានវត្តមានគ្រូ និងបុគ្គលិកជាក់ស្តែង ផ្ទៀងផ្ទាត់ទីតាំង GPS គណនាម៉ោងយឺត និងការជូនដំណឹងតេឡេក្រាមស្វ័យប្រវត្តិ។'
-              : 'Real-time biometric & mobile check-in verification, late arrival calculations, and automated Telegram alerts.'}
+            {currentUser.role === 'teacher'
+              ? (isKhmer
+                  ? 'សូមពិនិត្យកាលវិភាគបង្រៀនប្រចាំថ្ងៃ ស្កេនវត្តមានចូល/ចេញ និងពិនិត្យប្រវត្តិវត្តមានរបស់អ្នក។'
+                  : 'Review your daily class teaching timetable, check-in/out of periods, and track personal attendance history.')
+              : (isKhmer
+                  ? 'តាមដានវត្តមានគ្រូ និងបុគ្គលិកជាក់ស្តែង ផ្ទៀងផ្ទាត់ទីតាំង GPS គណនាម៉ោងយឺត និងការជូនដំណឹងតេឡេក្រាមស្វ័យប្រវត្តិ។'
+                  : 'Real-time biometric & mobile check-in verification, late arrival calculations, and automated Telegram alerts.')}
           </p>
         </div>
 

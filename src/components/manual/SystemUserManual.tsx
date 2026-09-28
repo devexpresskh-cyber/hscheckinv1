@@ -23,8 +23,13 @@ import {
   HelpCircle,
   FileSpreadsheet,
   Globe,
-  ArrowRight
+  ArrowRight,
+  Bell,
+  Volume2,
+  Play
 } from 'lucide-react';
+import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
+import { ScheduleAlertService } from '../../services/scheduleAlertService.ts';
 
 interface ManualSection {
   id: string;
@@ -397,6 +402,122 @@ export const SystemUserManual: React.FC = () => {
           tip: 'ប្រធានដេប៉ាតឺម៉ង់ (Supervisor) អាចមើលឃើញតែបុគ្គលិកក្នុងផ្នែករបស់ខ្លួនប៉ុណ្ណោះ។'
         }
       ]
+    },
+    {
+      id: 'pwa-install',
+      titleEn: '8. Install App to Mobile Home Screen (PWA)',
+      titleKm: '៨. ដំឡើងកម្មវិធីលើអេក្រង់ទូរស័ព្ទ (PWA)',
+      badge: 'Mobile PWA',
+      icon: Smartphone,
+      descriptionEn: 'How to install EduTrack directly onto iPhone (iOS Safari) or Android (Chrome) home screen for fast 1-tap full-screen access without app stores.',
+      descriptionKm: 'ការណែនាំអំពីរបៀបដំឡើង EduTrack លើអេក្រង់ដើមនៃទូរស័ព្ទដៃ iPhone និង Android ដើម្បីប្រើប្រាស់ដូចកម្មវិធីទូរស័ព្ទពិតប្រាកដ ដោយមិនបាច់ចូល App Store ឬ Play Store។',
+      stepsEn: [
+        {
+          title: 'First-Login Popup Alert & In-App Guide',
+          desc: 'When staff or teachers first sign in on a mobile browser, an automatic popup alert welcomes them to install EduTrack directly to their home screen with 1 tap.',
+          tip: 'Opens fullscreen like an installed native app with offline caching and schedule alerts.'
+        },
+        {
+          title: 'iPhone & iPad Installation (Safari)',
+          desc: '1. Open EduTrack in Safari. 2. Tap the Share button (⎋) at the bottom toolbar. 3. Scroll down and tap "Add to Home Screen". 4. Tap "Add" in the top right corner.',
+          tip: 'An EduTrack icon will appear on your phone home screen immediately.'
+        },
+        {
+          title: 'Android & Samsung Internet Installation',
+          desc: '1. Open EduTrack in Chrome. 2. Tap the three dots (⋮) in the top-right corner. 3. Select "Install app" or "Add to Home screen". 4. Confirm to complete.',
+          tip: 'Ultra lightweight, takes less than 2MB of phone storage.'
+        }
+      ],
+      stepsKm: [
+        {
+          title: 'ផ្ទាំង Alert ដំឡើងស្វ័យប្រវត្តពេលចូលដំបូង',
+          desc: 'នៅពេលគ្រូ ឬបុគ្គលិកចូលប្រើលើកដំបូងតាមទូរស័ព្ទដៃ ប្រព័ន្ធនឹងបង្ហាញផ្ទាំង Alert ស្វាគមន៍ដោយស្វ័យប្រវត្ត ដើម្បីឱ្យលោកអ្នកដំឡើង App លើអេក្រង់ដើមដោយចុចតែម្តង។',
+          tip: 'ដំណើរការពេញអេក្រង់ និងគាំទ្រការប្រើប្រាស់ Offline។'
+        },
+        {
+          title: 'សម្រាប់ទូរស័ព្ទ iPhone & iPad (Safari)',
+          desc: '១. បើកតំណភ្ជាប់ក្នុង Safari។ ២. ចុចប៊ូតុង Share (សញ្ញាប្រអប់មានព្រួញឡើងលើ ⎋) នៅរបារខាងក្រោម។ ៣. រំកិលចុះក្រោម រួចចុច "Add to Home Screen (បន្ថែមទៅអេក្រង់ដើម)"។ ៤. ចុច "Add" នៅជ្រុងខាងស្តាំលើ។',
+          tip: 'រូបតំណាង EduTrack នឹងបង្ហាញលើអេក្រង់ទូរស័ព្ទភ្លាមៗ។'
+        },
+        {
+          title: 'សម្រាប់ទូរស័ព្ទ Android (Chrome / Samsung)',
+          desc: '១. បើកកម្មវិធីក្នុង Chrome។ ២. ចុចសញ្ញាចុចបី (⋮) នៅជ្រុងខាងស្តាំលើ។ ៣. ជ្រើសយក "Install app" ឬ "បន្ថែមទៅអេក្រង់ដើម"។ ៤. ចុចបញ្ជាក់ Install។',
+          tip: 'ទំហំតូចក្រោម 2MB មិនស៊ីមេម៉ូរីទូរស័ព្ទឡើយ។'
+        }
+      ]
+    },
+    {
+      id: 'schedule-alerts',
+      titleEn: '9. Teacher Schedule Alerts Before Start & End',
+      titleKm: '៩. ការដាស់តឿនគ្រូមុនម៉ោងបង្រៀនចូល និងចេញ',
+      badge: 'Automated Alerts',
+      icon: Bell,
+      descriptionEn: 'How EduTrack alerts teachers automatically before their scheduled class starts and ends via Audio Bell Chimes, Web Push Notifications, In-App Countdown Banners, and Telegram Bot Dispatches.',
+      descriptionKm: 'របៀបដែលប្រព័ន្ធ EduTrack ផ្ញើសារ និងបន្លឺសម្លេងរោទ៍ដាស់តឿនគ្រូបង្រៀនមុនម៉ោងចូលបង្រៀន និងមុនម៉ោងបញ្ចប់ តាមរយៈកណ្ដឹងសម្លេង ការជូនដំណឹងលើទូរស័ព្ទ (Web Push) ផ្ទាំងរាប់ថយក្រោយលើអេក្រង់ និងសារ Telegram Bot។',
+      stepsEn: [
+        {
+          title: '1. In-App Audio Bell Chimes (100% Offline Synthesizer)',
+          desc: 'The system plays a clear, melodic synthesizer bell chime (C5-E5-G5) 5-15 minutes before class begins, and a gentle wrap-up chime (G5-E5) 3-5 minutes before class ends. Teachers can mute or preview the sounds in their schedule banner.',
+          tip: 'Synthesized via HTML5 Web Audio API, so it rings reliably without needing external audio downloads.'
+        },
+        {
+          title: '2. Mobile & Desktop Web Push Notifications',
+          desc: 'When using the installed PWA or browser, teachers receive system push notifications even if the phone screen is locked: "🔔 Class Reminder: Grade 12A Math starts in 10 mins at Room 204".',
+          tip: 'Tap "Enable" on the alert settings widget to grant notification permission.'
+        },
+        {
+          title: '3. Real-Time Countdown & Quick Check-in Banner',
+          desc: 'A persistent status banner appears atop the teacher schedule and home screen displaying exact minutes remaining until the next class or until class conclusion, complete with 1-tap "Check-in" and "Check-out" buttons.',
+          tip: 'Shows exact room number, subject name, class grade, and scheduled time window.'
+        },
+        {
+          title: '4. Automated Telegram Bot Direct Alerts',
+          desc: 'If Telegram Bot alerts are enabled, the server dispatches a personal schedule reminder to the teacher or department group chat with subject details, room assignment, and attendance check-in instructions.',
+          tip: 'Teachers can also message the bot commands like /myschedule and /status anytime.'
+        }
+      ],
+      stepsKm: [
+        {
+          title: '១. សម្លេងរោទ៍កណ្ដឹងក្នុងប្រព័ន្ធ (Audio Chimes)',
+          desc: 'ប្រព័ន្ធបន្លឺសម្លេងកណ្ដឹងពិរោះរណ្តំ ៥ ទៅ ១៥ នាទីមុនម៉ោងបង្រៀនចូល និងសម្លេងរំលឹកបិទបញ្ចប់ ៣ ទៅ ៥ នាទីមុនម៉ោងចប់។ គ្រូអាចបើក/បិទ ឬសាកល្បងសម្លេងបានដោយផ្ទាល់។',
+          tip: 'ដំណើរការតាមបច្ចេកវិទ្យា Web Audio API មិនត្រូវការទាញយកឯកសារសម្លេងពីក្រៅឡើយ។'
+        },
+        {
+          title: '២. ការជូនដំណឹងលើអេក្រង់ទូរស័ព្ទ (Web Push Notifications)',
+          desc: 'នៅពេលដំឡើង App រួច គ្រូនឹងទទួលបាន Notification លើអេក្រង់ទូរស័ព្ទ ទោះបីកំពុងចាក់សោទូរស័ព្ទ ឬបិទកម្មវិធីក៏ដោយ ដូចជា៖ "🔔 រំលឹកម៉ោងបង្រៀន៖ គណិតវិទ្យា ថ្នាក់ ១២A នឹងចាប់ផ្តើមក្នុង 10 នាទីទៀតនៅបន្ទប់ 204"។',
+          tip: 'ចុចប៊ូតុង "បើក" លើផ្ទាំងកំណត់ការដាស់តឿនដើម្បីអនុញ្ញាត។'
+        },
+        {
+          title: '៣. ផ្ទាំងរាប់ថយក្រោយ និងប៊ូតុងស្កេនវត្តមានរហ័ស',
+          desc: 'ផ្ទាំងពណ៌ស្អាតនៅផ្នែកខាងលើនៃទំព័រកាលវិភាគបង្ហាញចំនួននាទីដែលនៅសល់មុនពេលចាប់ផ្តើម ឬបញ្ចប់ ព្រមទាំងប៊ូតុង "ស្កេនវត្តមាន" ឬ "ស្កេនចេញ" ដោយចុចតែម្តង។',
+          tip: 'បង្ហាញច្បាស់លាស់នូវលេខបន្ទប់ ឈ្មោះមុខវិជ្ជា និងថ្នាក់រៀន។'
+        },
+        {
+          title: '៤. ការផ្ញើសាររំលឹកស្វ័យប្រវត្តិតាម Telegram Bot',
+          desc: 'ប្រព័ន្ធនឹងផ្ញើសាររំលឹកកាលវិភាគទៅកាន់ Telegram ផ្ទាល់ខ្លួនរបស់គ្រូ ឬគ្រុប Telegram ដេប៉ាតឺម៉ង់ មុនម៉ោងបង្រៀនចូល។',
+          tip: 'គ្រូអាចវាយបញ្ជា /myschedule ឬ /status ទៅកាន់ Bot ដើម្បីឆែកកាលវិភាគគ្រប់ពេល។'
+        }
+      ],
+      faqEn: [
+        {
+          q: 'Can a teacher change how many minutes before class the alert sounds?',
+          a: 'Yes. In the Schedule Alert widget at the top of the schedule, click the Settings (gear/sliders) icon. Teachers can select 5, 10, or 15 minutes before class start, and 3, 5, or 10 minutes before class ends.'
+        },
+        {
+          q: 'Will alerts work if the phone screen is turned off?',
+          a: 'Yes! Once you install EduTrack to your home screen (PWA) and click "Enable Notifications", your mobile OS delivers Web Push notifications directly to your lock screen and notification shade.'
+        }
+      ],
+      faqKm: [
+        {
+          q: 'តើគ្រូអាចកំណត់ចំនួននាទីដាស់តឿនមុនម៉ោងបង្រៀនបានទេ?',
+          a: 'បាន! គ្រូគ្រាន់តែចុចលើរូបសញ្ញាកំណត់ (Settings) នៅលើផ្ទាំង Schedule Alert រួចរើស ៥, ១០ ឬ ១៥ នាទីមុនម៉ោងចូល និង ៣, ៥ ឬ ១០ នាទីមុនម៉ោងចេញ។'
+        },
+        {
+          q: 'តើការដាស់តឿនដំណើរការទេពេលបិទអេក្រង់ទូរស័ព្ទ?',
+          a: 'ដំណើរការ! នៅពេលដំឡើង App លើទូរស័ព្ទ (PWA) រួចចុច "បើកការជូនដំណឹង" ទូរស័ព្ទនឹងលោត Push Notification លើ Lock Screen ដូចកម្មវិធីទូរស័ព្ទដទៃទៀត។'
+        }
+      ]
     }
   ];
 
@@ -672,6 +793,51 @@ export const SystemUserManual: React.FC = () => {
               })}
             </div>
           </div>
+
+          {/* Interactive Install Action if viewing the PWA Install module */}
+          {activeSection.id === 'pwa-install' && (
+            <div className="pt-2">
+              <PWAInstallButton variant="banner" />
+            </div>
+          )}
+
+          {/* Interactive Audio Bell Test if viewing Schedule Alerts module */}
+          {activeSection.id === 'schedule-alerts' && (
+            <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Volume2 className="w-5 h-5 text-indigo-600" />
+                  <span className="font-bold text-xs sm:text-sm text-indigo-950">
+                    {isKhmer ? 'សាកល្បងសម្លេងកណ្ដឹងរោទ៍កាលវិភាគផ្ទាល់' : 'Test Real-Time Schedule Chimes'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-200/60 text-indigo-800">
+                  Web Audio Synthesizer
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {isKhmer
+                  ? 'ចុចប៊ូតុងខាងក្រោមដើម្បីស្តាប់សម្លេងកណ្ដឹងដែលប្រព័ន្ធនឹងបន្លឺឡើងមុនម៉ោងបង្រៀនចូល និងមុនម៉ោងចេញ៖'
+                  : 'Click below to preview the melodic chimes triggered by the system before class starts and ends:'}
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <button
+                  onClick={() => ScheduleAlertService.playStartAlertSound()}
+                  className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? '🔔 សម្លេងមុនម៉ោងចូល (Start Chime)' : '🔔 Play Class Start Chime'}</span>
+                </button>
+                <button
+                  onClick={() => ScheduleAlertService.playEndAlertSound()}
+                  className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? '⏳ សម្លេងមុនម៉ោងចេញ (Wrap-up Chime)' : '⏳ Play Class End Chime'}</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Frequently Asked Questions (FAQ) */}
           {((activeSection.faqKm && activeSection.faqKm.length > 0) || (activeSection.faqEn && activeSection.faqEn.length > 0)) && (

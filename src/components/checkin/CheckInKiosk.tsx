@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { StorageService } from '../../services/storageService.ts';
+import { TeacherSubjectSchedule } from '../../types/index.ts';
 import confetti from 'canvas-confetti';
 import {
   Clock,
@@ -283,7 +284,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const todayDayShortName = todayDate.toLocaleDateString('en-US', { weekday: 'short' });
 
   const isTeacher = activeStaff?.type === 'teacher';
-  const teacherSubjectSchedules = isTeacher && activeStaff
+  const rawTeacherSubjectSchedules = isTeacher && activeStaff
     ? StorageService.getSubjectSchedulesForTeacher(activeStaff.id).filter((sub: any) => {
         // Prefer an explicit calendar date when one exists.
         const scheduleDate = sub.date ?? sub.scheduledDate ?? sub.scheduleDate;
@@ -318,13 +319,51 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     ? customTimeInput
     : AttendanceEngine.getCurrentTimeString();
 
+  // Move current schedule to TOP: In-progress class first, followed by active time window, then upcoming, then past
+  const teacherSubjectSchedules = useMemo<TeacherSubjectSchedule[]>(() => {
+    if (!rawTeacherSubjectSchedules || rawTeacherSubjectSchedules.length === 0) return [];
+    const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
+
+    return [...rawTeacherSubjectSchedules].sort((a: TeacherSubjectSchedule, b: TeacherSubjectSchedule) => {
+      const recA = attendanceList.find(
+        (r: any) => r.personId === activeStaff?.id && r.date === todayStr && r.subjectScheduleId === a.id
+      );
+      const recB = attendanceList.find(
+        (r: any) => r.personId === activeStaff?.id && r.date === todayStr && r.subjectScheduleId === b.id
+      );
+
+      // 1. Current in-progress class (checked in, not checked out) goes to the very top
+      const inProgressA = Boolean(recA?.checkInTime && !recA?.checkOutTime);
+      const inProgressB = Boolean(recB?.checkInTime && !recB?.checkOutTime);
+      if (inProgressA !== inProgressB) return inProgressA ? -1 : 1;
+
+      const aStart = AttendanceEngine.timeToMinutes(a.startTime);
+      const aEnd = AttendanceEngine.timeToMinutes(a.endTime);
+      const bStart = AttendanceEngine.timeToMinutes(b.startTime);
+      const bEnd = AttendanceEngine.timeToMinutes(b.endTime);
+
+      // 2. Currently active time window (curMins >= start && curMins < end and not checked out)
+      const isActiveNowA = curMins >= aStart && curMins < aEnd && !recA?.checkOutTime;
+      const isActiveNowB = curMins >= bStart && curMins < bEnd && !recB?.checkOutTime;
+      if (isActiveNowA !== isActiveNowB) return isActiveNowA ? -1 : 1;
+
+      // 3. Next upcoming classes today
+      const isUpcomingA = curMins < aStart && !recA?.checkInTime;
+      const isUpcomingB = curMins < bStart && !recB?.checkInTime;
+      if (isUpcomingA !== isUpcomingB) return isUpcomingA ? -1 : 1;
+
+      // 4. By start time
+      return aStart - bStart;
+    });
+  }, [rawTeacherSubjectSchedules, effectiveTime, attendanceList, activeStaff?.id, todayStr]);
+
   // Auto-select active present-time subject period for teacher
   useEffect(() => {
     if (isTeacher && teacherSubjectSchedules.length > 0) {
       // 1. Look for an in-progress class (checked in, not checked out)
-      const inProgress = teacherSubjectSchedules.find(sub => {
+      const inProgress = teacherSubjectSchedules.find((sub: TeacherSubjectSchedule) => {
         const rec = attendanceList.find(
-          a => a.personId === activeStaff.id && a.date === todayStr && a.subjectScheduleId === sub.id
+          (a: any) => a.personId === activeStaff.id && a.date === todayStr && a.subjectScheduleId === sub.id
         );
         return rec && rec.checkInTime && !rec.checkOutTime;
       });
@@ -335,7 +374,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       }
 
       // 2. Find class active at the PRESENT TIME
-      const activeNow = teacherSubjectSchedules.find(sub => {
+      const activeNow = teacherSubjectSchedules.find((sub: TeacherSubjectSchedule) => {
         return AttendanceEngine.isSubjectScheduleAtPresentTime(sub, effectiveTime, todayStr).isValid;
       });
 
@@ -344,15 +383,15 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         return;
       }
 
-      // 3. Fallback to first schedule or maintain selection if valid
-      if (!selectedSubjectId || !teacherSubjectSchedules.some(s => s.id === selectedSubjectId)) {
+      // 3. Fallback to first schedule (which is sorted to top!) or maintain selection if valid
+      if (!selectedSubjectId || !teacherSubjectSchedules.some((s: TeacherSubjectSchedule) => s.id === selectedSubjectId)) {
         setSelectedSubjectId(teacherSubjectSchedules[0].id);
       }
     }
   }, [activeStaff?.id, isTeacher, teacherSubjectSchedules.length, attendanceList.length, effectiveTime]);
 
   const activeSubject = isTeacher
-    ? (teacherSubjectSchedules.find(s => s.id === selectedSubjectId) || teacherSubjectSchedules[0])
+    ? (teacherSubjectSchedules.find((s: TeacherSubjectSchedule) => s.id === selectedSubjectId) || teacherSubjectSchedules[0])
     : undefined;
 
   const activeSubjectTimeCheck = isTeacher && activeSubject
@@ -360,8 +399,22 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     : null;
   const isCurrentSubjectPresentTime = activeSubjectTimeCheck ? activeSubjectTimeCheck.isValid : true;
 
+  const currentScheduledStartTime = isTeacher && activeSubject ? activeSubject.startTime : activeSchedule.startTime;
   const currentScheduledEndTime = isTeacher && activeSubject ? activeSubject.endTime : activeSchedule.endTime;
+
+  const isBeforeStartTime = isTeacher && activeSubject
+    ? AttendanceEngine.timeToMinutes(effectiveTime) < AttendanceEngine.timeToMinutes(currentScheduledStartTime)
+    : false;
+
   const isOverEndTime = AttendanceEngine.timeToMinutes(effectiveTime) >= AttendanceEngine.timeToMinutes(currentScheduledEndTime);
+
+  const isBeforeEndTime = isTeacher && activeSubject
+    ? AttendanceEngine.timeToMinutes(effectiveTime) < AttendanceEngine.timeToMinutes(currentScheduledEndTime)
+    : false;
+
+  const isOvertimeCheckout = isTeacher && activeSubject
+    ? AttendanceEngine.timeToMinutes(effectiveTime) > AttendanceEngine.timeToMinutes(currentScheduledEndTime) + 15
+    : false;
 
   // Selected subject attendance record for today (if teacher)
   const activeSubjectRecord = isTeacher && activeSubject
@@ -382,30 +435,53 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     if (!activeStaff) return;
 
     const targetSubject = isTeacher
-      ? (teacherSubjectSchedules.find(s => s.id === (specificSubjectId || selectedSubjectId)) || activeSubject)
+      ? (teacherSubjectSchedules.find((s: TeacherSubjectSchedule) => s.id === (specificSubjectId || selectedSubjectId)) || activeSubject)
       : undefined;
 
-    // Strict validation: Do not allow scan-in if current time is over end-time
-    const targetEndTime = isTeacher && targetSubject ? targetSubject.endTime : activeSchedule.endTime;
     const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
-    const endMins = AttendanceEngine.timeToMinutes(targetEndTime);
 
-    if (curMins >= endMins) {
-      showToast(
-        isKhmer
-          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបច្ចុប្បន្ន (${effectiveTime}) បានដល់ ឬហួសម៉ោងបញ្ចប់កាលវិភាគ (${targetEndTime}) រួចហើយ!`
-          : `Cannot scan in: Current time (${effectiveTime}) is over the scheduled end-time (${targetEndTime}). Scanning in after end-time is strictly prohibited.`,
-        'error'
-      );
-      return;
-    }
-
-    // Strict validation: Prevent scanning into a schedule that is not at the present time
+    // Strict validation for teachers: Do not allow check-in before schedule or overtime
     if (isTeacher && targetSubject) {
+      const startMins = AttendanceEngine.timeToMinutes(targetSubject.startTime);
+      const endMins = AttendanceEngine.timeToMinutes(targetSubject.endTime);
+
+      if (curMins < startMins) {
+        const waitMins = startMins - curMins;
+        showToast(
+          isKhmer
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលមុនម៉ោងទេ៖ ម៉ោងបង្រៀន "${targetSubject.khmerSubject || targetSubject.subject}" ចាប់ផ្តើមនៅម៉ោង ${targetSubject.startTime} (នៅសល់ ${waitMins} នាទី)។ ហាមស្កេនចូលមុនម៉ោងកាលវិភាគ។`
+            : `Cannot check in before schedule: "${targetSubject.subject}" starts at ${targetSubject.startTime} (starts in ${waitMins}m). Teachers are not allowed to check in before schedule.`,
+          'error'
+        );
+        return;
+      }
+
+      if (curMins >= endMins) {
+        showToast(
+          isKhmer
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបច្ចុប្បន្ន (${effectiveTime}) បានដល់ ឬហួសម៉ោងបញ្ចប់កាលវិភាគ (${targetSubject.endTime}) រួចហើយ! ហាមស្កេនចូលពេលហួសម៉ោង ឬថែមម៉ោង។`
+            : `Cannot check in: Current time (${effectiveTime}) is over the scheduled end-time (${targetSubject.endTime}). Checking in overtime or after schedule end-time is strictly prohibited.`,
+          'error'
+        );
+        return;
+      }
+
       const timeCheck = AttendanceEngine.isSubjectScheduleAtPresentTime(targetSubject, effectiveTime, todayStr);
       if (!timeCheck.isValid) {
         showToast(
           isKhmer && timeCheck.khmerMessage ? timeCheck.khmerMessage : (timeCheck.message || 'Cannot scan in: Selected schedule is not active at the present time.'),
+          'error'
+        );
+        return;
+      }
+    } else {
+      const targetEndTime = activeSchedule.endTime;
+      const endMins = AttendanceEngine.timeToMinutes(targetEndTime);
+      if (curMins >= endMins) {
+        showToast(
+          isKhmer
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបច្ចុប្បន្ន (${effectiveTime}) បានដល់ ឬហួសម៉ោងបញ្ចប់កាលវិភាគ (${targetEndTime}) រួចហើយ!`
+            : `Cannot scan in: Current time (${effectiveTime}) is over the scheduled end-time (${targetEndTime}). Scanning in after end-time is strictly prohibited.`,
           'error'
         );
         return;
@@ -464,15 +540,46 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   // Actual Check-out Execution
   const executeCheckOut = (specificSubjectId?: string) => {
     if (!activeStaff) return;
-    setIsSubmitting(true);
-
-    const effectiveTime = useCustomTime && customTimeInput
-      ? customTimeInput
-      : AttendanceEngine.getCurrentTimeString();
 
     const targetSubjectId = isTeacher
       ? (specificSubjectId || selectedSubjectId || activeSubject?.id)
       : undefined;
+
+    const targetSubject = isTeacher
+      ? (teacherSubjectSchedules.find((s: TeacherSubjectSchedule) => s.id === targetSubjectId) || activeSubject)
+      : undefined;
+
+    const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
+
+    // Strict validation for teachers: Do not allow check-out before schedule or overtime
+    if (isTeacher && targetSubject) {
+      const endMins = AttendanceEngine.timeToMinutes(targetSubject.endTime);
+
+      if (curMins < endMins) {
+        const earlyMins = endMins - curMins;
+        showToast(
+          isKhmer
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងទេ៖ ម៉ោងបង្រៀន "${targetSubject.khmerSubject || targetSubject.subject}" បញ្ចប់នៅម៉ោង ${targetSubject.endTime} (នៅសល់ ${earlyMins} នាទីទៀត)។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងកាលវិភាគឡើយ។`
+            : `Cannot check out before schedule: "${targetSubject.subject}" ends at ${targetSubject.endTime} (${earlyMins}m remaining). Teachers are not allowed to check out before schedule.`,
+          'error'
+        );
+        return;
+      }
+
+      const maxCheckoutGrace = 15;
+      if (curMins > endMins + maxCheckoutGrace) {
+        const overtimeMins = curMins - endMins;
+        showToast(
+          isKhmer
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចេញថែមម៉ោងទេ៖ ម៉ោងបច្ចុប្បន្ន (${effectiveTime}) បានហួសម៉ោងបញ្ចប់ (${targetSubject.endTime}) ចំនួន ${overtimeMins} នាទីរួចហើយ។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចេញថែមម៉ោងឡើយ។`
+            : `Cannot check out overtime: Current time (${effectiveTime}) is ${overtimeMins}m past scheduled end-time (${targetSubject.endTime}). Overtime check-out is strictly prohibited for teachers.`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
 
     setTimeout(() => {
       const result = AttendanceEngine.processCheckOut({
@@ -866,7 +973,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {teacherSubjectSchedules.map((sub, idx) => {
+                  {teacherSubjectSchedules.map((sub: TeacherSubjectSchedule, idx: number) => {
                     const isSelected = (activeSubject?.id === sub.id);
                     const subRecord = attendanceList.find(
                       a => a.personId === activeStaff?.id && a.date === todayStr && a.subjectScheduleId === sub.id
@@ -890,15 +997,23 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                       >
                         {/* Card Header: Period & Time */}
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white'
-                              : isPresentTime
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
-                            {sub.periodName}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white'
+                                : isPresentTime
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {sub.periodName}
+                            </span>
+                            {idx === 0 && (isCheckedIn && !isCheckedOut || isPresentTime) && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-gradient-to-r from-amber-500 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-0.5">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-200" />
+                                {isKhmer ? 'ម៉ោងបច្ចុប្បន្ន' : 'Current'}
+                              </span>
+                            )}
+                          </div>
                           <span className="font-mono text-[11px] font-bold text-slate-600 flex items-center gap-1">
                             <Clock className={`w-3 h-3 ${isPresentTime ? 'text-emerald-600' : 'text-slate-400'}`} />
                             {sub.startTime} - {sub.endTime}
@@ -994,25 +1109,80 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                               >
                                 <Lock className={`w-3 h-3 ${timeCheck.reason === 'too_late' ? 'text-rose-500' : 'text-slate-400'}`} />
                                 {timeCheck.reason === 'too_early'
-                                  ? (isKhmer ? 'មិនទាន់ដល់ម៉ោង' : 'Upcoming')
+                                  ? (isKhmer ? 'មិនទាន់ដល់ម៉ោង' : 'Before Schedule')
                                   : timeCheck.reason === 'too_late'
                                   ? (isKhmer ? 'ហួសម៉ោងបញ្ចប់' : 'Over End-Time')
                                   : (isKhmer ? 'ខុសថ្ងៃ' : 'Locked')}
                               </button>
                             )
                           ) : !isCheckedOut ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedSubjectId(sub.id);
-                                handleCheckOut(sub.id);
-                              }}
-                              disabled={isSubmitting}
-                              className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-black tracking-wide shrink-0 transition-colors shadow-xs"
-                            >
-                              {isKhmer ? 'ស្កេនចេញ' : 'Check Out'}
-                            </button>
+                            (() => {
+                              const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
+                              const subEndMins = AttendanceEngine.timeToMinutes(sub.endTime);
+                              const isBeforeSubEnd = curMins < subEndMins;
+                              const isOvertimeSub = curMins > subEndMins + 15;
+
+                              if (isBeforeSubEnd) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedSubjectId(sub.id);
+                                      showToast(
+                                        isKhmer
+                                          ? `មិនអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងទេ៖ ម៉ោងបង្រៀនបញ្ចប់នៅម៉ោង ${sub.endTime}`
+                                          : `Cannot check out before schedule ends at ${sub.endTime}. Early checkout is prohibited.`,
+                                        'warning'
+                                      );
+                                    }}
+                                    className="px-2 py-1 rounded-lg font-bold shrink-0 transition-colors flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-200 cursor-not-allowed"
+                                    title={isKhmer ? `ម៉ោងបង្រៀនបញ្ចប់នៅម៉ោង ${sub.endTime}` : `Class ends at ${sub.endTime}`}
+                                  >
+                                    <Lock className="w-3 h-3 text-amber-600" />
+                                    <span>{isKhmer ? 'មិនទាន់ចប់ម៉ោង' : 'In Class'}</span>
+                                  </button>
+                                );
+                              }
+
+                              if (isOvertimeSub) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedSubjectId(sub.id);
+                                      showToast(
+                                        isKhmer
+                                          ? `មិនអនុញ្ញាតឱ្យស្កេនចេញថែមម៉ោងទេ៖ ហួសពេលកំណត់ស្កេនចេញហើយ (${sub.endTime})`
+                                          : `Cannot check out overtime: Exceeded checkout window for ${sub.endTime}.`,
+                                        'error'
+                                      );
+                                    }}
+                                    className="px-2 py-1 rounded-lg font-bold shrink-0 transition-colors flex items-center gap-1 text-[10px] bg-rose-50 text-rose-700 border border-rose-200 cursor-not-allowed"
+                                    title={isKhmer ? 'ហួសម៉ោងស្កេនចេញ' : 'Overtime'}
+                                  >
+                                    <Lock className="w-3 h-3 text-rose-500" />
+                                    <span>{isKhmer ? 'ហួសម៉ោងស្កេនចេញ' : 'Overtime'}</span>
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedSubjectId(sub.id);
+                                    handleCheckOut(sub.id);
+                                  }}
+                                  disabled={isSubmitting}
+                                  className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-black tracking-wide shrink-0 transition-colors shadow-xs"
+                                >
+                                  {isKhmer ? 'ស្កេនចេញ' : 'Check Out'}
+                                </button>
+                              );
+                            })()
                           ) : (
                             <span className="text-[10px] text-slate-400 font-medium">
                               ✓ {isKhmer ? 'រួចរាល់' : 'Done'}
@@ -1097,12 +1267,14 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                 isSubmitting ||
                 Boolean(currentRecord?.checkInTime) ||
                 (isTeacher && !activeSubject) ||
+                (isTeacher && isBeforeStartTime) ||
                 (isTeacher && !isCurrentSubjectPresentTime) ||
                 isOverEndTime
               }
               className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
                 currentRecord?.checkInTime ||
                 (isTeacher && !activeSubject) ||
+                (isTeacher && isBeforeStartTime) ||
                 (isTeacher && !isCurrentSubjectPresentTime) ||
                 isOverEndTime
                   ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
@@ -1111,6 +1283,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             >
               {isOverEndTime ? (
                 <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-rose-500" />
+              ) : isTeacher && isBeforeStartTime ? (
+                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
               ) : isTeacher && !isCurrentSubjectPresentTime ? (
                 <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-slate-400" />
               ) : (
@@ -1123,6 +1297,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   ? (isKhmer ? 'បានស្កេនចូលរួចរាល់' : 'Already Checked In')
                   : isOverEndTime
                   ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — ហួសម៉ោងបញ្ចប់' : 'CANNOT SCAN IN — OVER END-TIME')
+                  : isTeacher && isBeforeStartTime
+                  ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — មិនទាន់ដល់ម៉ោង' : 'CANNOT SCAN IN — BEFORE SCHEDULE')
                   : isTeacher && !isCurrentSubjectPresentTime
                   ? (isKhmer ? 'មិនមែនជាម៉ោងបង្រៀនបច្ចុប្បន្ន' : 'CANNOT SCAN IN — NOT PRESENT TIME')
                   : isTeacher && activeSubject
@@ -1136,6 +1312,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   ? (isKhmer ? `បានកត់ត្រាម៉ោង ${currentRecord.checkInTime}` : `Recorded at ${currentRecord.checkInTime}`)
                   : isOverEndTime
                   ? (isKhmer ? `កាលវិភាគបានបញ្ចប់នៅម៉ោង ${currentScheduledEndTime}។ ម៉ោងបច្ចុប្បន្ន៖ ${effectiveTime}។ ហាមស្កេនចូលពេលហួសម៉ោងបញ្ចប់។` : `Schedule ended at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Scanning in after end-time is strictly prohibited.`)
+                  : isTeacher && isBeforeStartTime
+                  ? (isKhmer ? `ម៉ោងបង្រៀនចាប់ផ្តើមនៅម៉ោង ${currentScheduledStartTime} (នៅសល់ ${AttendanceEngine.timeToMinutes(currentScheduledStartTime) - AttendanceEngine.timeToMinutes(effectiveTime)} នាទី)។ ហាមស្កេនចូលមុនម៉ោងកាលវិភាគ។` : `Class starts at ${currentScheduledStartTime}. Current time: ${effectiveTime}. Checking in before schedule is strictly prohibited.`)
                   : isTeacher && !isCurrentSubjectPresentTime
                   ? (activeSubjectTimeCheck?.khmerMessage || activeSubjectTimeCheck?.message || (isKhmer ? 'មិនអនុញ្ញាតឱ្យស្កេនចូលម៉ោងដែលមិនមែនជាពេលបច្ចុប្បន្នឡើយ' : 'Teachers can only scan in during present class hours'))
                   : isTeacher && activeSubject
@@ -1147,19 +1325,42 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             {/* Check-out Button */}
             <button
               onClick={() => handleCheckOut()}
-              disabled={isSubmitting || !currentRecord?.checkInTime || Boolean(currentRecord?.checkOutTime) || (isTeacher && !activeSubject)}
+              disabled={
+                isSubmitting ||
+                !currentRecord?.checkInTime ||
+                Boolean(currentRecord?.checkOutTime) ||
+                (isTeacher && !activeSubject) ||
+                (isTeacher && isBeforeEndTime) ||
+                (isTeacher && isOvertimeCheckout)
+              }
               className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
-                !currentRecord?.checkInTime || currentRecord?.checkOutTime || (isTeacher && !activeSubject)
+                !currentRecord?.checkInTime ||
+                currentRecord?.checkOutTime ||
+                (isTeacher && !activeSubject) ||
+                (isTeacher && isBeforeEndTime) ||
+                (isTeacher && isOvertimeCheckout)
                   ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
                   : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:shadow-xl'
               }`}
             >
-              <LogOut className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
+              {isTeacher && isBeforeEndTime ? (
+                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
+              ) : isTeacher && isOvertimeCheckout ? (
+                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-rose-500" />
+              ) : (
+                <LogOut className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
+              )}
               <span className="text-base sm:text-xl font-black tracking-tight uppercase">
                 {isTeacher && !activeSubject
                   ? (isKhmer ? 'ត្រូវមានកាលវិភាគមុខវិជ្ជា' : 'SUBJECT SCHEDULE REQUIRED')
                   : currentRecord?.checkOutTime
                   ? (isKhmer ? 'បានស្កេនចេញរួចរាល់' : 'Session Completed')
+                  : !currentRecord?.checkInTime
+                  ? (isKhmer ? 'ត្រូវស្កេនចូលជាមុនសិន' : 'Check-In Required First')
+                  : isTeacher && isBeforeEndTime
+                  ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចេញ — មិនទាន់ចប់ម៉ោង' : 'CANNOT CHECK OUT — BEFORE SCHEDULE')
+                  : isTeacher && isOvertimeCheckout
+                  ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចេញ — ហួសម៉ោងថែមម៉ោង' : 'CANNOT CHECK OUT — OVERTIME')
                   : isTeacher && activeSubject
                   ? (isKhmer ? `ស្កេនចេញ៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `CHECK OUT — ${activeSubject.subject}`)
                   : (isKhmer ? 'ស្កេនចេញ (CHECK OUT)' : 'CHECK OUT')}
@@ -1171,6 +1372,10 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   ? (isKhmer ? `បានស្កេនចេញម៉ោង ${currentRecord.checkOutTime}` : `Checked out at ${currentRecord.checkOutTime}`)
                   : !currentRecord?.checkInTime
                   ? (isKhmer ? 'ត្រូវស្កេនចូលជាមុនសិន' : 'Check-in required first')
+                  : isTeacher && isBeforeEndTime
+                  ? (isKhmer ? `ម៉ោងបង្រៀនបញ្ចប់នៅម៉ោង ${currentScheduledEndTime} (នៅសល់ ${AttendanceEngine.timeToMinutes(currentScheduledEndTime) - AttendanceEngine.timeToMinutes(effectiveTime)} នាទី)។ ហាមស្កេនចេញមុនម៉ោងកាលវិភាគ។` : `Class ends at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Checking out before schedule is strictly prohibited.`)
+                  : isTeacher && isOvertimeCheckout
+                  ? (isKhmer ? `ហួសពេលកំណត់ស្កេនចេញហើយ (បញ្ចប់នៅម៉ោង ${currentScheduledEndTime})។ ហាមស្កេនចេញថែមម៉ោង។` : `Exceeded allowable checkout window for ${currentScheduledEndTime}. Overtime check-out is prohibited.`)
                   : isTeacher && activeSubject
                   ? (isKhmer ? `ចុចទីនេះដើម្បីបញ្ចប់ម៉ោងបង្រៀន ${activeSubject.subject}` : `End class session for ${activeSubject.gradeClass}`)
                   : (isKhmer ? 'ចុចទីនេះដើម្បីស្កេនចេញបញ្ចប់ការងារ' : "Clock out from today's shift")}
