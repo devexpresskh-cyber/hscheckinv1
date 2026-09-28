@@ -622,50 +622,55 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                   </p>
                 </div>
               ) : (
-                selectedDayDetails.classes.map((cls, idx) => (
-                  <div
-                    key={cls.id || idx}
-                    className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 hover:bg-white hover:border-indigo-300 transition-all shadow-2xs"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-slate-900 text-sm">
-                            {cls.subject}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                            {cls.gradeClass}
-                          </span>
+                [...selectedDayDetails.classes]
+                  .sort((a, b) => {
+                    const pA = a.periodNumber || 0;
+                    const pB = b.periodNumber || 0;
+                    if (pA !== pB) return pA - pB;
+                    return a.startTime.localeCompare(b.startTime);
+                  })
+                  .map((cls, idx) => (
+                    <div
+                      key={cls.id || idx}
+                      className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 hover:bg-white hover:border-indigo-300 transition-all shadow-2xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-600 text-white shadow-2xs">
+                              {isKhmer ? `ម៉ោងទី ${cls.periodNumber || idx + 1}` : cls.periodName || `P${cls.periodNumber || idx + 1}`}
+                            </span>
+                            <span className="font-extrabold text-slate-900 text-sm">
+                              {cls.subject}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              {cls.gradeClass}
+                            </span>
+                          </div>
+                          {cls.khmerSubject && (
+                            <span className="text-[11px] text-slate-500 font-khmer block mt-0.5">
+                              {cls.khmerSubject}
+                            </span>
+                          )}
                         </div>
-                        {cls.khmerSubject && (
-                          <span className="text-[11px] text-slate-500 font-khmer block mt-0.5">
-                            {cls.khmerSubject}
-                          </span>
-                        )}
+
+                        <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                          {cls.currency === 'KHR' ? '៛' : '$'}{(cls.hourlyRate ?? activeTeacher?.hourlyRate ?? 20).toFixed(0)}/hr
+                        </span>
                       </div>
 
-                      <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
-                        {cls.currency === 'KHR' ? '៛' : '$'}{(cls.hourlyRate ?? activeTeacher?.hourlyRate ?? 20).toFixed(0)}/hr
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 pt-1 border-t border-slate-200/60">
-                      <span className="flex items-center gap-1 font-mono font-semibold text-slate-800">
-                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{cls.startTime} – {cls.endTime}</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{cls.room}</span>
-                      </span>
-                      {cls.periodNumber && (
-                        <span className="text-[11px] text-slate-500">
-                          Period #{cls.periodNumber}
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 pt-1 border-t border-slate-200/60">
+                        <span className="flex items-center gap-1 font-mono font-semibold text-slate-800">
+                          <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>{cls.startTime} – {cls.endTime}</span>
                         </span>
-                      )}
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{cls.room}</span>
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
 

@@ -49,6 +49,7 @@ export const ScheduleManagement: React.FC = () => {
   const [viewMode, setViewMode] = useState<'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards'>(
     () => (isTeacher ? 'daily_schedule' : 'weekly_timetable')
   );
+  const [dailyGroupMode, setDailyGroupMode] = useState<'period' | 'flat'>('period');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
@@ -551,6 +552,101 @@ export const ScheduleManagement: React.FC = () => {
     });
   }, [filteredSubjectSchedules, selectedDay, todayDayIndex, attendanceList, activeTeacher, currentUser, todayStr]);
 
+  // Group and order daily classes by Period
+  const dailyClassesGroupedByPeriod = useMemo(() => {
+    const list = filteredSubjectSchedules.filter(sub => {
+      if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
+        return sub.daysOfWeek.includes(selectedDay);
+      }
+      return sub.dayOfWeek === selectedDay;
+    });
+
+    if (list.length === 0) return [];
+
+    const isClassToday = selectedDay === todayDayIndex;
+    const curTimeStr = AttendanceEngine.getCurrentTimeString();
+    const curMins = AttendanceEngine.timeToMinutes(curTimeStr);
+
+    const map = new Map<number, {
+      periodNumber: number;
+      periodName: string;
+      khmerPeriodName: string;
+      startTime: string;
+      endTime: string;
+      sessionType: 'Morning' | 'Afternoon' | 'Evening';
+      color?: string;
+      classes: TeacherSubjectSchedule[];
+    }>();
+
+    list.forEach(sub => {
+      let pNum = sub.periodNumber || 0;
+      if (!pNum) {
+        const matched = periods.find(
+          p => p.startTime === sub.startTime ||
+               (p.periodName && sub.periodName && p.periodName.toLowerCase() === sub.periodName.toLowerCase())
+        );
+        if (matched) {
+          pNum = matched.periodNumber;
+        } else {
+          const sMin = AttendanceEngine.timeToMinutes(sub.startTime);
+          pNum = sMin > 0 ? Math.floor(sMin / 60) : 1;
+        }
+      }
+
+      const periodDef = periods.find(p => p.periodNumber === pNum);
+      const sTime = sub.startTime || periodDef?.startTime || '07:30';
+      const eTime = sub.endTime || periodDef?.endTime || '08:15';
+      const sMins = AttendanceEngine.timeToMinutes(sTime);
+      const sessionType: 'Morning' | 'Afternoon' | 'Evening' = periodDef?.sessionType && periodDef.sessionType !== 'Break'
+        ? periodDef.sessionType
+        : (sMins < 720 ? 'Morning' : sMins < 1080 ? 'Afternoon' : 'Evening');
+
+      if (!map.has(pNum)) {
+        map.set(pNum, {
+          periodNumber: pNum,
+          periodName: periodDef?.periodName || sub.periodName || `Period ${pNum}`,
+          khmerPeriodName: periodDef?.khmerPeriodName || `ម៉ោងទី ${pNum}`,
+          startTime: periodDef?.startTime || sTime,
+          endTime: periodDef?.endTime || eTime,
+          sessionType,
+          color: periodDef?.color || sub.color || '#4F46E5',
+          classes: []
+        });
+      }
+
+      map.get(pNum)!.classes.push(sub);
+    });
+
+    const sortedGroups = Array.from(map.values()).sort((a, b) => {
+      if (a.periodNumber !== b.periodNumber) return a.periodNumber - b.periodNumber;
+      return a.startTime.localeCompare(b.startTime);
+    });
+
+    sortedGroups.forEach(g => {
+      g.classes.sort((a, b) => {
+        const timeDiff = a.startTime.localeCompare(b.startTime);
+        if (timeDiff !== 0) return timeDiff;
+        return a.gradeClass.localeCompare(b.gradeClass);
+      });
+    });
+
+    return sortedGroups.map(g => {
+      const gStart = AttendanceEngine.timeToMinutes(g.startTime);
+      const gEnd = AttendanceEngine.timeToMinutes(g.endTime);
+
+      const isCurrentActive = isClassToday && curMins >= gStart && curMins < gEnd;
+      const isUpcoming = isClassToday && curMins < gStart;
+      const isCompleted = isClassToday && curMins >= gEnd;
+
+      return {
+        ...g,
+        isCurrentActive,
+        isUpcoming,
+        isCompleted
+      };
+    });
+  }, [filteredSubjectSchedules, selectedDay, todayDayIndex, periods]);
+
   const weekDayTabs = [
     { index: 1, shortEn: 'Mon', shortKm: 'ចន្ទ', fullEn: 'Monday', fullKm: 'ថ្ងៃចន្ទ' },
     { index: 2, shortEn: 'Tue', shortKm: 'អង្គារ', fullEn: 'Tuesday', fullKm: 'ថ្ងៃអង្គារ' },
@@ -659,6 +755,179 @@ export const ScheduleManagement: React.FC = () => {
     } else {
       showToast(result.message, 'error');
     }
+  };
+
+  const renderClassCard = (sub: TeacherSubjectSchedule, idx: number) => {
+    // Find attendance record for this class today
+    const isClassToday = selectedDay === todayDayIndex;
+    const targetPersonId = activeTeacher?.id || currentUser.personId || currentUser.id;
+    const todayRec = attendanceList.find(
+      a =>
+        (a.personId === targetPersonId ||
+          a.personName.toLowerCase() === currentUser.fullName.toLowerCase()) &&
+        a.date === todayStr &&
+        a.subjectScheduleId === sub.id
+    );
+
+    const isCheckedIn = Boolean(todayRec?.checkInTime);
+    const isCheckedOut = Boolean(todayRec?.checkOutTime);
+    const isLate = todayRec?.status === 'Late';
+
+    const curTimeStr = AttendanceEngine.getCurrentTimeString();
+    const curMins = AttendanceEngine.timeToMinutes(curTimeStr);
+    const sStart = AttendanceEngine.timeToMinutes(sub.startTime);
+    const sEnd = AttendanceEngine.timeToMinutes(sub.endTime);
+
+    const isCurrentActive = isClassToday && (
+      (isCheckedIn && !isCheckedOut) ||
+      (curMins >= sStart && curMins < sEnd && !isCheckedOut)
+    );
+
+    return (
+      <div
+        key={sub.id}
+        className={`bg-white rounded-3xl border p-4 sm:p-5 shadow-xs hover:shadow-md transition-all relative overflow-hidden flex flex-col justify-between ${
+          isCurrentActive ? 'border-indigo-400 ring-2 ring-indigo-500/20 shadow-sm' : 'border-slate-200'
+        }`}
+        style={{ borderLeftWidth: '6px', borderLeftColor: sub.color || '#4F46E5' }}
+      >
+        <div>
+          <div className="flex items-start justify-between gap-3 mb-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="px-2.5 py-1 rounded-xl text-xs font-black text-white"
+                style={{ backgroundColor: sub.color || '#4F46E5' }}
+              >
+                {isKhmer ? `ម៉ោងទី ${sub.periodNumber || 1}` : sub.periodName || `Period ${sub.periodNumber || 1}`}
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-slate-500" />
+                {sub.startTime} - {sub.endTime}
+              </span>
+              {isClassToday && isCurrentActive && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-xs">
+                  <Sparkles className="w-3 h-3 text-amber-200" />
+                  <span>{isKhmer ? 'ម៉ោងបច្ចុប្បន្ន' : 'Current Class'}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Status Badge if checking today */}
+            {isClassToday && (
+              <div>
+                {isCheckedOut ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{isKhmer ? `ចប់ម៉ោង (${todayRec?.checkOutTime})` : `Out: ${todayRec?.checkOutTime}`}</span>
+                  </span>
+                ) : isCheckedIn ? (
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold ${
+                    isLate ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  }`}>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{isKhmer ? `ស្កេនចូលម៉ោង ${todayRec?.checkInTime}` : `In: ${todayRec?.checkInTime}`}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600">
+                    {isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1 mb-3">
+            <h4 className="font-black text-base text-slate-900">
+              {sub.subject}
+            </h4>
+            {sub.khmerSubject && (
+              <p className="text-xs font-semibold text-indigo-700">
+                {sub.khmerSubject}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-600 font-medium">
+            <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl font-bold text-slate-800">
+              {sub.gradeClass}
+            </span>
+            <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl font-bold text-slate-700 flex items-center gap-1">
+              <Building className="w-3 h-3 text-slate-400" />
+              {sub.room}
+            </span>
+            {sub.subjectCode && (
+              <span className="font-mono text-[11px] text-slate-400">
+                {sub.subjectCode}
+              </span>
+            )}
+          </div>
+
+          {/* Attribution for Admin / HR */}
+          {!isTeacher && (
+            <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 text-xs text-slate-800">
+              <GraduationCap className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span className="font-bold">{sub.teacherName}</span>
+              {sub.khmerTeacherName && (
+                <span className="text-slate-500 font-medium">({sub.khmerTeacherName})</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Attendance Action Buttons for Today */}
+        {isClassToday && (
+          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
+            {!isCheckedIn ? (
+              curMins < sStart ? (
+                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed">
+                  <Lock className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{isKhmer ? `មិនទាន់ដល់ម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Before Schedule (Starts ${sub.startTime})`}</span>
+                </div>
+              ) : curMins >= sEnd ? (
+                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold cursor-not-allowed">
+                  <Lock className="w-3.5 h-3.5 text-rose-500" />
+                  <span>{isKhmer ? `ហួសម៉ោងបញ្ចប់ (${sub.endTime})` : `Over End-Time (${sub.endTime})`}</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleTeacherClassCheckIn(sub)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class'}</span>
+                </button>
+              )
+            ) : !isCheckedOut ? (
+              curMins < sEnd ? (
+                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold cursor-not-allowed">
+                  <Lock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{isKhmer ? `កំពុងបង្រៀន (ចប់ម៉ោង ${sub.endTime})` : `In Class (Ends at ${sub.endTime})`}</span>
+                </div>
+              ) : curMins > sEnd + 15 ? (
+                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold cursor-not-allowed">
+                  <Lock className="w-3.5 h-3.5 text-rose-500" />
+                  <span>{isKhmer ? `ហួសម៉ោងស្កេនចេញ (${sub.endTime})` : `Overtime (Ended at ${sub.endTime})`}</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleTeacherClassCheckOut(sub)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class'}</span>
+                </button>
+              )
+            ) : (
+              <div className="w-full text-center text-xs font-bold text-slate-500 py-1">
+                ✓ {isKhmer ? 'បានកត់ត្រាវត្តមានសម្រាប់ម៉ោងនេះរួចរាល់' : 'Class Attendance Completed'}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -815,18 +1084,89 @@ export const ScheduleManagement: React.FC = () => {
       {viewMode === 'daily_schedule' && (
         <div className="space-y-4">
           
-          {/* Day Selector Navigation Pills */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-3 sm:p-4 shadow-xs">
-            <div className="flex items-center justify-between gap-2 mb-3">
+          {/* Day Selector Navigation Pills & Toolbar */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5">
+            {/* Top Toolbar: Teacher Filter & Group Mode Switcher */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {!isTeacher ? (
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-700">
+                      {isKhmer ? 'ជ្រើសរើសគ្រូបង្រៀន:' : 'Teacher:'}
+                    </span>
+                    <select
+                      value={selectedTeacherFilter}
+                      onChange={e => setSelectedTeacherFilter(e.target.value)}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Faculty)' : 'All Faculty'}</option>
+                      {teachers.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} — {t.department}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-800">
+                      {isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃតាមវេនម៉ោង' : 'Daily Schedule Grouped by Period'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Group By Period vs Flat Switcher */}
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setDailyGroupMode('period')}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      dailyGroupMode === 'period'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title={isKhmer ? 'តម្រៀបតាមវេនម៉ោង (Group order by Period)' : 'Group order by Period'}
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'តាមវេនម៉ោង (By Period)' : 'By Period'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyGroupMode('flat')}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      dailyGroupMode === 'flat'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title={isKhmer ? 'បញ្ជីកាតសរុប (Flat Cards)' : 'Flat Cards'}
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'កាតសរុប (Flat)' : 'Flat'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Day Selector Navigation Pills & Stats */}
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-indigo-600" />
                 <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
                   {isKhmer ? 'ជ្រើសរើសថ្ងៃបង្រៀន (Select Day):' : 'Select Day of Week:'}
                 </span>
               </div>
-              <span className="text-xs text-indigo-700 font-bold bg-indigo-50 px-2.5 py-1 rounded-xl">
-                {dailyClasses.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes Scheduled'}
-              </span>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl">
+                  {dailyClasses.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes'}
+                </span>
+                <span className="text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
+                  {dailyClassesGroupedByPeriod.length} {isKhmer ? 'វេនម៉ោង' : 'Periods'}
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -870,7 +1210,7 @@ export const ScheduleManagement: React.FC = () => {
           </div>
 
           {/* Classes for Selected Day */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             {dailyClasses.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs">
                 <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center mb-3">
@@ -885,166 +1225,90 @@ export const ScheduleManagement: React.FC = () => {
                     : 'You do not have any teaching sessions on this day. Use the day switcher above to view other days.'}
                 </p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {dailyClasses.map((sub, idx) => {
-                  // Find attendance record for this class today
-                  const isClassToday = selectedDay === todayDayIndex;
-                  const todayRec = attendanceList.find(
-                    a =>
-                      (a.personId === (activeTeacher?.id || currentUser.id) ||
-                        a.personName.toLowerCase() === currentUser.fullName.toLowerCase()) &&
-                      a.date === todayStr &&
-                      a.subjectScheduleId === sub.id
-                  );
-
-                  const isCheckedIn = Boolean(todayRec?.checkInTime);
-                  const isCheckedOut = Boolean(todayRec?.checkOutTime);
-                  const isLate = todayRec?.status === 'Late';
-
-                  const curTimeStr = AttendanceEngine.getCurrentTimeString();
-                  const curMins = AttendanceEngine.timeToMinutes(curTimeStr);
-                  const sStart = AttendanceEngine.timeToMinutes(sub.startTime);
-                  const sEnd = AttendanceEngine.timeToMinutes(sub.endTime);
-
-                  const isCurrentActive = isClassToday && (
-                    (isCheckedIn && !isCheckedOut) ||
-                    (curMins >= sStart && curMins < sEnd && !isCheckedOut)
-                  );
-
+            ) : dailyGroupMode === 'period' ? (
+              /* Grouped and Ordered by Period */
+              <div className="space-y-5">
+                {dailyClassesGroupedByPeriod.map(group => {
                   return (
                     <div
-                      key={sub.id}
-                      className={`bg-white rounded-3xl border p-4 sm:p-5 shadow-xs hover:shadow-md transition-all relative overflow-hidden ${
-                        isCurrentActive ? 'border-indigo-400 ring-2 ring-indigo-500/20 shadow-sm' : 'border-slate-200'
+                      key={group.periodNumber}
+                      className={`bg-white rounded-3xl border p-4 sm:p-5 shadow-xs space-y-3.5 transition-all ${
+                        group.isCurrentActive
+                          ? 'border-emerald-300 ring-2 ring-emerald-500/20 shadow-md'
+                          : 'border-slate-200'
                       }`}
-                      style={{ borderLeftWidth: '6px', borderLeftColor: sub.color || '#4F46E5' }}
                     >
-                      <div className="flex items-start justify-between gap-3 mb-2.5">
-                        <div className="flex flex-wrap items-center gap-2">
+                      {/* Period Header Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                        <div className="flex flex-wrap items-center gap-2.5">
                           <span
-                            className="px-2.5 py-1 rounded-xl text-xs font-black text-white"
-                            style={{ backgroundColor: sub.color || '#4F46E5' }}
+                            className="w-8 h-8 rounded-xl font-black text-white text-xs flex items-center justify-center shadow-xs"
+                            style={{ backgroundColor: group.color || '#4F46E5' }}
                           >
-                            {isKhmer ? `ម៉ោងទី ${sub.periodNumber}` : sub.periodName}
+                            P{group.periodNumber}
                           </span>
-                          <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-500" />
-                            {sub.startTime} - {sub.endTime}
-                          </span>
-                          {isClassToday && idx === 0 && isCurrentActive && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-xs">
-                              <Sparkles className="w-3 h-3 text-amber-200" />
-                              <span>{isKhmer ? 'ម៉ោងបច្ចុប្បន្ន' : 'Current Class'}</span>
-                            </span>
-                          )}
-                        </div>
 
-                        {/* Status Badge if checking today */}
-                        {isClassToday && (
                           <div>
-                            {isCheckedOut ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                                <span>{isKhmer ? `ចប់ម៉ោង (${todayRec?.checkOutTime})` : `Out: ${todayRec?.checkOutTime}`}</span>
-                              </span>
-                            ) : isCheckedIn ? (
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold ${
-                                isLate ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              }`}>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>{isKhmer ? `ស្កេនចូលម៉ោង ${todayRec?.checkInTime}` : `In: ${todayRec?.checkInTime}`}</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600">
-                                {isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-1 mb-3">
-                        <h4 className="font-black text-base text-slate-900">
-                          {sub.subject}
-                        </h4>
-                        {sub.khmerSubject && (
-                          <p className="text-xs font-semibold text-indigo-700">
-                            {sub.khmerSubject}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-600 font-medium">
-                        <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl font-bold text-slate-800">
-                          {sub.gradeClass}
-                        </span>
-                        <span className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl font-bold text-slate-700 flex items-center gap-1">
-                          <Building className="w-3 h-3 text-slate-400" />
-                          {sub.room}
-                        </span>
-                        {sub.subjectCode && (
-                          <span className="font-mono text-[11px] text-slate-400">
-                            {sub.subjectCode}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Quick Attendance Action Buttons for Today */}
-                      {isClassToday && (
-                        <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                          {!isCheckedIn ? (
-                            curMins < sStart ? (
-                              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed">
-                                <Lock className="w-3.5 h-3.5 text-amber-500" />
-                                <span>{isKhmer ? `មិនទាន់ដល់ម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Before Schedule (Starts ${sub.startTime})`}</span>
-                              </div>
-                            ) : curMins >= sEnd ? (
-                              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold cursor-not-allowed">
-                                <Lock className="w-3.5 h-3.5 text-rose-500" />
-                                <span>{isKhmer ? `ហួសម៉ោងបញ្ចប់ (${sub.endTime})` : `Over End-Time (${sub.endTime})`}</span>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleTeacherClassCheckIn(sub)}
-                                className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-98"
-                              >
-                                <LogIn className="w-3.5 h-3.5" />
-                                <span>{isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class'}</span>
-                              </button>
-                            )
-                          ) : !isCheckedOut ? (
-                            curMins < sEnd ? (
-                              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold cursor-not-allowed">
-                                <Lock className="w-3.5 h-3.5 text-amber-600" />
-                                <span>{isKhmer ? `កំពុងបង្រៀន (ចប់ម៉ោង ${sub.endTime})` : `In Class (Ends at ${sub.endTime})`}</span>
-                              </div>
-                            ) : curMins > sEnd + 15 ? (
-                              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold cursor-not-allowed">
-                                <Lock className="w-3.5 h-3.5 text-rose-500" />
-                                <span>{isKhmer ? `ហួសម៉ោងស្កេនចេញ (${sub.endTime})` : `Overtime (Ended at ${sub.endTime})`}</span>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleTeacherClassCheckOut(sub)}
-                                className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-sm transition-all active:scale-98"
-                              >
-                                <LogOut className="w-3.5 h-3.5" />
-                                <span>{isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class'}</span>
-                              </button>
-                            )
-                          ) : (
-                            <div className="w-full text-center text-xs font-bold text-slate-500 py-1">
-                              ✓ {isKhmer ? 'បានកត់ត្រាវត្តមានសម្រាប់ម៉ោងនេះរួចរាល់' : 'Class Attendance Completed'}
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-black text-sm text-slate-900">
+                                {isKhmer ? group.khmerPeriodName : group.periodName}
+                              </h4>
+                              {group.sessionType && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                  {group.sessionType === 'Morning'
+                                    ? (isKhmer ? 'វេនព្រឹក' : 'Morning')
+                                    : group.sessionType === 'Afternoon'
+                                    ? (isKhmer ? 'វេនរសៀល' : 'Afternoon')
+                                    : (isKhmer ? 'វេនយប់' : 'Evening')}
+                                </span>
+                              )}
                             </div>
-                          )}
+                          </div>
+
+                          {/* Period Bell Time Badge */}
+                          <span className="text-xs font-mono font-bold text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl flex items-center gap-1.5 shadow-2xs">
+                            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{group.startTime} – {group.endTime}</span>
+                          </span>
                         </div>
-                      )}
+
+                        <div className="flex items-center gap-2">
+                          {/* Period live indicator on today */}
+                          {selectedDay === todayDayIndex && (
+                            group.isCurrentActive ? (
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-600 text-white flex items-center gap-1.5 shadow-xs animate-pulse">
+                                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                                <span>{isKhmer ? 'កំពុងបង្រៀន (Active Now)' : 'Active Class Period'}</span>
+                              </span>
+                            ) : group.isUpcoming ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                                {isKhmer ? 'វេនបន្ទាប់' : 'Upcoming'}
+                              </span>
+                            ) : group.isCompleted ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                                {isKhmer ? 'បានបញ្ចប់' : 'Passed'}
+                              </span>
+                            ) : null
+                          )}
+
+                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl">
+                            {group.classes.length} {isKhmer ? 'ថ្នាក់/ម៉ោង' : group.classes.length === 1 ? 'class' : 'classes'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Class Cards inside this Period */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {group.classes.map((sub, idx) => renderClassCard(sub, idx))}
+                      </div>
                     </div>
                   );
                 })}
+              </div>
+            ) : (
+              /* Flat Cards View */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {dailyClasses.map((sub, idx) => renderClassCard(sub, idx))}
               </div>
             )}
           </div>
