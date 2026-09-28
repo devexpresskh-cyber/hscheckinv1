@@ -16,7 +16,10 @@ import {
   AttendanceCorrectionRequest,
   LeaveRequest,
   AuditLog,
-  AppNotification
+  AppNotification,
+  OfflineSyncItem,
+  SyncHistoryLog,
+  SyncStatusState
 } from '../types/index.ts';
 import {
   DEFAULT_ROLES,
@@ -26,6 +29,7 @@ import {
   DEFAULT_DEPARTMENTS,
   DEFAULT_LOCATIONS,
   DEFAULT_TIMETABLE_PERIODS,
+  DEFAULT_SUBJECT_SCHEDULES,
   DEFAULT_SYSTEM_SETTINGS,
   DEFAULT_TELEGRAM_SETTINGS
 } from '../data/initialData.ts';
@@ -58,7 +62,10 @@ const STORAGE_KEYS = {
   LEAVE_REQUESTS: 'edutrack_leaves_v2',
   AUDIT_LOGS: 'edutrack_audit_logs_v2',
   NOTIFICATIONS: 'edutrack_notifs_v2',
-  HAS_BOOTSTRAPPED: 'edutrack_bootstrapped_v2'
+  HAS_BOOTSTRAPPED: 'edutrack_bootstrapped_v2',
+  OFFLINE_SYNC_QUEUE: 'edutrack_offline_sync_queue_v2',
+  SYNC_HISTORY: 'edutrack_sync_history_v2',
+  LAST_SYNCED: 'edutrack_last_synced_at_v2'
 };
 
 type Listener = () => void;
@@ -95,14 +102,24 @@ function setStored<T>(key: string, value: T): void {
 }
 
 // In-memory cache for synchronous, flicker-free rendering
+const initialRoles = getStored<RoleDefinition[]>(STORAGE_KEYS.ROLES, DEFAULT_ROLES).map(r => {
+  if (r.code === 'admin_hr') {
+    const perms = new Set(r.permissions);
+    perms.add('teachers.delete');
+    perms.add('employees.delete');
+    return { ...r, permissions: Array.from(perms) };
+  }
+  return r;
+});
+
 let cache = {
-  roles: getStored<RoleDefinition[]>(STORAGE_KEYS.ROLES, DEFAULT_ROLES),
+  roles: initialRoles,
   users: getStored<UserAccount[]>(STORAGE_KEYS.USERS, DEFAULT_USERS),
   teachers: getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, DEFAULT_TEACHERS),
   employees: getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, []),
   schedules: getStored<Schedule[]>(STORAGE_KEYS.SCHEDULES, DEFAULT_SCHEDULES),
   periods: getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, DEFAULT_TIMETABLE_PERIODS),
-  subjectSchedules: getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, []),
+  subjectSchedules: getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, DEFAULT_SUBJECT_SCHEDULES),
   attendance: getStored<AttendanceRecord[]>(STORAGE_KEYS.ATTENDANCE, []),
   holidays: getStored<Holiday[]>(STORAGE_KEYS.HOLIDAYS, []),
   departments: getStored<Department[]>(STORAGE_KEYS.DEPARTMENTS, DEFAULT_DEPARTMENTS),
@@ -136,6 +153,12 @@ function initFirestoreSync() {
               p => !['telegram.view', 'telegram.configure', 'settings.manage'].includes(p)
             )
           };
+        }
+        if (role.code === 'admin_hr') {
+          const perms = new Set(role.permissions);
+          perms.add('teachers.delete');
+          perms.add('employees.delete');
+          return { ...role, permissions: Array.from(perms) };
         }
         return role;
       });
@@ -228,10 +251,23 @@ function initFirestoreSync() {
 
   // 7. Subject Schedules (Class teaching periods)
   onSnapshot(collection(db, 'subject_schedules'), snapshot => {
-    cache.subjectSchedules = snapshot.docs.map(d => d.data() as TeacherSubjectSchedule);
-    setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, cache.subjectSchedules);
-    notifyListeners();
-  }, err => handleFirestoreError(err, OperationType.GET, 'subject_schedules'));
+    if (!snapshot.empty) {
+      cache.subjectSchedules = snapshot.docs.map(d => d.data() as TeacherSubjectSchedule);
+      setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, cache.subjectSchedules);
+      notifyListeners();
+    } else {
+      const stored = getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, []);
+      const toSave = stored && stored.length > 0 ? stored : DEFAULT_SUBJECT_SCHEDULES;
+      cache.subjectSchedules = toSave;
+      setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, toSave);
+      toSave.forEach(s => {
+        setDoc(doc(db, 'subject_schedules', s.id), s).catch(err =>
+          console.warn('Subject schedule bootstrap notice:', err)
+        );
+      });
+      notifyListeners();
+    }
+  }, err => console.warn('Subject schedules sync notice:', err));
 
   // 8. Attendance records
   onSnapshot(collection(db, 'attendance'), snapshot => {
@@ -361,6 +397,169 @@ function initFirestoreSync() {
 
 // Auto-start sync
 initFirestoreSync();
+
+// ==========================================
+// OFFLINE AUTO-SYNC ENGINE FOR ADMIN & SYSTEM
+// ==========================================
+
+let offlineSyncQueue: OfflineSyncItem[] = getStored<OfflineSyncItem[]>(STORAGE_KEYS.OFFLINE_SYNC_QUEUE, []);
+let syncHistory: SyncHistoryLog[] = getStored<SyncHistoryLog[]>(STORAGE_KEYS.SYNC_HISTORY, []);
+let lastSyncedAt: string | null = getStored<string | null>(STORAGE_KEYS.LAST_SYNCED, null);
+let isSyncing = false;
+
+const syncListeners = new Set<() => void>();
+
+function notifySyncListeners() {
+  syncListeners.forEach(fn => {
+    try {
+      fn();
+    } catch (e) {
+      console.error('Sync listener error:', e);
+    }
+  });
+}
+
+function saveSyncQueue() {
+  setStored(STORAGE_KEYS.OFFLINE_SYNC_QUEUE, offlineSyncQueue);
+}
+
+function saveSyncHistory() {
+  setStored(STORAGE_KEYS.SYNC_HISTORY, syncHistory.slice(0, 60));
+}
+
+/**
+ * Queue or execute a Firestore cloud mutation with automatic offline resilience.
+ * If online: attempts immediate write; on failure or network interruption, queues for auto-sync.
+ * If offline: queues directly and notifies UI.
+ */
+async function queueCloudWrite(
+  collectionName: string,
+  docId: string,
+  action: 'set' | 'update' | 'delete',
+  payload?: any,
+  description?: string
+): Promise<void> {
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  if (isOnline) {
+    try {
+      if (action === 'delete') {
+        await deleteDoc(doc(db, collectionName, docId));
+      } else {
+        await setDoc(doc(db, collectionName, docId), payload, { merge: action === 'update' });
+      }
+      lastSyncedAt = new Date().toISOString();
+      setStored(STORAGE_KEYS.LAST_SYNCED, lastSyncedAt);
+      notifySyncListeners();
+      return;
+    } catch (err: any) {
+      console.warn(`Direct write to ${collectionName}/${docId} unconfirmed, enqueuing for offline auto-sync:`, err);
+    }
+  }
+
+  // Enqueue for auto sync
+  const existingIdx = offlineSyncQueue.findIndex(
+    item => item.collection === collectionName && item.docId === docId
+  );
+
+  const syncItem: OfflineSyncItem = {
+    id: `sync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    collection: collectionName,
+    docId,
+    action,
+    payload,
+    timestamp: Date.now(),
+    retryCount: 0,
+    status: 'pending',
+    description: description || `${action.toUpperCase()} ${collectionName} (${docId})`
+  };
+
+  if (existingIdx >= 0) {
+    offlineSyncQueue[existingIdx] = syncItem;
+  } else {
+    offlineSyncQueue.push(syncItem);
+  }
+
+  saveSyncQueue();
+  notifySyncListeners();
+}
+
+/**
+ * Auto-sync worker: synchronizes all pending offline mutations to Cloud Firestore sequentially.
+ */
+async function processOfflineSyncQueue(): Promise<{ succeeded: number; failed: number }> {
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  if (!isOnline || isSyncing || offlineSyncQueue.length === 0) {
+    return { succeeded: 0, failed: 0 };
+  }
+
+  isSyncing = true;
+  notifySyncListeners();
+
+  let succeeded = 0;
+  let failed = 0;
+  const remainingQueue: OfflineSyncItem[] = [];
+
+  for (const item of offlineSyncQueue) {
+    try {
+      if (item.action === 'delete') {
+        await deleteDoc(doc(db, item.collection, item.docId));
+      } else {
+        await setDoc(doc(db, item.collection, item.docId), item.payload, { merge: item.action === 'update' });
+      }
+      succeeded++;
+      syncHistory.unshift({
+        id: item.id,
+        action: item.action,
+        target: item.description,
+        timestamp: new Date().toLocaleTimeString(),
+        status: 'success'
+      });
+    } catch (err: any) {
+      failed++;
+      item.retryCount = (item.retryCount || 0) + 1;
+      item.lastError = err instanceof Error ? err.message : String(err);
+      item.status = 'failed';
+      remainingQueue.push(item);
+      syncHistory.unshift({
+        id: item.id,
+        action: item.action,
+        target: item.description,
+        timestamp: new Date().toLocaleTimeString(),
+        status: 'failed',
+        error: item.lastError
+      });
+    }
+  }
+
+  offlineSyncQueue = remainingQueue;
+  saveSyncQueue();
+  saveSyncHistory();
+
+  lastSyncedAt = new Date().toISOString();
+  setStored(STORAGE_KEYS.LAST_SYNCED, lastSyncedAt);
+
+  isSyncing = false;
+  notifySyncListeners();
+  notifyListeners();
+
+  return { succeeded, failed };
+}
+
+// Automatically trigger auto-sync when internet reconnects
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.log('Network online detected: auto-syncing pending offline mutations...');
+    processOfflineSyncQueue();
+  });
+
+  // Background auto-sync heartbeat (every 15s when online and items pending)
+  setInterval(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine && offlineSyncQueue.length > 0 && !isSyncing) {
+      processOfflineSyncQueue();
+    }
+  }, 15000);
+}
 
 export const StorageService = {
   subscribe(fn: Listener): () => void {
@@ -498,9 +697,7 @@ export const StorageService = {
     cache.teachers = list;
     setStored(STORAGE_KEYS.TEACHERS, list);
     notifyListeners();
-    setDoc(doc(db, 'teachers', teacher.id), teacher).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, `teachers/${teacher.id}`)
-    );
+    queueCloudWrite('teachers', teacher.id, 'set', teacher, `Create Teacher ${teacher.fullName}`);
   },
   addTeachersBatch(newTeachers: Teacher[], mode: 'append' | 'replace' = 'append') {
     let finalTeachers: Teacher[];
@@ -536,19 +733,49 @@ export const StorageService = {
     notifyListeners();
     const updated = list.find(t => t.id === id);
     if (updated) {
-      setDoc(doc(db, 'teachers', id), updated, { merge: true }).catch(err =>
-        handleFirestoreError(err, OperationType.WRITE, `teachers/${id}`)
-      );
+      queueCloudWrite('teachers', id, 'update', updated, `Update Teacher ${updated.fullName}`);
     }
   },
-  deleteTeacher(id: string) {
+  deleteTeacher(
+    id: string,
+    options: { deleteSchedules?: boolean; deleteUserAccount?: boolean } = { deleteSchedules: true, deleteUserAccount: true }
+  ) {
+    const target = cache.teachers.find(t => t.id === id);
+    const teacherName = target?.fullName || id;
+
+    // 1. Remove teacher from cache and localStorage
     const list = cache.teachers.filter(t => t.id !== id);
     cache.teachers = list;
     setStored(STORAGE_KEYS.TEACHERS, list);
+    queueCloudWrite('teachers', id, 'delete', undefined, `Delete Teacher ${teacherName}`);
+
+    // 2. Cascade delete subject timetable schedules if requested
+    if (options.deleteSchedules) {
+      const remainingSchedules = cache.subjectSchedules.filter(s => s.teacherId !== id);
+      const deletedSchedules = cache.subjectSchedules.filter(s => s.teacherId === id);
+      cache.subjectSchedules = remainingSchedules;
+      setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, remainingSchedules);
+      deletedSchedules.forEach(s => {
+        queueCloudWrite('subject_schedules', s.id, 'delete', undefined, `Delete Schedule slot for ${teacherName}`);
+      });
+    }
+
+    // 3. Cascade delete linked login user account if requested
+    if (options.deleteUserAccount) {
+      const linkedUsers = cache.users.filter(
+        u => u.personId === id || u.id === `usr-${id}` || (target?.email && u.email.toLowerCase() === target.email.toLowerCase())
+      );
+      if (linkedUsers.length > 0) {
+        const remainingUsers = cache.users.filter(u => !linkedUsers.some(lu => lu.id === u.id));
+        cache.users = remainingUsers;
+        setStored(STORAGE_KEYS.USERS, remainingUsers);
+        linkedUsers.forEach(lu => {
+          queueCloudWrite('users', lu.id, 'delete', undefined, `Delete Login Account for ${teacherName}`);
+        });
+      }
+    }
+
     notifyListeners();
-    deleteDoc(doc(db, 'teachers', id)).catch(err =>
-      handleFirestoreError(err, OperationType.DELETE, `teachers/${id}`)
-    );
   },
 
   // Employees
@@ -570,9 +797,7 @@ export const StorageService = {
     cache.employees = list;
     setStored(STORAGE_KEYS.EMPLOYEES, list);
     notifyListeners();
-    setDoc(doc(db, 'employees', employee.id), employee).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, `employees/${employee.id}`)
-    );
+    queueCloudWrite('employees', employee.id, 'set', employee, `Create Staff ${employee.fullName}`);
   },
   updateEmployee(id: string, updates: Partial<Employee>) {
     const list = cache.employees.map(e => (e.id === id ? { ...e, ...updates } : e));
@@ -581,19 +806,29 @@ export const StorageService = {
     notifyListeners();
     const updated = list.find(e => e.id === id);
     if (updated) {
-      setDoc(doc(db, 'employees', id), updated, { merge: true }).catch(err =>
-        handleFirestoreError(err, OperationType.WRITE, `employees/${id}`)
-      );
+      queueCloudWrite('employees', id, 'update', updated, `Update Staff ${updated.fullName}`);
     }
   },
   deleteEmployee(id: string) {
+    const target = cache.employees.find(e => e.id === id);
+    const empName = target?.fullName || id;
     const list = cache.employees.filter(e => e.id !== id);
     cache.employees = list;
     setStored(STORAGE_KEYS.EMPLOYEES, list);
+    queueCloudWrite('employees', id, 'delete', undefined, `Delete Staff ${empName}`);
+
+    // Clean up linked user account
+    const linkedUsers = cache.users.filter(u => u.personId === id || u.id === `usr-${id}`);
+    if (linkedUsers.length > 0) {
+      const remainingUsers = cache.users.filter(u => !linkedUsers.some(lu => lu.id === u.id));
+      cache.users = remainingUsers;
+      setStored(STORAGE_KEYS.USERS, remainingUsers);
+      linkedUsers.forEach(lu => {
+        queueCloudWrite('users', lu.id, 'delete', undefined, `Delete Login Account for ${empName}`);
+      });
+    }
+
     notifyListeners();
-    deleteDoc(doc(db, 'employees', id)).catch(err =>
-      handleFirestoreError(err, OperationType.DELETE, `employees/${id}`)
-    );
   },
 
   // Schedules
@@ -1122,5 +1357,38 @@ export const StorageService = {
     isInitialized = false;
     initFirestoreSync();
     notifyListeners();
+  },
+
+  // Offline Auto-Sync API for Admin
+  getOfflineSyncQueue(): OfflineSyncItem[] {
+    return [...offlineSyncQueue];
+  },
+  getSyncHistory(): SyncHistoryLog[] {
+    return [...syncHistory];
+  },
+  getLastSyncedAt(): string | null {
+    return lastSyncedAt;
+  },
+  isSyncing(): boolean {
+    return isSyncing;
+  },
+  subscribeSync(fn: () => void): () => void {
+    syncListeners.add(fn);
+    return () => {
+      syncListeners.delete(fn);
+    };
+  },
+  triggerOfflineSync(): Promise<{ succeeded: number; failed: number }> {
+    return processOfflineSyncQueue();
+  },
+  clearSyncQueue(): void {
+    offlineSyncQueue = [];
+    saveSyncQueue();
+    notifySyncListeners();
+  },
+  clearSyncHistory(): void {
+    syncHistory = [];
+    saveSyncHistory();
+    notifySyncListeners();
   }
 };

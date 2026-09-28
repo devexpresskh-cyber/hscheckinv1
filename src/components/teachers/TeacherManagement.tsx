@@ -7,6 +7,11 @@ import { Teacher, AttendanceRecord, TeacherSubjectSchedule, Department } from '.
 import { TeacherModal } from './TeacherModal.tsx';
 import { ImportTeacherModal } from './ImportTeacherModal.tsx';
 import { MonSatWeeklyTimetable } from '../schedules/MonSatWeeklyTimetable.tsx';
+import { TeacherOnTeachingList } from './TeacherOnTeachingList.tsx';
+import { DeleteTeacherModal } from './DeleteTeacherModal.tsx';
+import { TeacherMonthlyCalendar } from '../schedules/TeacherMonthlyCalendar.tsx';
+import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
+import { OfflineSyncModal } from '../sync/OfflineSyncModal.tsx';
 import {
   GraduationCap,
   Plus,
@@ -26,13 +31,18 @@ import {
   Eye,
   X,
   KeyRound,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Activity,
+  Layers,
+  Wifi,
+  Database
 } from 'lucide-react';
 
 export const TeacherManagement: React.FC = () => {
   const { currentUser, canAccessDepartment, hasPermission } = useAuth();
   const { showToast } = useNotification();
 
+  const [activeTab, setActiveTab] = useState<'directory' | 'on_teaching' | 'sync_queue'>('directory');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
@@ -40,8 +50,11 @@ export const TeacherManagement: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
+  const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null);
   const [selectedTeacherForHistory, setSelectedTeacherForHistory] = useState<Teacher | null>(null);
   const [selectedTeacherForSchedule, setSelectedTeacherForSchedule] = useState<Teacher | null>(null);
+  const [selectedTeacherForMonthlyCalendar, setSelectedTeacherForMonthlyCalendar] = useState<Teacher | null>(null);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() => StorageService.getSubjectSchedules());
   const [teachers, setTeachers] = useState<Teacher[]>(() => StorageService.getTeachers());
   const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
@@ -115,19 +128,8 @@ export const TeacherManagement: React.FC = () => {
     setEditingTeacher(null);
   };
 
-  const handleDeleteTeacher = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to remove teacher ${name}?`)) {
-      StorageService.deleteTeacher(id);
-      StorageService.addAuditLog({
-        userId: currentUser.id,
-        userName: currentUser.fullName,
-        userRole: currentUser.role,
-        action: 'Deleted Teacher Profile',
-        target: name,
-        ipAddress: '127.0.0.1'
-      });
-      showToast(`Removed teacher ${name}`, 'info');
-    }
+  const handleDeleteTeacher = (teacher: Teacher) => {
+    setTeacherToDelete(teacher);
   };
 
   const handleSendScheduleReminder = (teacher: Teacher) => {
@@ -219,6 +221,98 @@ export const TeacherManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* Sub-tab navigation bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab('directory')}
+            className={`px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'directory'
+                ? 'bg-white text-slate-900 shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <GraduationCap className="w-4 h-4 text-indigo-600" />
+            <span>Faculty Directory</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 text-slate-700 font-bold">
+              {filteredTeachers.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('on_teaching')}
+            className={`px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'on_teaching'
+                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                : 'text-emerald-700 hover:text-emerald-900'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Teachers on Teaching</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              activeTab === 'on_teaching' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              Live Roster
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sync_queue')}
+            className={`px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all cursor-pointer ${
+              activeTab === 'sync_queue'
+                ? 'bg-slate-900 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Offline Auto-Sync</span>
+          </button>
+        </div>
+
+        <OfflineSyncBadge variant="pill" />
+      </div>
+
+      {/* VIEW 1: Teachers On Teaching (Live In-Class Roster) */}
+      {activeTab === 'on_teaching' && (
+        <TeacherOnTeachingList
+          onOpenMonthlySchedule={teacher => setSelectedTeacherForMonthlyCalendar(teacher)}
+          onOpenWeeklySchedule={teacher => {
+            setSubjectSchedules(StorageService.getSubjectSchedules());
+            setSelectedTeacherForSchedule(teacher);
+          }}
+        />
+      )}
+
+      {/* VIEW 2: Offline Auto-Sync Management View */}
+      {activeTab === 'sync_queue' && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Database className="w-5 h-5 text-indigo-600" />
+                <span>Admin Cloud & Offline Synchronization Queue</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                All teacher records, class schedules, and attendance are resiliently cached locally and auto-replicated to Firebase Firestore.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsSyncModalOpen(true)}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+            >
+              Open Full Auto-Sync Center
+            </button>
+          </div>
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+            <span>Pending offline items: <strong className="text-slate-900">{StorageService.getOfflineSyncQueue().length}</strong></span>
+            <span>Last Synced: <strong className="text-slate-900">{StorageService.getLastSyncedAt() ? new Date(StorageService.getLastSyncedAt()!).toLocaleTimeString() : 'Auto heartbeat active'}</strong></span>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 3: Faculty Directory Table */}
+      {activeTab === 'directory' && (
+        <>
       {/* Search & Filter Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         
@@ -400,7 +494,16 @@ export const TeacherManagement: React.FC = () => {
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* View Mon-Sat Weekly Schedule */}
+                          {/* View Monthly Calendar Schedule */}
+                          <button
+                            onClick={() => setSelectedTeacherForMonthlyCalendar(teacher)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                            title="View Monthly Calendar Schedule"
+                          >
+                            <Calendar className="w-4 h-4 text-emerald-600" />
+                          </button>
+
+                          {/* View Mon-Sat Weekly Timetable */}
                           <button
                             onClick={() => {
                               setSubjectSchedules(StorageService.getSubjectSchedules());
@@ -409,7 +512,7 @@ export const TeacherManagement: React.FC = () => {
                             className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                             title="View Mon-Sat Weekly Schedule"
                           >
-                            <CalendarDays className="w-4 h-4 text-indigo-600" />
+                            <Layers className="w-4 h-4 text-indigo-600" />
                           </button>
 
                           {/* View Attendance History */}
@@ -444,14 +547,14 @@ export const TeacherManagement: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Delete Teacher */}
+                          {/* Delete Teacher (In-App Modal) */}
                           {hasPermission('teachers.delete') && (
                             <button
-                              onClick={() => handleDeleteTeacher(teacher.id, teacher.fullName)}
+                              onClick={() => handleDeleteTeacher(teacher)}
                               className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                              title="Delete Teacher"
+                              title="Delete Teacher Profile"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4 text-rose-500" />
                             </button>
                           )}
                         </div>
@@ -471,6 +574,8 @@ export const TeacherManagement: React.FC = () => {
           <span>Department scoped according to your role permission</span>
         </div>
       </div>
+      </>
+      )}
 
       {/* Modal for Add / Edit */}
       <TeacherModal
@@ -635,6 +740,32 @@ export const TeacherManagement: React.FC = () => {
           setTeachers(StorageService.getTeachers());
           showToast(`Successfully imported ${count} teachers`, 'success');
         }}
+      />
+
+      {/* Delete Teacher In-App Confirmation Modal */}
+      <DeleteTeacherModal
+        teacher={teacherToDelete}
+        isOpen={Boolean(teacherToDelete)}
+        onClose={() => setTeacherToDelete(null)}
+        onDeleted={() => {
+          setTeachers(StorageService.getTeachers());
+          setTeacherToDelete(null);
+        }}
+      />
+
+      {/* Monthly Calendar Schedule Modal */}
+      {selectedTeacherForMonthlyCalendar && (
+        <TeacherMonthlyCalendar
+          initialTeacher={selectedTeacherForMonthlyCalendar}
+          isOpenModal={true}
+          onClose={() => setSelectedTeacherForMonthlyCalendar(null)}
+        />
+      )}
+
+      {/* Offline Sync Center Modal */}
+      <OfflineSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
       />
 
     </div>

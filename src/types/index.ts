@@ -145,6 +145,7 @@ export interface TeacherSubjectSchedule {
   endTime: string; // '09:00'
   gracePeriodMinutes: number; // e.g. 10
   hourlyRate?: number; // Optional subject-specific hourly rate override
+  currency?: 'USD' | 'KHR';
   color?: string;
   isActive: boolean;
 }
@@ -409,4 +410,34 @@ export interface SystemSettings {
   requirePinForKiosk?: boolean; // Restrict terminal check-in with teacher personal PIN
   allowSwitchStaffInKiosk?: boolean; // Whether staff dropdown is open or locked
   requireBarcodeScanOnly?: boolean; // Strictly require physical ID barcode scan
+}
+
+export interface OfflineSyncItem {
+  id: string;
+  collection: string;
+  docId: string;
+  action: 'set' | 'update' | 'delete';
+  payload?: any;
+  timestamp: number;
+  retryCount: number;
+  status: 'pending' | 'syncing' | 'failed' | 'synced';
+  description: string;
+  lastError?: string;
+}
+
+export interface SyncHistoryLog {
+  id: string;
+  action: string;
+  target: string;
+  timestamp: string;
+  status: 'success' | 'failed';
+  error?: string;
+}
+
+export interface SyncStatusState {
+  isOnline: boolean;
+  isSyncing: boolean;
+  pendingCount: number;
+  lastSyncedAt: string | null;
+  history: SyncHistoryLog[];
 }

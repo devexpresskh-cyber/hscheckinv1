@@ -4,6 +4,7 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { StorageService } from '../../services/storageService.ts';
+import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
 import {
   Bell,
   Clock,
@@ -192,6 +193,11 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{isScanning ? t('header.scanning', 'Scanning...') : t('header.detectAbsences', 'Detect Absences')}</span>
             </button>
           )}
+
+          {/* Offline Cloud Auto-Sync Badge */}
+          <div className="hidden sm:flex shrink-0">
+            <OfflineSyncBadge variant="pill" />
+          </div>
 
           {/* Telegram Status Badge (Restricted from teachers and employees) */}
           {currentUser.role !== 'teacher' && currentUser.role !== 'employee' && hasPermission('telegram.view') && (

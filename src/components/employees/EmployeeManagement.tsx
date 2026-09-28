@@ -16,7 +16,8 @@ import {
   Edit2,
   Trash2,
   Eye,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 
 export const EmployeeManagement: React.FC = () => {
@@ -29,6 +30,7 @@ export const EmployeeManagement: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedEmpForHistory, setSelectedEmpForHistory] = useState<Employee | null>(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
   const departments = StorageService.getDepartments();
   const employees = StorageService.getEmployees();
@@ -79,19 +81,24 @@ export const EmployeeManagement: React.FC = () => {
     setEditingEmployee(null);
   };
 
-  const handleDeleteEmployee = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to remove employee ${name}?`)) {
-      StorageService.deleteEmployee(id);
-      StorageService.addAuditLog({
-        userId: currentUser.id,
-        userName: currentUser.fullName,
-        userRole: currentUser.role,
-        action: 'Deleted Employee Record',
-        target: name,
-        ipAddress: '127.0.0.1'
-      });
-      showToast(`Removed employee ${name}`, 'info');
-    }
+  const handleDeleteEmployee = (emp: Employee) => {
+    setEmployeeToDelete(emp);
+  };
+
+  const confirmDeleteEmployee = () => {
+    if (!employeeToDelete) return;
+    const { id, fullName } = employeeToDelete;
+    StorageService.deleteEmployee(id);
+    StorageService.addAuditLog({
+      userId: currentUser.id,
+      userName: currentUser.fullName,
+      userRole: currentUser.role,
+      action: 'Deleted Employee Record',
+      target: fullName,
+      ipAddress: '127.0.0.1'
+    });
+    showToast(`Removed employee ${fullName}`, 'info');
+    setEmployeeToDelete(null);
   };
 
   const handleExportCSV = () => {
@@ -327,7 +334,7 @@ export const EmployeeManagement: React.FC = () => {
 
                           {hasPermission('employees.delete') && (
                             <button
-                              onClick={() => handleDeleteEmployee(emp.id, emp.fullName)}
+                              onClick={() => handleDeleteEmployee(emp)}
                               className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                               title="Delete Employee"
                             >
@@ -421,6 +428,45 @@ export const EmployeeManagement: React.FC = () => {
                 className="px-4 py-2 bg-slate-200 rounded-xl text-xs font-bold text-slate-800"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Staff Confirmation In-App Modal */}
+      {employeeToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-rose-800 font-bold text-sm">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <span>Confirm Staff Deletion</span>
+              </div>
+              <button
+                onClick={() => setEmployeeToDelete(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to remove staff member <strong className="text-slate-900">{employeeToDelete.fullName}</strong> ({employeeToDelete.employeeId})? This will delete their staff record and auto-sync to Cloud Firestore.
+              </p>
+            </div>
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setEmployeeToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteEmployee}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Delete Staff Member
               </button>
             </div>
           </div>

@@ -34,6 +34,7 @@ import confetti from 'canvas-confetti';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
 import { MonSatWeeklyTimetable } from './MonSatWeeklyTimetable.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
+import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 
 export const ScheduleManagement: React.FC = () => {
@@ -45,7 +46,7 @@ export const ScheduleManagement: React.FC = () => {
   const todayDayIndex = new Date().getDay();
   const [selectedDay, setSelectedDay] = useState<number>(todayDayIndex);
 
-  const [viewMode, setViewMode] = useState<'daily_schedule' | 'weekly_timetable' | 'subject_schedules' | 'cards'>(
+  const [viewMode, setViewMode] = useState<'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards'>(
     () => (isTeacher ? 'daily_schedule' : 'weekly_timetable')
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -701,6 +702,15 @@ export const ScheduleManagement: React.FC = () => {
               <span>{isKhmer ? 'កាលវិភាគពេញមួយសប្តាហ៍' : 'Weekly Timetable'}</span>
             </button>
             <button
+              onClick={() => setViewMode('monthly_calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                viewMode === 'monthly_calendar' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'កាលវិភាគប្រចាំខែ (Monthly)' : 'Monthly Calendar'}</span>
+            </button>
+            <button
               onClick={() => setViewMode('subject_schedules')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 viewMode === 'subject_schedules' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
@@ -1056,6 +1066,16 @@ export const ScheduleManagement: React.FC = () => {
           canEdit={hasPermission('schedules.edit') && !isTeacher}
           canDelete={hasPermission('schedules.delete') && !isTeacher}
           canCreate={hasPermission('schedules.create') && !isTeacher}
+        />
+      )}
+
+      {/* Monthly Calendar Schedule View */}
+      {viewMode === 'monthly_calendar' && (
+        <TeacherMonthlyCalendar
+          initialTeacher={activeTeacher}
+          onAddScheduleForDay={hasPermission('schedules.create') && !isTeacher ? (dayOfWeek) => {
+            handleOpenAddSubjectForSlot(dayOfWeek);
+          } : undefined}
         />
       )}
 
