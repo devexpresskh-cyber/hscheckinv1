@@ -241,7 +241,7 @@ const MainLayout: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { currentUser, isAuthenticated, isLoading } = useAuth();
   const { isKhmer } = useLanguage();
   const [sysSettings, setSysSettings] = useState(() => StorageService.getSystemSettings());
 
@@ -276,7 +276,7 @@ const AppContent: React.FC = () => {
     );
   }
 
-  return <MainLayout />;
+  return <MainLayout key={currentUser.id} />;
 };
 
 export default function App() {

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
-import { Teacher } from '../../types/index.ts';
 import {
   Building2,
   Lock,
@@ -46,40 +45,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Teacher PIN Login States
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [teacherSearch, setTeacherSearch] = useState('');
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
   const [manualTeacherId, setManualTeacherId] = useState('');
   const [pinDigits, setPinDigits] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [isPinSubmitting, setIsPinSubmitting] = useState(false);
 
-  const systemSettings = StorageService.getSystemSettings();
-
-  // Load active teachers from storage/sync
+  // Clear all credentials when on login page so previous session data is never leaked or prefilled
   useEffect(() => {
-    const loadTeachers = () => {
-      const active = StorageService.getTeachers().filter(t => t.status === 'Active');
-      setTeachers(active);
-    };
+    setPhoneNumber('');
+    setPhonePin('');
+    setManualTeacherId('');
+    setPinDigits('');
+    setIdentifier('');
+    setPassword('');
+    setAuthError(null);
+  }, [setAuthError]);
 
-    loadTeachers();
-    const unsub = StorageService.subscribe(loadTeachers);
-    return unsub;
-  }, []);
-
-  // Filter teachers for the selector
-  const filteredTeachers = teachers.filter(t => {
-    if (!teacherSearch.trim()) return true;
-    const q = teacherSearch.toLowerCase();
-    return (
-      t.fullName.toLowerCase().includes(q) ||
-      (t.khmerName && t.khmerName.toLowerCase().includes(q)) ||
-      t.teacherId.toLowerCase().includes(q) ||
-      (t.subject && t.subject.toLowerCase().includes(q)) ||
-      (t.department && t.department.toLowerCase().includes(q))
-    );
-  });
+  const systemSettings = StorageService.getSystemSettings();
 
   // Handle Phone Number + PIN Login (No SMS OTP / Google phone auth required)
   const handlePhoneSubmit = async (e?: React.FormEvent) => {
@@ -110,6 +92,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     try {
       const success = await loginWithPhone(targetPhone, phonePin);
       if (success) {
+        setPhoneNumber('');
+        setPhonePin('');
         onLoginSuccess?.();
       }
     } finally {
@@ -127,8 +111,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      await loginWithCredentials(identifier, password);
-      onLoginSuccess?.();
+      const success = await loginWithCredentials(identifier, password);
+      if (success) {
+        setIdentifier('');
+        setPassword('');
+        onLoginSuccess?.();
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -175,13 +163,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     try {
       const success = await loginWithPin(targetId, pinDigits);
       if (success) {
+        setManualTeacherId('');
+        setPinDigits('');
         onLoginSuccess?.();
-      } else if (!authError) {
-        setAuthError(
-          isKhmer
-            ? 'លេខកូដសម្ងាត់ PIN មិនត្រឹមត្រូវ។ សូមពិនិត្យលេខសម្ងាត់របស់អ្នកម្តងទៀត។'
-            : 'Incorrect PIN. Please check your PIN code.'
-        );
       }
     } finally {
       setIsPinSubmitting(false);
@@ -341,6 +325,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       autoComplete="tel"
                     />
                   </div>
+
                   <p className="text-[10px] text-slate-400">
                     {isKhmer ? 'គាំទ្រលេខទូរស័ព្ទ Smart, Cellcard, Metfone គ្រប់ប្រព័ន្ធ (មិនប្រើ Google Phone Auth)' : 'Supports all Cambodian mobile operators directly without SMS wait.'}
                   </p>
@@ -412,18 +397,42 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>{isKhmer ? 'លេខសម្គាល់គ្រូ បុគ្គលិក ឬលេខទូរស័ព្ទ៖' : 'Teacher ID, Staff ID, or Phone:'}</span>
+                      <span>{isKhmer ? 'លេខសម្គាល់គ្រូ បុគ្គលិក ឬទូរស័ព្ទ៖' : 'Teacher ID, Staff ID, or Phone:'}</span>
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">TCH / EMP / Phone</span>
                   </label>
-                  <input
-                    type="text"
-                    value={manualTeacherId}
-                    onChange={e => setManualTeacherId(e.target.value)}
-                    placeholder="e.g. 012 345 678, TCH-2026-001 or EMP-201"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none uppercase bg-slate-50 focus:bg-white transition-colors"
-                    autoComplete="username"
-                  />
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={manualTeacherId}
+                      onChange={e => {
+                        setManualTeacherId(e.target.value);
+                        setAuthError(null);
+                      }}
+                      placeholder="e.g. TCH-2026-001, EMP-101, or 012 345 678"
+                      className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none uppercase bg-slate-50 focus:bg-white transition-colors"
+                      autoComplete="off"
+                    />
+                    {manualTeacherId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualTeacherId('');
+                          setAuthError(null);
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1"
+                        aria-label="Clear Teacher ID"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {isKhmer
+                      ? 'បញ្ចូលលេខសម្គាល់គ្រូ (ឧទាហរណ៍ TCH-2026-001) ឬលេខទូរស័ព្ទដែលបានចុះឈ្មោះ'
+                      : 'Enter your assigned Teacher ID (e.g. TCH-2026-001) or registered phone number.'}
+                  </p>
                 </div>
 
                 {/* PIN Code Direct Input Field */}
@@ -433,6 +442,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       <Lock className="w-3.5 h-3.5 text-amber-600" />
                       <span>{isKhmer ? 'លេខកូដសម្ងាត់ PIN (៤ ខ្ទង់)៖' : '4-Digit Security PIN:'}</span>
                     </span>
+                    <span className="text-[10px] text-slate-400">Default PIN: 1234</span>
                   </label>
 
                   <div className="relative">
@@ -460,7 +470,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 {/* Submit PIN Button */}
                 <button
                   type="submit"
-                  disabled={isPinSubmitting || isLoading || pinDigits.length < 4}
+                  disabled={isPinSubmitting || isLoading || pinDigits.length < 4 || !manualTeacherId.trim()}
                   className="w-full mt-2 flex items-center justify-center gap-2 py-3 sm:py-3.5 rounded-xl font-black text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/30 transition-all duration-200 hover:shadow-lg active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isPinSubmitting ? (
@@ -468,7 +478,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   ) : (
                     <>
                       <KeyRound className="w-4 h-4" />
-                      <span>{isKhmer ? 'ចូលប្រើប្រព័ន្ធ' : 'Sign In with PIN'}</span>
+                      <span>{isKhmer ? 'ចូលប្រើប្រព័ន្ធដោយលេខសម្គាល់គ្រូ' : 'Sign In with Teacher ID'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

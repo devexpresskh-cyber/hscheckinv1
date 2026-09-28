@@ -402,6 +402,14 @@ export const StorageService = {
 
   // Users
   getUsers(): UserAccount[] {
+    if (!cache.users || cache.users.length === 0) {
+      const stored = getStored<UserAccount[]>(STORAGE_KEYS.USERS, DEFAULT_USERS);
+      if (stored && stored.length > 0) {
+        cache.users = stored;
+        return stored;
+      }
+      return DEFAULT_USERS;
+    }
     return cache.users;
   },
   saveUsers(users: UserAccount[]) {
@@ -465,6 +473,14 @@ export const StorageService = {
 
   // Teachers
   getTeachers(): Teacher[] {
+    if (!cache.teachers || cache.teachers.length === 0) {
+      const stored = getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, DEFAULT_TEACHERS);
+      if (stored && stored.length > 0) {
+        cache.teachers = stored;
+        return stored;
+      }
+      return DEFAULT_TEACHERS;
+    }
     return cache.teachers;
   },
   saveTeachers(teachers: Teacher[]) {

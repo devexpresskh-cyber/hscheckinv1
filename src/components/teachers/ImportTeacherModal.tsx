@@ -417,7 +417,8 @@ export const ImportTeacherModal: React.FC<ImportTeacherModalProps> = ({
       assignedLocation: r.assignedLocation,
       assignedScheduleId: r.assignedScheduleId,
       hourlyRate: r.hourlyRate || 25,
-      currency: 'USD'
+      currency: 'USD',
+      pinCode: '1234'
     }));
 
     if (importConflictStrategy === 'replace_all') {

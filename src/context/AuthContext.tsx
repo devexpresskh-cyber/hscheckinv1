@@ -4,6 +4,7 @@ import { StorageService } from '../services/storageService.ts';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { phoneNumbersMatch, normalizePhoneNumber } from '../utils/phoneUtils.ts';
+import { matchTeacher, matchEmployee, findStaffPerson } from '../utils/staffMatchUtils.ts';
 
 interface AuthContextType {
   currentUser: UserAccount;
@@ -44,12 +45,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(CURRENT_USER_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        let match = users.find(u => u.id === parsed.id || u.email === parsed.email);
-        if (match) {
-          if (match.role === 'super_admin' && (match.personId === 'tch-001' || match.personId === 'tch-002')) {
-            match = { ...match, personId: undefined };
+        if (parsed && parsed.id && parsed.role) {
+          // If the saved user is a teacher, guarantee role is 'teacher'
+          if (parsed.role === 'teacher' || parsed.personId?.startsWith('tch-') || parsed.id?.includes('tch-')) {
+            return {
+              ...parsed,
+              role: 'teacher'
+            };
           }
-          return match;
+          let match = users.find(u => u.id === parsed.id || u.email === parsed.email);
+          if (match) {
+            if (match.role === 'super_admin' && (match.personId === 'tch-001' || match.personId === 'tch-002')) {
+              match = { ...match, personId: undefined };
+            }
+            return match;
+          }
+          return parsed;
         }
       }
     } catch {
@@ -75,29 +86,102 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  // Keep users and roles updated with StorageService
+  // Keep users and roles updated with StorageService without corrupting teacher sessions
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       const updatedUsers = StorageService.getUsers();
       setUsers(updatedUsers);
       setRoles(StorageService.getRoles());
+
+      // If user is not authenticated, do not do anything
+      const authStatus = localStorage.getItem(AUTH_STATUS_KEY);
+      if (authStatus !== 'true') return;
+
       const currentStillExists = updatedUsers.find(u => u.id === currentUser.id);
       if (currentStillExists) {
-        setCurrentUser(currentStillExists);
-      } else if (updatedUsers.length > 0) {
-        const fallback = updatedUsers.find(u => u.role === 'super_admin') || updatedUsers[0];
-        setCurrentUser(fallback);
-        try {
-          localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(fallback));
-        } catch {}
+        // If current user is a teacher, strictly guarantee their role remains 'teacher'
+        if (currentUser.role === 'teacher' || currentUser.personId?.startsWith('tch-')) {
+          setCurrentUser({
+            ...currentStillExists,
+            role: 'teacher',
+            personId: currentUser.personId || currentStillExists.personId
+          });
+        } else {
+          setCurrentUser(currentStillExists);
+        }
+      } else {
+        // Current user is not in updatedUsers.
+        // If currentUser is a teacher, keep their teacher profile! NEVER fallback to super_admin!
+        if (currentUser.role === 'teacher' || currentUser.personId?.startsWith('tch-')) {
+          const teachers = StorageService.getTeachers();
+          const teacher = teachers.find(
+            t => t.id === currentUser.personId || t.id === currentUser.id.replace(/^usr-/, '')
+          );
+          if (teacher) {
+            const preservedTeacherUser: UserAccount = {
+              ...currentUser,
+              role: 'teacher',
+              personId: teacher.id,
+              fullName: teacher.fullName,
+              khmerName: teacher.khmerName,
+              department: teacher.department,
+              phone: teacher.phone || currentUser.phone
+            };
+            setCurrentUser(preservedTeacherUser);
+            localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(preservedTeacherUser));
+          }
+        } else if (currentUser.role === 'employee' || currentUser.personId?.startsWith('emp-')) {
+          const employees = StorageService.getEmployees();
+          const employee = employees.find(
+            e => e.id === currentUser.personId || e.id === currentUser.id.replace(/^usr-/, '')
+          );
+          if (employee) {
+            const preservedEmployeeUser: UserAccount = {
+              ...currentUser,
+              role: 'employee',
+              personId: employee.id,
+              fullName: employee.fullName,
+              khmerName: employee.khmerName,
+              department: employee.department,
+              phone: employee.phone || currentUser.phone
+            };
+            setCurrentUser(preservedEmployeeUser);
+            localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(preservedEmployeeUser));
+          }
+        }
       }
     });
     return unsub;
-  }, [currentUser.id]);
+  }, [currentUser.id, currentUser.role, currentUser.personId]);
 
   // Listen to Firebase Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
+      const authStatus = localStorage.getItem(AUTH_STATUS_KEY);
+      const savedUserStr = localStorage.getItem(CURRENT_USER_KEY);
+
+      // If user deliberately logged out, do NOT auto sign-in with stale Firebase Google session
+      if (authStatus === 'false') {
+        if (fbUser) {
+          signOut(auth).catch(() => {});
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // If the saved user in localStorage is a PIN, Phone, or Credentials account (not a Google account),
+      // do NOT overwrite it with a background Firebase Google session
+      if (savedUserStr && fbUser) {
+        try {
+          const parsed = JSON.parse(savedUserStr);
+          if (parsed && !parsed.id?.startsWith('usr-google-') && parsed.email?.toLowerCase() !== fbUser.email?.toLowerCase()) {
+            signOut(auth).catch(() => {});
+            setIsLoading(false);
+            return;
+          }
+        } catch {}
+      }
+
       if (fbUser && fbUser.email) {
         const updatedUsers = StorageService.getUsers();
         let match = updatedUsers.find(u => u.email.toLowerCase() === fbUser.email?.toLowerCase());
@@ -144,7 +228,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const currentRole = roles.find(r => r.code === currentUser.role) || roles[0];
+  const currentRole = React.useMemo(() => {
+    // If the active user is a teacher or tied to a teacher profile, guarantee teacher role definition
+    if (currentUser.role === 'teacher' || currentUser.personId?.startsWith('tch-') || currentUser.id?.includes('tch-')) {
+      const teacherRole = roles.find(r => r.code === 'teacher');
+      if (teacherRole) return teacherRole;
+    }
+    if (currentUser.role === 'employee' || currentUser.personId?.startsWith('emp-') || currentUser.id?.includes('emp-')) {
+      const empRole = roles.find(r => r.code === 'employee');
+      if (empRole) return empRole;
+    }
+    return roles.find(r => r.code === currentUser.role) || roles.find(r => r.code === 'teacher') || roles[0];
+  }, [roles, currentUser.role, currentUser.personId, currentUser.id]);
 
   const hasPermission = (permission: Permission): boolean => {
     // Teachers and employees are strictly barred from Telegram settings and System settings
@@ -171,7 +266,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return currentUser.department.toLowerCase() === departmentName.toLowerCase();
   };
 
-  const switchUser = (user: UserAccount) => {
+  const switchUser = async (user: UserAccount) => {
+    // Detach Firebase if switching away from Google account
+    if (!user.id.startsWith('usr-google-')) {
+      try {
+        if (auth.currentUser) {
+          await signOut(auth);
+        }
+      } catch {}
+    }
     setCurrentUser(user);
     setIsAuthenticated(true);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
@@ -194,6 +297,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async () => {
     setIsLoading(true);
     setAuthError(null);
+    // Clear old session
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.setItem(AUTH_STATUS_KEY, 'false');
     try {
       const result = await signInWithPopup(auth, googleAuthProvider);
       const fbUser = result.user;
@@ -262,35 +368,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithCredentials = async (identifier: string, _password?: string): Promise<boolean> => {
     setIsLoading(true);
     setAuthError(null);
+    // Clear old session first so previous account state never leaks
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+    } catch {}
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.setItem(AUTH_STATUS_KEY, 'false');
+
     const rawTrimmed = identifier.trim();
     const trimmed = rawTrimmed.toLowerCase();
     
-    // 1. Find matching existing user (by email, id, personId, phone, or name)
-    let matched = users.find(u => 
-      u.email.toLowerCase() === trimmed ||
-      u.id.toLowerCase() === trimmed ||
-      (u.personId && u.personId.toLowerCase() === trimmed) ||
-      (u.phone && phoneNumbersMatch(rawTrimmed, u.phone)) ||
-      (u.phoneNumber && phoneNumbersMatch(rawTrimmed, u.phoneNumber)) ||
-      u.fullName.toLowerCase() === trimmed ||
-      u.fullName.toLowerCase().startsWith(trimmed)
-    );
+    // 1. First, check teachers directly by smart matching
+    const allTeachers = StorageService.getTeachers();
+    const matchedTeacher = allTeachers.find(t => matchTeacher(rawTrimmed, t));
 
-    // 2. If not found in user list, check teachers directly by Teacher ID, Phone, Email, or Name
-    if (!matched) {
-      const allTeachers = StorageService.getTeachers();
-      const matchedTeacher = allTeachers.find(t => 
-        t.teacherId.toLowerCase() === trimmed ||
-        t.id.toLowerCase() === trimmed ||
-        (t.employeeId && t.employeeId.toLowerCase() === trimmed) ||
-        (t.phone && phoneNumbersMatch(rawTrimmed, t.phone)) ||
-        (t.email && t.email.toLowerCase() === trimmed) ||
-        t.fullName.toLowerCase() === trimmed ||
-        t.fullName.toLowerCase().includes(trimmed) ||
-        (t.khmerName && t.khmerName.includes(trimmed))
+    if (matchedTeacher) {
+      const updatedUsers = StorageService.getUsers();
+      let matched = updatedUsers.find(
+        u =>
+          (u.personId && u.personId === matchedTeacher.id) ||
+          u.id === `usr-${matchedTeacher.id}` ||
+          (matchedTeacher.email && u.email.toLowerCase() === matchedTeacher.email.toLowerCase()) ||
+          (matchedTeacher.phone && u.phone && phoneNumbersMatch(matchedTeacher.phone, u.phone))
       );
 
-      if (matchedTeacher) {
+      const isNew = !matched;
+      if (!matched) {
         matched = {
           id: `usr-${matchedTeacher.id}`,
           email: matchedTeacher.email || `${matchedTeacher.teacherId.toLowerCase()}@edutrack.edu`,
@@ -300,28 +405,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           department: matchedTeacher.department,
           phone: matchedTeacher.phone,
           personId: matchedTeacher.id,
+          pinCode: matchedTeacher.pinCode || '1234',
           status: 'Active',
           avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
           createdAt: new Date().toISOString()
         };
-        StorageService.addUser(matched);
+      } else {
+        matched = {
+          ...matched,
+          role: 'teacher',
+          personId: matchedTeacher.id,
+          department: matchedTeacher.department,
+          phone: matchedTeacher.phone || matched.phone
+        };
       }
+
+      setCurrentUser(matched);
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matched));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+
+      if (isNew) {
+        StorageService.addUser(matched);
+      } else {
+        StorageService.updateUser(matched.id, matched);
+      }
+
+      StorageService.addAuditLog({
+        userId: matched.id,
+        userName: matched.fullName,
+        userRole: 'teacher',
+        action: 'User Sign In',
+        target: `Signed in as Teacher ${matched.fullName}`,
+        ipAddress: '127.0.0.1'
+      });
+      setIsLoading(false);
+      return true;
     }
 
-    // 3. If not found in teachers, check employees directly
-    if (!matched) {
-      const allEmployees = StorageService.getEmployees();
-      const matchedEmployee = allEmployees.find(e => 
-        e.employeeId.toLowerCase() === trimmed ||
-        e.id.toLowerCase() === trimmed ||
-        (e.phone && phoneNumbersMatch(rawTrimmed, e.phone)) ||
-        (e.email && e.email.toLowerCase() === trimmed) ||
-        e.fullName.toLowerCase() === trimmed ||
-        e.fullName.toLowerCase().includes(trimmed) ||
-        (e.khmerName && e.khmerName.includes(trimmed))
+    // 2. Check employees directly
+    const allEmployees = StorageService.getEmployees();
+    const matchedEmployee = allEmployees.find(e => matchEmployee(rawTrimmed, e));
+
+    if (matchedEmployee) {
+      const updatedUsers = StorageService.getUsers();
+      let matched = updatedUsers.find(
+        u =>
+          (u.personId && u.personId === matchedEmployee.id) ||
+          u.id === `usr-${matchedEmployee.id}` ||
+          (matchedEmployee.email && u.email.toLowerCase() === matchedEmployee.email.toLowerCase()) ||
+          (matchedEmployee.phone && u.phone && phoneNumbersMatch(matchedEmployee.phone, u.phone))
       );
 
-      if (matchedEmployee) {
+      const isNew = !matched;
+      if (!matched) {
         matched = {
           id: `usr-${matchedEmployee.id}`,
           email: matchedEmployee.email || `${matchedEmployee.employeeId.toLowerCase()}@edutrack.edu`,
@@ -331,25 +468,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           department: matchedEmployee.department,
           phone: matchedEmployee.phone,
           personId: matchedEmployee.id,
+          pinCode: matchedEmployee.pinCode || '1234',
           status: 'Active',
           avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
           createdAt: new Date().toISOString()
         };
-        StorageService.addUser(matched);
+      } else {
+        matched = {
+          ...matched,
+          role: 'employee',
+          personId: matchedEmployee.id,
+          department: matchedEmployee.department,
+          phone: matchedEmployee.phone || matched.phone
+        };
       }
-    }
 
-    if (matched) {
       setCurrentUser(matched);
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matched));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
+
+      if (isNew) {
+        StorageService.addUser(matched);
+      } else {
+        StorageService.updateUser(matched.id, matched);
+      }
+
       StorageService.addAuditLog({
         userId: matched.id,
         userName: matched.fullName,
-        userRole: matched.role,
+        userRole: 'employee',
         action: 'User Sign In',
-        target: `Signed in as ${matched.fullName} (${matched.role})`,
+        target: `Signed in as Staff ${matched.fullName}`,
+        ipAddress: '127.0.0.1'
+      });
+      setIsLoading(false);
+      return true;
+    }
+
+    // 3. Find matching dedicated administrative system user
+    let matchedAdmin = users.find(u => 
+      u.email.toLowerCase() === trimmed ||
+      u.id.toLowerCase() === trimmed ||
+      (u.phone && phoneNumbersMatch(rawTrimmed, u.phone)) ||
+      (u.phoneNumber && phoneNumbersMatch(rawTrimmed, u.phoneNumber)) ||
+      u.fullName.toLowerCase() === trimmed
+    );
+
+    if (matchedAdmin) {
+      // Guard: if user has a teacher ID or profile, strictly enforce teacher role
+      if (
+        matchedAdmin.personId?.startsWith('tch-') ||
+        allTeachers.some(t => t.id === matchedAdmin?.personId || t.email?.toLowerCase() === matchedAdmin?.email.toLowerCase())
+      ) {
+        matchedAdmin = {
+          ...matchedAdmin,
+          role: 'teacher'
+        };
+      }
+
+      setCurrentUser(matchedAdmin);
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedAdmin));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+      StorageService.addAuditLog({
+        userId: matchedAdmin.id,
+        userName: matchedAdmin.fullName,
+        userRole: matchedAdmin.role,
+        action: 'User Sign In',
+        target: `Signed in as ${matchedAdmin.fullName} (${matchedAdmin.role})`,
         ipAddress: '127.0.0.1'
       });
       setIsLoading(false);
@@ -364,6 +551,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithPin = async (identifier: string, pin: string): Promise<boolean> => {
     setIsLoading(true);
     setAuthError(null);
+    // Clear old session first so previous account state never leaks
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+    } catch {}
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.setItem(AUTH_STATUS_KEY, 'false');
+
     const rawTrimmedId = identifier.trim();
     const trimmedId = rawTrimmedId.toLowerCase();
     const trimmedPin = pin.trim();
@@ -378,41 +574,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const allTeachers = StorageService.getTeachers();
     const allEmployees = StorageService.getEmployees();
 
-    // Check if matching an administrator or system user by phone, email, or id
-    if (trimmedId) {
-      const foundUser = allUsers.find(
-        u =>
-          (u.phone && phoneNumbersMatch(rawTrimmedId, u.phone)) ||
-          (u.phoneNumber && phoneNumbersMatch(rawTrimmedId, u.phoneNumber)) ||
-          u.email.toLowerCase() === trimmedId ||
-          u.id.toLowerCase() === trimmedId
-      );
-
-      if (foundUser) {
-        const requiredPin = foundUser.pinCode || '1234';
-        if (trimmedPin !== requiredPin) {
-          setIsLoading(false);
-          setAuthError(`Incorrect PIN for account ${foundUser.fullName}. Please enter the correct PIN code.`);
-          return false;
-        }
-
-        setCurrentUser(foundUser);
-        setIsAuthenticated(true);
-        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(foundUser));
-        localStorage.setItem(AUTH_STATUS_KEY, 'true');
-        StorageService.addAuditLog({
-          userId: foundUser.id,
-          userName: foundUser.fullName,
-          userRole: foundUser.role,
-          action: 'PIN Login',
-          target: `Signed in as ${foundUser.fullName} (${foundUser.role})`,
-          ipAddress: '127.0.0.1'
-        });
-        setIsLoading(false);
-        return true;
-      }
-    }
-
     // 1. Locate specific teacher or employee
     let matchedPerson:
       | { type: 'teacher'; data: (typeof allTeachers)[0] }
@@ -420,32 +581,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       | undefined;
 
     if (trimmedId) {
-      const foundTeacher = allTeachers.find(
-        t =>
-          t.teacherId.toLowerCase() === trimmedId ||
-          t.id.toLowerCase() === trimmedId ||
-          (t.employeeId && t.employeeId.toLowerCase() === trimmedId) ||
-          (t.phone && phoneNumbersMatch(rawTrimmedId, t.phone)) ||
-          (t.email && t.email.toLowerCase() === trimmedId) ||
-          t.fullName.toLowerCase() === trimmedId ||
-          t.fullName.toLowerCase().includes(trimmedId) ||
-          (t.khmerName && t.khmerName.toLowerCase().includes(trimmedId))
-      );
-      if (foundTeacher) {
-        matchedPerson = { type: 'teacher', data: foundTeacher };
+      // Prioritize smart teacher and employee matching (Teacher ID, short ID, suffix, name, phone, etc.)
+      const staffMatch = findStaffPerson(rawTrimmedId, allTeachers, allEmployees);
+      if (staffMatch) {
+        matchedPerson = staffMatch;
       } else {
-        const foundEmployee = allEmployees.find(
-          e =>
-            e.employeeId.toLowerCase() === trimmedId ||
-            e.id.toLowerCase() === trimmedId ||
-            (e.phone && phoneNumbersMatch(rawTrimmedId, e.phone)) ||
-            (e.email && e.email.toLowerCase() === trimmedId) ||
-            e.fullName.toLowerCase() === trimmedId ||
-            e.fullName.toLowerCase().includes(trimmedId) ||
-            (e.khmerName && e.khmerName.toLowerCase().includes(trimmedId))
+        // Fallback: check if matching an administrator or system user by phone, email, or id
+        const foundUser = allUsers.find(
+          u =>
+            (u.phone && phoneNumbersMatch(rawTrimmedId, u.phone)) ||
+            (u.phoneNumber && phoneNumbersMatch(rawTrimmedId, u.phoneNumber)) ||
+            u.email.toLowerCase() === trimmedId ||
+            u.id.toLowerCase() === trimmedId ||
+            (u.fullName && u.fullName.toLowerCase() === trimmedId)
         );
-        if (foundEmployee) {
-          matchedPerson = { type: 'employee', data: foundEmployee };
+
+        if (foundUser) {
+          // If this user is tied to a teacher/employee, resolve to their profile
+          const t = allTeachers.find(
+            item =>
+              item.id === foundUser.personId ||
+              (item.email && foundUser.email && item.email.toLowerCase() === foundUser.email.toLowerCase()) ||
+              (item.phone && foundUser.phone && phoneNumbersMatch(item.phone, foundUser.phone)) ||
+              (foundUser.id && foundUser.id.replace(/^usr-/, '') === item.id)
+          );
+
+          if (t) {
+            matchedPerson = { type: 'teacher', data: t };
+          } else {
+            const e = allEmployees.find(
+              item =>
+                item.id === foundUser.personId ||
+                (item.email && foundUser.email && item.email.toLowerCase() === foundUser.email.toLowerCase()) ||
+                (item.phone && foundUser.phone && phoneNumbersMatch(item.phone, foundUser.phone)) ||
+                (foundUser.id && foundUser.id.replace(/^usr-/, '') === item.id)
+            );
+            if (e) {
+              matchedPerson = { type: 'employee', data: e };
+            }
+          }
+
+          if (!matchedPerson) {
+            // Strictly check if foundUser is a teacher account
+            if (foundUser.role === 'teacher' || foundUser.id.startsWith('usr-tch-') || foundUser.personId?.startsWith('tch-')) {
+              const requiredPin = foundUser.pinCode || '1234';
+              if (trimmedPin !== requiredPin) {
+                setIsLoading(false);
+                setAuthError(`Incorrect PIN for Teacher ${foundUser.fullName}. Please enter the correct PIN code.`);
+                return false;
+              }
+
+              const safeTeacherUser: UserAccount = {
+                ...foundUser,
+                role: 'teacher'
+              };
+              setCurrentUser(safeTeacherUser);
+              setIsAuthenticated(true);
+              localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(safeTeacherUser));
+              localStorage.setItem(AUTH_STATUS_KEY, 'true');
+              StorageService.addAuditLog({
+                userId: safeTeacherUser.id,
+                userName: safeTeacherUser.fullName,
+                userRole: 'teacher',
+                action: 'Staff PIN Login',
+                target: `Signed in via PIN as Teacher ${safeTeacherUser.fullName}`,
+                ipAddress: '127.0.0.1'
+              });
+              setIsLoading(false);
+              return true;
+            }
+
+            const requiredPin = foundUser.pinCode || '1234';
+            if (trimmedPin !== requiredPin) {
+              setIsLoading(false);
+              setAuthError(`Incorrect PIN for account ${foundUser.fullName}. Please enter the correct PIN code.`);
+              return false;
+            }
+
+            // Ensure non-admin users don't get super_admin
+            const isSuperAdminEmail =
+              foundUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+              foundUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+              foundUser.email?.toLowerCase() === 'singsabmc@gmail.com';
+
+            const validatedUser: UserAccount = {
+              ...foundUser,
+              role: isSuperAdminEmail ? 'super_admin' : (foundUser.role === 'super_admin' ? 'teacher' : foundUser.role)
+            };
+
+            setCurrentUser(validatedUser);
+            setIsAuthenticated(true);
+            localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(validatedUser));
+            localStorage.setItem(AUTH_STATUS_KEY, 'true');
+            StorageService.addAuditLog({
+              userId: validatedUser.id,
+              userName: validatedUser.fullName,
+              userRole: validatedUser.role,
+              action: 'PIN Login',
+              target: `Signed in as ${validatedUser.fullName} (${validatedUser.role})`,
+              ipAddress: '127.0.0.1'
+            });
+            setIsLoading(false);
+            return true;
+          }
         }
       }
     } else {
@@ -468,7 +706,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!matchedPerson) {
       setIsLoading(false);
-      setAuthError('Staff or Teacher account not found. Please enter your Phone Number, Teacher ID, or Staff ID.');
+      setAuthError(`Teacher or Staff account not found for "${rawTrimmedId}". Please verify your Teacher ID (e.g. TCH-2026-001 or TCH-001) or phone number.`);
       return false;
     }
 
@@ -489,7 +727,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
-    // 3. Find or create UserAccount
+    // 3. Find or create UserAccount with synchronized PIN and phone
     const updatedUsers = StorageService.getUsers();
     const pData = matchedPerson.data;
     let matchedUser = updatedUsers.find(
@@ -500,6 +738,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         u.fullName.toLowerCase() === pData.fullName.toLowerCase()
     );
 
+    const isNew = !matchedUser;
     if (!matchedUser) {
       matchedUser = {
         id: `usr-${pData.id}`,
@@ -515,24 +754,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatarUrl: pData.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
         createdAt: new Date().toISOString()
       };
-      StorageService.addUser(matchedUser);
     } else {
-      if (matchedUser.role !== matchedPerson.type || matchedUser.personId !== pData.id || !matchedUser.pinCode || !matchedUser.phone) {
-        matchedUser = {
-          ...matchedUser,
-          role: matchedPerson.type,
-          personId: pData.id,
-          phone: pData.phone || matchedUser.phone,
-          pinCode: pData.pinCode || '1234'
-        };
-        StorageService.updateUser(matchedUser.id, matchedUser);
-      }
+      matchedUser = {
+        ...matchedUser,
+        role: matchedPerson.type,
+        personId: pData.id,
+        phone: pData.phone || matchedUser.phone,
+        pinCode: pData.pinCode || matchedUser.pinCode || '1234',
+        avatarUrl: pData.photoUrl || matchedUser.avatarUrl
+      };
     }
 
+    // Set active state FIRST before triggering any StorageService listeners
     setCurrentUser(matchedUser);
     setIsAuthenticated(true);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedUser));
     localStorage.setItem(AUTH_STATUS_KEY, 'true');
+
+    if (isNew) {
+      StorageService.addUser(matchedUser);
+    } else {
+      StorageService.updateUser(matchedUser.id, matchedUser);
+    }
 
     StorageService.addAuditLog({
       userId: matchedUser.id,
@@ -551,6 +794,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithPhone = async (phone: string, pin: string): Promise<boolean> => {
     setIsLoading(true);
     setAuthError(null);
+    // Clear old session first so previous account state never leaks
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+    } catch {}
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.setItem(AUTH_STATUS_KEY, 'false');
+
     const trimmedPhone = phone.trim();
     const trimmedPin = pin.trim();
 
@@ -570,38 +822,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const allTeachers = StorageService.getTeachers();
     const allEmployees = StorageService.getEmployees();
 
-    // 1. Check if matches any registered system user (Super Admin, HR, Manager)
-    const matchedUser = allUsers.find(
-      u =>
-        (u.phone && phoneNumbersMatch(trimmedPhone, u.phone)) ||
-        (u.phoneNumber && phoneNumbersMatch(trimmedPhone, u.phoneNumber))
-    );
-
-    if (matchedUser) {
-      const requiredPin = matchedUser.pinCode || '1234';
-      if (trimmedPin !== requiredPin) {
-        setIsLoading(false);
-        setAuthError(`Incorrect PIN for account ${matchedUser.fullName}. Please check your PIN code.`);
-        return false;
-      }
-
-      setCurrentUser(matchedUser);
-      setIsAuthenticated(true);
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedUser));
-      localStorage.setItem(AUTH_STATUS_KEY, 'true');
-      StorageService.addAuditLog({
-        userId: matchedUser.id,
-        userName: matchedUser.fullName,
-        userRole: matchedUser.role,
-        action: 'Phone Login',
-        target: `Signed in via Phone (${trimmedPhone}) as ${matchedUser.fullName}`,
-        ipAddress: '127.0.0.1'
-      });
-      setIsLoading(false);
-      return true;
-    }
-
-    // 2. Check if matches any registered teacher
+    // 1. Check if matches any registered teacher first
     const matchedTeacher = allTeachers.find(
       t => t.phone && phoneNumbersMatch(trimmedPhone, t.phone)
     );
@@ -621,6 +842,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (matchedTeacher.email && u.email.toLowerCase() === matchedTeacher.email.toLowerCase())
       );
 
+      const isNew = !userAcc;
       if (!userAcc) {
         userAcc = {
           id: `usr-${matchedTeacher.id}`,
@@ -636,22 +858,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&h=200&fit=crop',
           createdAt: new Date().toISOString()
         };
-        StorageService.addUser(userAcc);
       } else {
-        if (!userAcc.phone || userAcc.phone !== matchedTeacher.phone || !userAcc.pinCode) {
-          userAcc = {
-            ...userAcc,
-            phone: matchedTeacher.phone,
-            pinCode: matchedTeacher.pinCode || userAcc.pinCode || '1234'
-          };
-          StorageService.updateUser(userAcc.id, userAcc);
-        }
+        userAcc = {
+          ...userAcc,
+          role: 'teacher',
+          personId: matchedTeacher.id,
+          phone: matchedTeacher.phone,
+          pinCode: matchedTeacher.pinCode || userAcc.pinCode || '1234',
+          avatarUrl: matchedTeacher.photoUrl || userAcc.avatarUrl
+        };
       }
 
+      // Set active user state FIRST
       setCurrentUser(userAcc);
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userAcc));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
+
+      if (isNew) {
+        StorageService.addUser(userAcc);
+      } else {
+        StorageService.updateUser(userAcc.id, userAcc);
+      }
+
       StorageService.addAuditLog({
         userId: userAcc.id,
         userName: userAcc.fullName,
@@ -664,7 +893,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     }
 
-    // 3. Check if matches any registered employee
+    // 2. Check if matches any registered employee
     const matchedEmployee = allEmployees.find(
       e => e.phone && phoneNumbersMatch(trimmedPhone, e.phone)
     );
@@ -684,6 +913,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (matchedEmployee.email && u.email.toLowerCase() === matchedEmployee.email.toLowerCase())
       );
 
+      const isNew = !userAcc;
       if (!userAcc) {
         userAcc = {
           id: `usr-${matchedEmployee.id}`,
@@ -699,28 +929,87 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
           createdAt: new Date().toISOString()
         };
-        StorageService.addUser(userAcc);
       } else {
-        if (!userAcc.phone || userAcc.phone !== matchedEmployee.phone || !userAcc.pinCode) {
-          userAcc = {
-            ...userAcc,
-            phone: matchedEmployee.phone,
-            pinCode: matchedEmployee.pinCode || userAcc.pinCode || '1234'
-          };
-          StorageService.updateUser(userAcc.id, userAcc);
-        }
+        userAcc = {
+          ...userAcc,
+          role: 'employee',
+          personId: matchedEmployee.id,
+          phone: matchedEmployee.phone,
+          pinCode: matchedEmployee.pinCode || userAcc.pinCode || '1234',
+          avatarUrl: matchedEmployee.photoUrl || userAcc.avatarUrl
+        };
       }
 
+      // Set active user state FIRST
       setCurrentUser(userAcc);
       setIsAuthenticated(true);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userAcc));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
+
+      if (isNew) {
+        StorageService.addUser(userAcc);
+      } else {
+        StorageService.updateUser(userAcc.id, userAcc);
+      }
+
       StorageService.addAuditLog({
         userId: userAcc.id,
         userName: userAcc.fullName,
         userRole: 'employee',
         action: 'Phone Login',
         target: `Signed in via Phone (${trimmedPhone}) as ${userAcc.fullName}`,
+        ipAddress: '127.0.0.1'
+      });
+      setIsLoading(false);
+      return true;
+    }
+
+    // 3. Check if matches any registered administrator or system user
+    const matchedUser = allUsers.find(
+      u =>
+        (u.phone && phoneNumbersMatch(trimmedPhone, u.phone)) ||
+        (u.phoneNumber && phoneNumbersMatch(trimmedPhone, u.phoneNumber))
+    );
+
+    if (matchedUser) {
+      const requiredPin = matchedUser.pinCode || '1234';
+      if (trimmedPin !== requiredPin) {
+        setIsLoading(false);
+        setAuthError(`Incorrect PIN for account ${matchedUser.fullName}. Please check your PIN code.`);
+        return false;
+      }
+
+      // Guard: if user has a teacher ID or profile, strictly enforce teacher role
+      const isTeacher =
+        matchedUser.role === 'teacher' ||
+        matchedUser.personId?.startsWith('tch-') ||
+        allTeachers.some(
+          t =>
+            t.id === matchedUser.personId ||
+            (t.phone && phoneNumbersMatch(trimmedPhone, t.phone)) ||
+            (matchedUser.email && t.email?.toLowerCase() === matchedUser.email.toLowerCase())
+        );
+
+      const isSuperAdminEmail =
+        matchedUser.email?.toLowerCase() === 'ktasa7038@gmail.com' ||
+        matchedUser.email?.toLowerCase() === 'planningtks585@gmail.com' ||
+        matchedUser.email?.toLowerCase() === 'singsabmc@gmail.com';
+
+      const effectiveUser: UserAccount = {
+        ...matchedUser,
+        role: isTeacher ? 'teacher' : (isSuperAdminEmail ? 'super_admin' : (matchedUser.role === 'super_admin' ? 'teacher' : matchedUser.role))
+      };
+
+      setCurrentUser(effectiveUser);
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(effectiveUser));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+      StorageService.addAuditLog({
+        userId: effectiveUser.id,
+        userName: effectiveUser.fullName,
+        userRole: effectiveUser.role,
+        action: 'Phone Login',
+        target: `Signed in via Phone (${trimmedPhone}) as ${effectiveUser.fullName}`,
         ipAddress: '127.0.0.1'
       });
       setIsLoading(false);
@@ -751,9 +1040,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
 
+    // Completely clear active user storage keys
     localStorage.removeItem(CURRENT_USER_KEY);
     localStorage.setItem(AUTH_STATUS_KEY, 'false');
+
+    // Reset currentUser to default sanitized admin so memory state is fresh
+    const sanitizedAdmin = defaultAdmin.role === 'super_admin' && (defaultAdmin.personId === 'tch-001' || defaultAdmin.personId === 'tch-002')
+      ? { ...defaultAdmin, personId: undefined }
+      : defaultAdmin;
+    setCurrentUser(sanitizedAdmin);
     setIsAuthenticated(false);
+    setAuthError(null);
     setIsLoading(false);
   };
 
