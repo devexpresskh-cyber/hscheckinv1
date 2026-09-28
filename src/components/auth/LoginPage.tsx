@@ -177,21 +177,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     <div className={`min-h-screen w-full flex flex-col justify-between bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 p-4 sm:p-6 lg:p-8 ${isKhmer ? 'font-khmer' : 'font-sans'}`}>
       
       {/* Top Bar with School Name and Language Switcher */}
-      <header className="flex items-center justify-between max-w-5xl mx-auto w-full pt-2">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
-            <Building2 className="w-6 h-6" />
+      <header className="flex items-center justify-between max-w-5xl mx-auto w-full pt-2 shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 shrink-0">
+            <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm sm:text-base text-white tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-bold text-xs sm:text-base text-white tracking-tight truncate">
                 {isKhmer ? systemSettings.khmerOrgName : systemSettings.organizationName}
               </span>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
                 School MIS
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-medium hidden sm:block">
+            <p className="text-[11px] sm:text-xs text-slate-400 font-medium hidden sm:block truncate">
               {isKhmer
                 ? 'ប្រព័ន្ធគ្រប់គ្រងវត្តមាន កាលវិភាគ និងប្រតិបត្តិការសាលារៀន'
                 : 'Faculty Attendance, Timetable & Operational Management'}
@@ -202,24 +202,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         {/* Language Switcher */}
         <button
           onClick={toggleLanguage}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all backdrop-blur-md"
+          className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all backdrop-blur-md shrink-0 ml-2"
         >
-          <Languages className="w-4 h-4 text-indigo-400" />
-          <span>{language === 'km' ? '🇰🇭 ភាសាខ្មែរ' : '🇬🇧 English'}</span>
+          <Languages className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400 shrink-0" />
+          <span className="whitespace-nowrap">{language === 'km' ? '🇰🇭 ភាសាខ្មែរ' : '🇬🇧 English'}</span>
         </button>
       </header>
 
-      {/* Center Auth Card */}
-      <div className="flex-1 flex items-center justify-center py-6 sm:py-10">
-        <div className="w-full max-w-xl bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
+      {/* Center Auth Card - strictly flex-col centered with full width up to max-w-lg */}
+      <main className="flex-1 flex flex-col items-center justify-center py-6 sm:py-10 w-full max-w-lg mx-auto">
+        <div className="w-full bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
           
           {/* Card Header */}
-          <div className="p-6 bg-gradient-to-b from-indigo-50/70 to-white border-b border-slate-100 text-center relative">
+          <div className="p-5 sm:p-6 bg-gradient-to-b from-indigo-50/70 to-white border-b border-slate-100 text-center relative">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 mb-2">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
               <span>{isKhmer ? 'ច្រកចូលប្រព័ន្ធដែលមានសុវត្ថិភាព' : 'Institutional Secure Login'}</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
               {isKhmer ? 'ចូលប្រើប្រព័ន្ធ EduTrack' : 'Sign in to EduTrack'}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
@@ -229,21 +229,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </p>
 
             {/* Mode Switcher Tabs */}
-            <div className="mt-5 grid grid-cols-3 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
+            <div className="mt-4 sm:mt-5 grid grid-cols-3 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode('phone');
                   setAuthError(null);
                 }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all ${
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl transition-all text-[11px] sm:text-xs ${
                   authMode === 'phone'
                     ? 'bg-white text-emerald-700 shadow-sm border border-slate-200/60 font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="truncate">{isKhmer ? 'លេខទូរស័ព្ទ' : 'Phone & PIN'}</span>
+                <Smartphone className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">{isKhmer ? 'ទូរស័ព្ទ' : 'Phone'}</span>
               </button>
 
               <button
@@ -252,14 +252,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   setAuthMode('pin');
                   setAuthError(null);
                 }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all ${
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl transition-all text-[11px] sm:text-xs ${
                   authMode === 'pin'
                     ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60 font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="truncate">{isKhmer ? 'លេខកូដគ្រូ' : 'Staff ID & PIN'}</span>
+                <KeyRound className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">{isKhmer ? 'កូដគ្រូ PIN' : 'Staff PIN'}</span>
               </button>
 
               <button
@@ -268,19 +268,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   setAuthMode('standard');
                   setAuthError(null);
                 }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all ${
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl transition-all text-[11px] sm:text-xs ${
                   authMode === 'standard'
                     ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60 font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Mail className="w-3.5 h-3.5 text-slate-500" />
-                <span className="truncate">{isKhmer ? 'Google / Email' : 'Email & Google'}</span>
+                <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="truncate">{isKhmer ? 'Email' : 'Email'}</span>
               </button>
             </div>
           </div>
 
-          <div className="p-6 sm:p-8 space-y-6">
+          <div className="p-5 sm:p-7 space-y-5 sm:space-y-6">
             
             {/* Error Message */}
             {authError && (
@@ -322,7 +322,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       value={phoneNumber}
                       onChange={e => setPhoneNumber(e.target.value)}
                       placeholder="012 345 678 / 12 345 678"
-                      className="w-full pl-22 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none bg-slate-50 focus:bg-white transition-colors"
+                      className="w-full pl-20 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none bg-slate-50 focus:bg-white transition-colors"
                       autoComplete="tel"
                     />
                   </div>
@@ -613,10 +613,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         </div>
 
         {/* Install Mobile App Quick Prompt */}
-        <div className="mt-4">
+        <div className="w-full mt-4">
           <PWAInstallButton variant="login" />
         </div>
-      </div>
+      </main>
 
       {/* Bottom Footer Info */}
       <footer className="text-center text-xs text-slate-400 py-2">

@@ -18,7 +18,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const [showModal, setShowModal] = useState(false);
 
   // If already running inside standalone app mode, hide or don't show the prompt
-  if (isInstalled && variant === 'banner') {
+  if (isInstalled && (variant === 'banner' || variant === 'login')) {
     return null;
   }
 
@@ -83,13 +83,13 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
 
       {variant === 'login' && (
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleClick}
           type="button"
-          className={`w-full flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl bg-indigo-50/80 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-900 text-xs font-bold transition-all shadow-xs active:scale-[0.99] ${className}`}
+          className={`w-full flex items-center justify-center gap-2.5 px-4 py-2.5 sm:py-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 hover:border-white/20 text-indigo-200 hover:text-white text-xs font-bold transition-all shadow-sm backdrop-blur-md active:scale-[0.99] ${className}`}
         >
-          <Smartphone className="w-4 h-4 text-indigo-600" />
-          <span>
-            {isKhmer ? '📱 ដំឡើងកម្មវិធីលើអេក្រង់ទូរស័ព្ទ (Install to Home Screen)' : '📱 Install App to Mobile Home Screen'}
+          <Smartphone className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span className="truncate">
+            {isKhmer ? '📱 ដំឡើងកម្មវិធីលើអេក្រង់ទូរស័ព្ទ (Install App)' : '📱 Install App to Mobile Home Screen'}
           </span>
         </button>
       )}
