@@ -44,9 +44,13 @@ export const AttendanceEngine = {
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   },
 
-  // Get current date 'YYYY-MM-DD'
+  // Get current date 'YYYY-MM-DD' in local timezone
   getCurrentDateString(): string {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   },
 
   // Haversine distance in meters
@@ -95,7 +99,7 @@ export const AttendanceEngine = {
     subjectSchedule: TeacherSubjectSchedule,
     currentTimeStr: string,
     dateStr?: string,
-    earlyBufferMinutes: number = 0 // Strictly 0: Do not allow teacher to check in before schedule
+    earlyBufferMinutes: number = 30 // Allow teachers to check in up to 30 mins before class starts to prepare!
   ): {
     isValid: boolean;
     reason?: 'day_mismatch' | 'too_early' | 'too_late';
@@ -130,27 +134,28 @@ export const AttendanceEngine = {
     const sEnd = this.timeToMinutes(subjectSchedule.endTime);
     const cur = this.timeToMinutes(currentTimeStr);
 
-    // Strict rule: Do not allow teacher to check in before schedule
-    if (cur < sStart) {
+    // Early buffer: allow check-in up to earlyBufferMinutes (default 30) before class start
+    const earliestAllowed = Math.max(0, sStart - earlyBufferMinutes);
+    if (cur < earliestAllowed) {
       const waitMins = sStart - cur;
       return {
         isValid: false,
         reason: 'too_early',
         startsInMinutes: waitMins,
-        message: `Cannot scan in: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) has not started yet (Current time: ${currentTimeStr}). Starts in ${waitMins} minute(s). Teachers are not allowed to check in before schedule.`,
-        khmerMessage: `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ មិនទាន់ដល់ម៉ោងបង្រៀនមុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" (${subjectSchedule.startTime} - ${subjectSchedule.endTime}) នៅឡើយទេ (នៅសល់ ${waitMins} នាទី)។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចូលមុនម៉ោងកាលវិភាគឡើយ។`
+        message: `Cannot scan in yet: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) starts in ${waitMins} minute(s). Early check-in opens ${earlyBufferMinutes}m before class.`,
+        khmerMessage: `មិនទាន់ដល់ម៉ោងស្កេនចូលទេ៖ មុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" (${subjectSchedule.startTime} - ${subjectSchedule.endTime}) នៅសល់ ${waitMins} នាទីទៀតទើបចាប់ផ្តើម (អាចស្កេនមុនបាន ${earlyBufferMinutes} នាទី)។`
       };
     }
 
-    // Strict rule: Do not allow teacher to check in overtime / after schedule end-time
+    // Schedule has ended
     if (cur >= sEnd) {
       const pastMins = cur - sEnd;
       return {
         isValid: false,
         reason: 'too_late',
         endedMinutesAgo: pastMins,
-        message: `Cannot scan in: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) ended at ${subjectSchedule.endTime} (ended ${pastMins}m ago). Teachers are strictly prohibited from checking in overtime / after schedule end-time.`,
-        khmerMessage: `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបង្រៀនមុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" បានចប់នៅម៉ោង ${subjectSchedule.endTime} រួចហើយ (ម៉ោងបច្ចុប្បន្ន៖ ${currentTimeStr})។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចូលពេលហួសម៉ោងកាលវិភាគ ឬថែមម៉ោងឡើយ។`
+        message: `Schedule ended: "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) ended at ${subjectSchedule.endTime} (${pastMins}m ago).`,
+        khmerMessage: `ម៉ោងបង្រៀនបានបញ្ចប់៖ មុខវិជ្ជា "${subjectSchedule.khmerSubject || subjectSchedule.subject}" បានចប់នៅម៉ោង ${subjectSchedule.endTime} រួចហើយ (${pastMins} នាទីមុន)។`
       };
     }
 
@@ -214,6 +219,8 @@ export const AttendanceEngine = {
     ipAddress?: string;
     deviceInfo?: string;
     bypassGeofence?: boolean;
+    bypassScheduleWindow?: boolean;
+    allowEarlyCheckInMinutes?: number;
   }): CheckInResult {
     const today = this.getCurrentDateString();
     const currentTime = params.customTime || this.getCurrentTimeString();
@@ -224,39 +231,62 @@ export const AttendanceEngine = {
       ? StorageService.getSubjectSchedules().find(s => s.id === params.subjectScheduleId)
       : undefined;
 
-    // Strict requirement: Teachers MUST check in by subject schedule at the PRESENT TIME
+    // Requirement: Teachers check in by subject schedule
     if (params.personType === 'teacher') {
-      const teacherSubjects = StorageService.getSubjectSchedulesForTeacher(params.personId);
+      const allTeachers = StorageService.getTeachers();
 
-      if (teacherSubjects.length === 0) {
-        return {
-          success: false,
-          message: `Check-in rejected: Teachers must check in by subject schedule, but ${params.personName} has no subject class schedules assigned. Please assign or create a subject schedule first.`
-        };
-      }
-
+      // If a specific subject schedule was selected/provided
       if (subjectSchedule) {
-        // A specific schedule was requested (e.g. from kiosk card selection or barcode scan)
-        // Verify it belongs to this teacher
-        if (subjectSchedule.teacherId !== params.personId) {
+        const schedTeacher = allTeachers.find(
+          t => t.id === subjectSchedule!.teacherId ||
+               t.teacherId?.toLowerCase() === subjectSchedule!.teacherId?.toLowerCase() ||
+               t.fullName.toLowerCase() === subjectSchedule!.teacherName.toLowerCase()
+        );
+
+        const currentTeacher = allTeachers.find(
+          t => t.id === params.personId ||
+               t.teacherId?.toLowerCase() === params.personId?.toLowerCase() ||
+               t.fullName.toLowerCase() === params.personName.toLowerCase()
+        );
+
+        const isOwner =
+          subjectSchedule.teacherId === params.personId ||
+          subjectSchedule.teacherId.toLowerCase() === params.personId.toLowerCase() ||
+          subjectSchedule.teacherName.toLowerCase() === params.personName.toLowerCase() ||
+          (schedTeacher && currentTeacher && (schedTeacher.id === currentTeacher.id || schedTeacher.teacherId === currentTeacher.teacherId)) ||
+          params.bypassScheduleWindow; // admin or manual schedule check-in
+
+        if (!isOwner) {
           return {
             success: false,
             message: `Check-in rejected: Selected subject schedule (${subjectSchedule.subject}) does not belong to ${params.personName}.`
           };
         }
 
-        // Strict enforcement: Do not allow teacher to scan in other different schedule that is not present time
-        const timeCheck = this.isSubjectScheduleAtPresentTime(subjectSchedule, currentTime, today);
-        if (!timeCheck.isValid) {
-          return {
-            success: false,
-            message: timeCheck.message || `Check-in denied: Selected schedule "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) is not at the present time (${currentTime}). Teachers are not allowed to scan into schedules that are not at the present time.`
-          };
+        // Check time window if not bypassed
+        if (!params.bypassScheduleWindow) {
+          const earlyBuffer = params.allowEarlyCheckInMinutes ?? 30;
+          const timeCheck = this.isSubjectScheduleAtPresentTime(subjectSchedule, currentTime, today, earlyBuffer);
+          if (!timeCheck.isValid) {
+            return {
+              success: false,
+              message: timeCheck.message || `Check-in denied: Selected schedule "${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime}) is not in active window.`
+            };
+          }
         }
       } else {
-        // Teacher scanned without specifying a subject -> Auto-find the scheduled class active at the PRESENT TIME
+        const teacherSubjects = StorageService.getSubjectSchedulesForTeacher(params.personId);
+        if (teacherSubjects.length === 0) {
+          return {
+            success: false,
+            message: `Check-in rejected: Teachers must check in by subject schedule, but ${params.personName} has no subject class schedules assigned. Please assign or create a subject schedule first.`
+          };
+        }
+
+        // Teacher scanned without specifying a subject -> Auto-find the scheduled class active at the PRESENT TIME (with early buffer)
+        const earlyBuffer = params.allowEarlyCheckInMinutes ?? 30;
         const activeNow = teacherSubjects.find(s => {
-          return this.isSubjectScheduleAtPresentTime(s, currentTime, today).isValid;
+          return this.isSubjectScheduleAtPresentTime(s, currentTime, today, earlyBuffer).isValid;
         });
 
         if (activeNow) {
@@ -278,20 +308,22 @@ export const AttendanceEngine = {
     const scheduledStartMins = this.timeToMinutes(scheduledStartTime);
     const scheduledEndMins = this.timeToMinutes(scheduledEndTime);
 
-    // Strict Universal Validation: Do not allow teacher to check in BEFORE schedule
-    if (params.personType === 'teacher' && currentMins < scheduledStartMins) {
+    // Validation: Early check-in window
+    const earlyBuffer = params.allowEarlyCheckInMinutes ?? 30;
+    const earliestAllowedMins = Math.max(0, scheduledStartMins - earlyBuffer);
+    if (!params.bypassScheduleWindow && params.personType === 'teacher' && currentMins < earliestAllowedMins) {
       const waitMins = scheduledStartMins - currentMins;
       const targetLabel = subjectSchedule
         ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
         : `shift "${schedule.name}" (${schedule.startTime} - ${schedule.endTime})`;
       return {
         success: false,
-        message: `Check-in denied: Current time (${currentTime}) is before scheduled start time (${scheduledStartTime}) for ${targetLabel}. Starts in ${waitMins} minute(s). Teachers are not allowed to check in before schedule.`
+        message: `Check-in denied: Current time (${currentTime}) is before check-in window for ${targetLabel}. Starts in ${waitMins} minute(s). Early check-in opens ${earlyBuffer}m before class.`
       };
     }
 
-    // Strict Universal Validation: Do not allow teacher or staff to scan in if over scheduled end-time or overtime
-    if (currentMins >= scheduledEndMins) {
+    // Validation: Over scheduled end-time check
+    if (!params.bypassScheduleWindow && currentMins >= scheduledEndMins) {
       const targetLabel = subjectSchedule
         ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
         : `shift "${schedule.name}" (${schedule.startTime} - ${schedule.endTime})`;

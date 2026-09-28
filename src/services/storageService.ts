@@ -978,8 +978,31 @@ export const StorageService = {
     });
   },
   getSubjectSchedulesForTeacher(teacherId: string, dayOfWeek?: number): TeacherSubjectSchedule[] {
+    const rawId = (teacherId || '').trim();
+    const lowId = rawId.toLowerCase();
+    const matchedTeacher = cache.teachers.find(
+      t => t.id === rawId ||
+           t.id?.toLowerCase() === lowId ||
+           t.teacherId?.toLowerCase() === lowId ||
+           t.fullName?.toLowerCase() === lowId
+    );
+
+    const validIds = new Set<string>();
+    if (rawId) validIds.add(lowId);
+    if (matchedTeacher) {
+      if (matchedTeacher.id) validIds.add(matchedTeacher.id.toLowerCase());
+      if (matchedTeacher.teacherId) validIds.add(matchedTeacher.teacherId.toLowerCase());
+    }
+
     return cache.subjectSchedules.filter(s => {
-      if (s.teacherId !== teacherId || !s.isActive) return false;
+      if (!s.isActive) return false;
+      const sTeacherId = (s.teacherId || '').trim().toLowerCase();
+      const matchesId = validIds.has(sTeacherId);
+      const matchesName = matchedTeacher && s.teacherName &&
+        s.teacherName.trim().toLowerCase() === matchedTeacher.fullName.trim().toLowerCase();
+
+      if (!matchesId && !matchesName) return false;
+
       if (dayOfWeek !== undefined) {
         if (s.daysOfWeek && Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
           return s.daysOfWeek.includes(dayOfWeek);

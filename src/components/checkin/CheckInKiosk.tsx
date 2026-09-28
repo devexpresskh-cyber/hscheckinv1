@@ -278,7 +278,10 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   // Today's date/day is used to show ONLY the teacher's schedule for the current day.
   // The filter supports the common schedule field names used by different data versions.
   const todayDate = new Date();
-  const todayStr = todayDate.toISOString().split('T')[0];
+  const year = todayDate.getFullYear();
+  const month = String(todayDate.getMonth() + 1).padStart(2, '0');
+  const day = String(todayDate.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
   const todayDayIndex = todayDate.getDay();
   const todayDayName = todayDate.toLocaleDateString('en-US', { weekday: 'long' });
   const todayDayShortName = todayDate.toLocaleDateString('en-US', { weekday: 'short' });
@@ -290,6 +293,11 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         const scheduleDate = sub.date ?? sub.scheduledDate ?? sub.scheduleDate;
         if (scheduleDate) {
           return String(scheduleDate).slice(0, 10) === todayStr;
+        }
+
+        // Support recurring daysOfWeek array
+        if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
+          return sub.daysOfWeek.includes(todayDayIndex);
         }
 
         // Otherwise match the recurring day-of-week field.
@@ -402,18 +410,27 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const currentScheduledStartTime = isTeacher && activeSubject ? activeSubject.startTime : activeSchedule.startTime;
   const currentScheduledEndTime = isTeacher && activeSubject ? activeSubject.endTime : activeSchedule.endTime;
 
+  const startMins = AttendanceEngine.timeToMinutes(currentScheduledStartTime);
+  const endMins = AttendanceEngine.timeToMinutes(currentScheduledEndTime);
+  const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
+  const earlyBufferMinutes = 30; // 30 minutes early window
+
   const isBeforeStartTime = isTeacher && activeSubject
-    ? AttendanceEngine.timeToMinutes(effectiveTime) < AttendanceEngine.timeToMinutes(currentScheduledStartTime)
+    ? curMins < Math.max(0, startMins - earlyBufferMinutes)
     : false;
 
-  const isOverEndTime = AttendanceEngine.timeToMinutes(effectiveTime) >= AttendanceEngine.timeToMinutes(currentScheduledEndTime);
+  const isEarlyArrival = isTeacher && activeSubject
+    ? curMins < startMins && curMins >= Math.max(0, startMins - earlyBufferMinutes)
+    : false;
+
+  const isOverEndTime = curMins >= endMins;
 
   const isBeforeEndTime = isTeacher && activeSubject
-    ? AttendanceEngine.timeToMinutes(effectiveTime) < AttendanceEngine.timeToMinutes(currentScheduledEndTime)
+    ? curMins < endMins
     : false;
 
   const isOvertimeCheckout = isTeacher && activeSubject
-    ? AttendanceEngine.timeToMinutes(effectiveTime) > AttendanceEngine.timeToMinutes(currentScheduledEndTime) + 15
+    ? curMins > endMins + 15
     : false;
 
   // Selected subject attendance record for today (if teacher)
@@ -1268,16 +1285,18 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                 Boolean(currentRecord?.checkInTime) ||
                 (isTeacher && !activeSubject) ||
                 (isTeacher && isBeforeStartTime) ||
-                (isTeacher && !isCurrentSubjectPresentTime) ||
+                (isTeacher && !isCurrentSubjectPresentTime && !isEarlyArrival) ||
                 isOverEndTime
               }
               className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
                 currentRecord?.checkInTime ||
                 (isTeacher && !activeSubject) ||
                 (isTeacher && isBeforeStartTime) ||
-                (isTeacher && !isCurrentSubjectPresentTime) ||
+                (isTeacher && !isCurrentSubjectPresentTime && !isEarlyArrival) ||
                 isOverEndTime
                   ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
+                  : isEarlyArrival
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:shadow-xl'
                   : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:shadow-xl'
               }`}
             >
@@ -1285,7 +1304,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                 <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-rose-500" />
               ) : isTeacher && isBeforeStartTime ? (
                 <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
-              ) : isTeacher && !isCurrentSubjectPresentTime ? (
+              ) : isTeacher && !isCurrentSubjectPresentTime && !isEarlyArrival ? (
                 <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-slate-400" />
               ) : (
                 <CheckCircle2 className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
@@ -1299,6 +1318,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — ហួសម៉ោងបញ្ចប់' : 'CANNOT SCAN IN — OVER END-TIME')
                   : isTeacher && isBeforeStartTime
                   ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — មិនទាន់ដល់ម៉ោង' : 'CANNOT SCAN IN — BEFORE SCHEDULE')
+                  : isTeacher && isEarlyArrival && activeSubject
+                  ? (isKhmer ? `ស្កេនចូលមុនម៉ោង៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `EARLY CHECK IN — ${activeSubject.subject}`)
                   : isTeacher && !isCurrentSubjectPresentTime
                   ? (isKhmer ? 'មិនមែនជាម៉ោងបង្រៀនបច្ចុប្បន្ន' : 'CANNOT SCAN IN — NOT PRESENT TIME')
                   : isTeacher && activeSubject
@@ -1313,7 +1334,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   : isOverEndTime
                   ? (isKhmer ? `កាលវិភាគបានបញ្ចប់នៅម៉ោង ${currentScheduledEndTime}។ ម៉ោងបច្ចុប្បន្ន៖ ${effectiveTime}។ ហាមស្កេនចូលពេលហួសម៉ោងបញ្ចប់។` : `Schedule ended at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Scanning in after end-time is strictly prohibited.`)
                   : isTeacher && isBeforeStartTime
-                  ? (isKhmer ? `ម៉ោងបង្រៀនចាប់ផ្តើមនៅម៉ោង ${currentScheduledStartTime} (នៅសល់ ${AttendanceEngine.timeToMinutes(currentScheduledStartTime) - AttendanceEngine.timeToMinutes(effectiveTime)} នាទី)។ ហាមស្កេនចូលមុនម៉ោងកាលវិភាគ។` : `Class starts at ${currentScheduledStartTime}. Current time: ${effectiveTime}. Checking in before schedule is strictly prohibited.`)
+                  ? (isKhmer ? `ម៉ោងបង្រៀនចាប់ផ្តើមនៅម៉ោង ${currentScheduledStartTime} (នៅសល់ ${startMins - curMins} នាទី)។ អាចស្កេនមុនបាន ${earlyBufferMinutes} នាទី។` : `Class starts at ${currentScheduledStartTime}. Starts in ${startMins - curMins}m. Early check-in opens ${earlyBufferMinutes}m before class.`)
+                  : isTeacher && isEarlyArrival && activeSubject
+                  ? (isKhmer ? `មកដល់មុនម៉ោង (ចាប់ផ្តើម ${activeSubject.startTime}) • វត្តមាន៖ ទាន់ពេល` : `Early preparation check-in (Class starts ${activeSubject.startTime}) • Status: On Time`)
                   : isTeacher && !isCurrentSubjectPresentTime
                   ? (activeSubjectTimeCheck?.khmerMessage || activeSubjectTimeCheck?.message || (isKhmer ? 'មិនអនុញ្ញាតឱ្យស្កេនចូលម៉ោងដែលមិនមែនជាពេលបច្ចុប្បន្នឡើយ' : 'Teachers can only scan in during present class hours'))
                   : isTeacher && activeSubject

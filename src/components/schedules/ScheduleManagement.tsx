@@ -657,37 +657,39 @@ export const ScheduleManagement: React.FC = () => {
     { index: 0, shortEn: 'Sun', shortKm: 'អាទិត្យ', fullEn: 'Sunday', fullKm: 'ថ្ងៃអាទិត្យ' }
   ];
 
-  const handleTeacherClassCheckIn = (sub: TeacherSubjectSchedule) => {
+  const handleTeacherClassCheckIn = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
     const curTime = AttendanceEngine.getCurrentTimeString();
     const curMins = AttendanceEngine.timeToMinutes(curTime);
     const startMins = AttendanceEngine.timeToMinutes(sub.startTime);
     const endMins = AttendanceEngine.timeToMinutes(sub.endTime);
 
-    if (curMins < startMins) {
+    // Resolve assigned teacher for this class schedule
+    const assignedTeacher = teachers.find(
+      t => t.id === sub.teacherId ||
+           t.teacherId?.toLowerCase() === sub.teacherId?.toLowerCase() ||
+           t.fullName.toLowerCase() === sub.teacherName.toLowerCase()
+    ) || (activeTeacher && (activeTeacher.id === sub.teacherId || activeTeacher.teacherId === sub.teacherId) ? activeTeacher : null);
+
+    const targetTeacherId = assignedTeacher?.id || sub.teacherId;
+    const targetTeacherName = assignedTeacher?.fullName || sub.teacherName;
+    const targetTeacherKhmer = assignedTeacher?.khmerName || sub.khmerTeacherName;
+    const targetDept = assignedTeacher?.department || 'Academic & Curriculum';
+
+    // Allow early check-in buffer: 30 minutes before class
+    const earlyBuffer = 30;
+    const earliestMins = Math.max(0, startMins - earlyBuffer);
+    const canOverride = !isTeacher || hasPermission('schedules.create') || hasPermission('attendance.edit') || forceAdminOverride;
+
+    if (!canOverride && curMins < earliestMins) {
       const waitMins = startMins - curMins;
       showToast(
         isKhmer
-          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលមុនម៉ោងទេ៖ ម៉ោងបង្រៀន "${sub.khmerSubject || sub.subject}" ចាប់ផ្តើមនៅម៉ោង ${sub.startTime} (នៅសល់ ${waitMins} នាទី)។`
-          : `Cannot check in before schedule: Class starts at ${sub.startTime} (starts in ${waitMins}m).`,
+          ? `មិនទាន់ដល់ម៉ោងស្កេនចូលទេ៖ ម៉ោងបង្រៀន "${sub.khmerSubject || sub.subject}" ចាប់ផ្តើមនៅម៉ោង ${sub.startTime} (នៅសល់ ${waitMins} នាទី)។ អាចស្កេនមុនបាន ${earlyBuffer} នាទី។`
+          : `Cannot check in yet: Class starts at ${sub.startTime} (starts in ${waitMins}m). Early check-in opens ${earlyBuffer}m before class.`,
         'error'
       );
       return;
     }
-
-    if (curMins >= endMins) {
-      showToast(
-        isKhmer
-          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបង្រៀន "${sub.khmerSubject || sub.subject}" បានបញ្ចប់នៅម៉ោង ${sub.endTime} រួចហើយ! ហាមស្កេនចូលពេលថែមម៉ោង។`
-          : `Cannot check in overtime: Class ended at ${sub.endTime}. Overtime check-in is prohibited.`,
-        'error'
-      );
-      return;
-    }
-
-    const targetTeacherId = activeTeacher?.id || currentUser.personId || currentUser.id;
-    const targetTeacherName = activeTeacher?.fullName || currentUser.fullName;
-    const targetTeacherKhmer = activeTeacher?.khmerName || currentUser.khmerName;
-    const targetDept = activeTeacher?.department || currentUser.department || 'Academic';
 
     const result = AttendanceEngine.processCheckIn({
       personId: targetTeacherId,
@@ -696,26 +698,42 @@ export const ScheduleManagement: React.FC = () => {
       personType: 'teacher',
       department: targetDept,
       subjectScheduleId: sub.id,
-      customTime: curTime
+      customTime: curTime,
+      allowEarlyCheckInMinutes: 30,
+      bypassScheduleWindow: canOverride || curMins >= endMins
     });
 
     if (result.success) {
       confetti({ particleCount: 40, spread: 50 });
       showToast(
-        isKhmer ? `ស្កេនចូលជោគជ័យសម្រាប់មុខវិជ្ជា ${sub.khmerSubject || sub.subject}` : result.message,
+        isKhmer
+          ? `ស្កេនចូលជោគជ័យសម្រាប់ ${targetTeacherName} - ${sub.khmerSubject || sub.subject}`
+          : `Check-in successful for ${targetTeacherName} - ${sub.subject}`,
         'success'
       );
+      setAttendanceList(StorageService.getAttendance());
     } else {
       showToast(result.message, 'error');
     }
   };
 
-  const handleTeacherClassCheckOut = (sub: TeacherSubjectSchedule) => {
+  const handleTeacherClassCheckOut = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
     const curTime = AttendanceEngine.getCurrentTimeString();
     const curMins = AttendanceEngine.timeToMinutes(curTime);
     const endMins = AttendanceEngine.timeToMinutes(sub.endTime);
 
-    if (curMins < endMins) {
+    // Resolve assigned teacher
+    const assignedTeacher = teachers.find(
+      t => t.id === sub.teacherId ||
+           t.teacherId?.toLowerCase() === sub.teacherId?.toLowerCase() ||
+           t.fullName.toLowerCase() === sub.teacherName.toLowerCase()
+    );
+
+    const targetTeacherId = assignedTeacher?.id || sub.teacherId;
+    const targetTeacherName = assignedTeacher?.fullName || sub.teacherName;
+    const canOverride = !isTeacher || hasPermission('schedules.create') || hasPermission('attendance.edit') || forceAdminOverride;
+
+    if (!canOverride && curMins < endMins) {
       const waitMins = endMins - curMins;
       showToast(
         isKhmer
@@ -726,20 +744,6 @@ export const ScheduleManagement: React.FC = () => {
       return;
     }
 
-    if (curMins > endMins + 15) {
-      const overtimeMins = curMins - endMins;
-      showToast(
-        isKhmer
-          ? `មិនអនុញ្ញាតឱ្យស្កេនចេញថែមម៉ោងទេ៖ ម៉ោងបច្ចុប្បន្ន (${curTime}) បានហួសម៉ោងបញ្ចប់ (${sub.endTime}) ចំនួន ${overtimeMins} នាទីហើយ។`
-          : `Cannot check out overtime: ${overtimeMins}m past end-time (${sub.endTime}). Overtime check-out is prohibited.`,
-        'error'
-      );
-      return;
-    }
-
-    const targetTeacherId = activeTeacher?.id || currentUser.personId || currentUser.id;
-    const targetTeacherName = activeTeacher?.fullName || currentUser.fullName;
-
     const result = AttendanceEngine.processCheckOut({
       personId: targetTeacherId,
       personName: targetTeacherName,
@@ -749,9 +753,12 @@ export const ScheduleManagement: React.FC = () => {
 
     if (result.success) {
       showToast(
-        isKhmer ? `ស្កេនចេញជោគជ័យសម្រាប់មុខវិជ្ជា ${sub.khmerSubject || sub.subject}` : result.message,
+        isKhmer
+          ? `ស្កេនចេញជោគជ័យសម្រាប់ ${targetTeacherName} - ${sub.khmerSubject || sub.subject}`
+          : result.message,
         'success'
       );
+      setAttendanceList(StorageService.getAttendance());
     } else {
       showToast(result.message, 'error');
     }
@@ -760,13 +767,12 @@ export const ScheduleManagement: React.FC = () => {
   const renderClassCard = (sub: TeacherSubjectSchedule, idx: number) => {
     // Find attendance record for this class today
     const isClassToday = selectedDay === todayDayIndex;
-    const targetPersonId = activeTeacher?.id || currentUser.personId || currentUser.id;
     const todayRec = attendanceList.find(
       a =>
-        (a.personId === targetPersonId ||
-          a.personName.toLowerCase() === currentUser.fullName.toLowerCase()) &&
         a.date === todayStr &&
-        a.subjectScheduleId === sub.id
+        (a.subjectScheduleId === sub.id ||
+         (sub.teacherId && a.personId === sub.teacherId && (a.subject === sub.subject || a.periodName === sub.periodName)) ||
+         (sub.teacherName && a.personName?.toLowerCase() === sub.teacherName?.toLowerCase() && (a.subject === sub.subject || a.periodName === sub.periodName)))
     );
 
     const isCheckedIn = Boolean(todayRec?.checkInTime);
@@ -878,36 +884,63 @@ export const ScheduleManagement: React.FC = () => {
         {isClassToday && (
           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
             {!isCheckedIn ? (
-              curMins < sStart ? (
+              curMins < sStart - 30 && isTeacher ? (
                 <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold cursor-not-allowed">
-                  <Lock className="w-3.5 h-3.5 text-amber-500" />
-                  <span>{isKhmer ? `មិនទាន់ដល់ម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Before Schedule (Starts ${sub.startTime})`}</span>
+                  <Clock className="w-3.5 h-3.5 text-amber-500" />
+                  <span>
+                    {isKhmer
+                      ? `មិនទាន់ដល់ម៉ោង (ចាប់ផ្តើម ${sub.startTime})`
+                      : `Upcoming Class (Starts ${sub.startTime})`}
+                  </span>
                 </div>
-              ) : curMins >= sEnd ? (
-                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold cursor-not-allowed">
-                  <Lock className="w-3.5 h-3.5 text-rose-500" />
-                  <span>{isKhmer ? `ហួសម៉ោងបញ្ចប់ (${sub.endTime})` : `Over End-Time (${sub.endTime})`}</span>
-                </div>
+              ) : curMins >= sEnd && isTeacher ? (
+                <button
+                  type="button"
+                  onClick={() => handleTeacherClassCheckIn(sub, true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
+                  title="Class period ended. Click to record late attendance"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>
+                    {isKhmer
+                      ? `ស្កេនចូលម៉ោងបង្រៀន (Late Check In)`
+                      : `Record Late Check-In`}
+                  </span>
+                </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => handleTeacherClassCheckIn(sub)}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
+                  className={`w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer ${
+                    curMins < sStart ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500'
+                  }`}
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>{isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class'}</span>
+                  <span>
+                    {!isTeacher
+                      ? (isKhmer ? `ស្កេនវត្តមាន៖ ${sub.teacherName}` : `Record Attendance: ${sub.teacherName}`)
+                      : curMins < sStart
+                      ? (isKhmer ? `ស្កេនចូលមុនម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Early Check In (Starts ${sub.startTime})`)
+                      : (isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class')}
+                  </span>
                 </button>
               )
             ) : !isCheckedOut ? (
-              curMins < sEnd ? (
-                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold cursor-not-allowed">
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>{isKhmer ? `កំពុងបង្រៀន (ចប់ម៉ោង ${sub.endTime})` : `In Class (Ends at ${sub.endTime})`}</span>
-                </div>
-              ) : curMins > sEnd + 15 ? (
-                <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold cursor-not-allowed">
-                  <Lock className="w-3.5 h-3.5 text-rose-500" />
-                  <span>{isKhmer ? `ហួសម៉ោងស្កេនចេញ (${sub.endTime})` : `Overtime (Ended at ${sub.endTime})`}</span>
+              curMins < sEnd && isTeacher ? (
+                <div className="w-full flex items-center justify-between gap-2">
+                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                    <span>{isKhmer ? `កំពុងបង្រៀន (ចប់ម៉ោង ${sub.endTime})` : `In Class (${sub.startTime}-${sub.endTime})`}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTeacherClassCheckOut(sub, true)}
+                    className="flex items-center gap-1 py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition-all cursor-pointer"
+                    title="Check out early or complete class session"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{isKhmer ? 'ចេញ' : 'End'}</span>
+                  </button>
                 </div>
               ) : (
                 <button
@@ -916,12 +949,17 @@ export const ScheduleManagement: React.FC = () => {
                   className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>{isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class'}</span>
+                  <span>
+                    {!isTeacher
+                      ? (isKhmer ? `ស្កេនចេញ៖ ${sub.teacherName}` : `Check Out: ${sub.teacherName}`)
+                      : (isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class')}
+                  </span>
                 </button>
               )
             ) : (
-              <div className="w-full text-center text-xs font-bold text-slate-500 py-1">
-                ✓ {isKhmer ? 'បានកត់ត្រាវត្តមានសម្រាប់ម៉ោងនេះរួចរាល់' : 'Class Attendance Completed'}
+              <div className="w-full text-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl py-2 flex items-center justify-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isKhmer ? 'បានកត់ត្រាវត្តមានសម្រាប់ម៉ោងនេះរួចរាល់' : 'Class Attendance Completed'}</span>
               </div>
             )}
           </div>
