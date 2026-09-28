@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Teacher, TeacherSubjectSchedule, Holiday, AttendanceRecord } from '../../types/index.ts';
 import { StorageService } from '../../services/storageService.ts';
+import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useNotification } from '../../context/NotificationContext.tsx';
+import confetti from 'canvas-confetti';
 import {
   CalendarDays,
   ChevronLeft,
@@ -22,7 +25,9 @@ import {
   User,
   Coffee,
   Calendar,
-  Layers
+  Layers,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 
 interface TeacherMonthlyCalendarProps {
@@ -30,6 +35,8 @@ interface TeacherMonthlyCalendarProps {
   isOpenModal?: boolean;
   onClose?: () => void;
   onAddScheduleForDay?: (dayOfWeek: number, teacherId: string) => void;
+  onCheckIn?: (sub: TeacherSubjectSchedule) => void;
+  onCheckOut?: (sub: TeacherSubjectSchedule) => void;
 }
 
 const MONTH_NAMES_EN = [
@@ -49,14 +56,18 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   initialTeacher,
   isOpenModal = false,
   onClose,
-  onAddScheduleForDay
+  onAddScheduleForDay,
+  onCheckIn,
+  onCheckOut
 }) => {
   const { isKhmer } = useLanguage();
   const { currentUser, hasPermission } = useAuth();
+  const { showToast } = useNotification();
 
   const isTeacherRole = currentUser.role === 'teacher';
 
   const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
   const [currentYear, setCurrentYear] = useState<number>(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(today.getMonth()); // 0-indexed
 
@@ -83,21 +94,130 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   // Determine selected teacher
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
     if (initialTeacher) return initialTeacher.id;
-    if (isTeacherRole && currentUser.personId) return currentUser.personId;
+    if (currentUser.personId) return currentUser.personId;
     return teachers[0]?.id || '';
   });
+
+  // Robustly resolve active teacher matching linked profile
+  const activeTeacher = useMemo(() => {
+    if (initialTeacher) return initialTeacher;
+    if (!currentUser) return teachers[0] || null;
+
+    if (currentUser.personId) {
+      const byPersonId = teachers.find(
+        t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase()
+      );
+      if (byPersonId) return byPersonId;
+    }
+    if (currentUser.id) {
+      const byId = teachers.find(t => t.id === currentUser.id);
+      if (byId) return byId;
+    }
+    if (currentUser.email) {
+      const byEmail = teachers.find(
+        t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase()
+      );
+      if (byEmail) return byEmail;
+    }
+    if (currentUser.fullName) {
+      const byName = teachers.find(
+        t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase()
+      );
+      if (byName) return byName;
+    }
+
+    return teachers.find(t => t.id === selectedTeacherId) || teachers[0] || null;
+  }, [initialTeacher, currentUser, teachers, selectedTeacherId]);
 
   useEffect(() => {
     if (initialTeacher) {
       setSelectedTeacherId(initialTeacher.id);
-    } else if (isTeacherRole && currentUser.personId) {
-      setSelectedTeacherId(currentUser.personId);
+    } else if (activeTeacher) {
+      setSelectedTeacherId(activeTeacher.id);
     }
-  }, [initialTeacher, isTeacherRole, currentUser.personId]);
+  }, [initialTeacher, activeTeacher]);
 
-  const activeTeacher = useMemo(() => {
-    return teachers.find(t => t.id === selectedTeacherId) || initialTeacher || teachers[0] || null;
-  }, [teachers, selectedTeacherId, initialTeacher]);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const handleTeacherCheckInAction = (cls: TeacherSubjectSchedule) => {
+    if (onCheckIn) {
+      onCheckIn(cls);
+      return;
+    }
+
+    // Built-in AttendanceEngine fallback
+    setIsActionLoading(true);
+    const targetTeacherId = activeTeacher?.id || cls.teacherId;
+    const targetTeacherName = activeTeacher?.fullName || cls.teacherName;
+    const targetTeacherKhmer = activeTeacher?.khmerName || cls.khmerTeacherName;
+    const targetDept = activeTeacher?.department || 'Academic & Curriculum';
+    const curTime = AttendanceEngine.getCurrentTimeString();
+
+    setTimeout(() => {
+      const result = AttendanceEngine.processCheckIn({
+        personId: targetTeacherId,
+        personName: targetTeacherName,
+        khmerName: targetTeacherKhmer,
+        personType: 'teacher',
+        department: targetDept,
+        subjectScheduleId: cls.id,
+        customTime: curTime,
+        allowEarlyCheckInMinutes: 30,
+        bypassScheduleWindow: !isTeacherRole || hasPermission('schedules.create') || hasPermission('attendance.edit')
+      });
+
+      setIsActionLoading(false);
+
+      if (result.success) {
+        confetti({ particleCount: 40, spread: 50 });
+        showToast(
+          isKhmer
+            ? `ស្កេនចូលជោគជ័យសម្រាប់ ${targetTeacherName} - ${cls.khmerSubject || cls.subject}`
+            : `Check-in successful for ${targetTeacherName} - ${cls.subject}`,
+          'success'
+        );
+        setAttendance(StorageService.getAttendance());
+      } else {
+        showToast(result.message, 'error');
+      }
+    }, 200);
+  };
+
+  const handleTeacherCheckOutAction = (cls: TeacherSubjectSchedule) => {
+    if (onCheckOut) {
+      onCheckOut(cls);
+      return;
+    }
+
+    // Built-in AttendanceEngine fallback
+    setIsActionLoading(true);
+    const targetTeacherId = activeTeacher?.id || cls.teacherId;
+    const targetTeacherName = activeTeacher?.fullName || cls.teacherName;
+    const curTime = AttendanceEngine.getCurrentTimeString();
+
+    setTimeout(() => {
+      const result = AttendanceEngine.processCheckOut({
+        personId: targetTeacherId,
+        personName: targetTeacherName,
+        subjectScheduleId: cls.id,
+        customTime: curTime
+      });
+
+      setIsActionLoading(false);
+
+      if (result.success) {
+        showToast(
+          isKhmer
+            ? `ស្កេនចេញជោគជ័យសម្រាប់ ${targetTeacherName} - ${cls.khmerSubject || cls.subject}`
+            : result.message,
+          'success'
+        );
+        setAttendance(StorageService.getAttendance());
+      } else {
+        showToast(result.message, 'error');
+      }
+    }, 200);
+  };
 
   // Selected Day Details Modal
   const [selectedDayDetails, setSelectedDayDetails] = useState<{
@@ -659,15 +779,75 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 pt-1 border-t border-slate-200/60">
-                        <span className="flex items-center gap-1 font-mono font-semibold text-slate-800">
-                          <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>{cls.startTime} – {cls.endTime}</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{cls.room}</span>
-                        </span>
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="flex items-center gap-1 font-mono font-semibold text-slate-800">
+                            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{cls.startTime} – {cls.endTime}</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{cls.room}</span>
+                          </span>
+                        </div>
+
+                        {/* Attendance status badge / live indicator */}
+                        {(() => {
+                          const isToday = selectedDayDetails.dateStr === todayStr;
+                          const classAtt = attendance.find(
+                            a =>
+                              a.date === selectedDayDetails.dateStr &&
+                              (a.subjectScheduleId === cls.id ||
+                                (a.personId === (activeTeacher?.id || cls.teacherId) &&
+                                  (a.subject === cls.subject || a.periodName === cls.periodName)))
+                          );
+
+                          if (classAtt) {
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
+                                  classAtt.status === 'Late'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}>
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>
+                                    {classAtt.checkInTime ? `In: ${classAtt.checkInTime}` : classAtt.status}
+                                    {classAtt.checkOutTime ? ` • Out: ${classAtt.checkOutTime}` : ''}
+                                  </span>
+                                </span>
+
+                                {isToday && !classAtt.checkOutTime && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTeacherCheckOutAction(cls)}
+                                    disabled={isActionLoading}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                                  >
+                                    <LogOut className="w-3 h-3" />
+                                    <span>{isKhmer ? 'ស្កេនចេញ' : 'Check Out'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (isToday) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleTeacherCheckInAction(cls)}
+                                disabled={isActionLoading}
+                                className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] shadow-xs shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                              >
+                                <LogIn className="w-3 h-3" />
+                                <span>{isKhmer ? 'ស្កេនវត្តមានចូល (Check In)' : 'Check In'}</span>
+                              </button>
+                            );
+                          }
+
+                          return null;
+                        })()}
                       </div>
                     </div>
                   ))

@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { Employee, Schedule, Holiday } from '../../types/index.ts';
+import { EmployeeMonthlyPresentCalendar } from './EmployeeMonthlyPresentCalendar.tsx';
 import {
   CalendarDays,
   Clock,
@@ -20,7 +21,8 @@ import {
   Sparkles,
   ArrowRight,
   LogOut,
-  LogIn
+  LogIn,
+  Layers
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -35,6 +37,7 @@ export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ on
 
   const [timeStr, setTimeStr] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'monthly_present' | 'weekly_shifts' | 'holidays'>('monthly_present');
 
   // Storage data
   const [employees, setEmployees] = useState<Employee[]>(() => StorageService.getEmployees());
@@ -369,110 +372,171 @@ export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ on
         </div>
       </div>
 
-      {/* 3. Weekly Work Schedule (Mon - Sun) */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-black text-base text-slate-900">
-              {isKhmer ? 'កាលវិភាគការងារប្រចាំសប្តាហ៍ (Weekly Shift Schedule)' : 'Weekly Work Shift Schedule'}
-            </h3>
-          </div>
-          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-            {assignedSchedule.daysOfWeek?.length || 6} {isKhmer ? 'ថ្ងៃ / សប្តាហ៍' : 'Days / Week'}
-          </span>
+      {/* 3. Navigation View Switcher (Monthly Present Calendar | Weekly Shifts | Holidays) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2 sm:p-2.5 rounded-3xl border border-slate-200 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('monthly_present')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'monthly_present'
+                ? 'bg-white text-indigo-700 shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <CalendarDays className="w-4 h-4 text-indigo-600" />
+            <span>{isKhmer ? 'ប្រតិទិនវត្តមានប្រចាំខែ (Monthly Present)' : 'Monthly Present Calendar'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('weekly_shifts')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'weekly_shifts'
+                ? 'bg-white text-indigo-700 shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Clock className="w-4 h-4 text-indigo-600" />
+            <span>{isKhmer ? 'កាលវិភាគវេនការងារ (Weekly Shifts)' : 'Weekly Shift Roster'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('holidays')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'holidays'
+                ? 'bg-white text-indigo-700 shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Palmtree className="w-4 h-4 text-emerald-600" />
+            <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាក (Holidays)' : 'School Holidays'}</span>
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
-          {weekDays.map(day => {
-            const isToday = day.index === currentDayIndex;
-            const isWorkingDay = assignedSchedule.daysOfWeek?.includes(day.index) ?? (day.index !== 0);
+        <div className="hidden sm:flex items-center gap-2 px-3 text-xs text-slate-500 font-semibold">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>{isKhmer ? 'កំណត់ត្រាវត្តមានបុគ្គលិកផ្លូវការ' : 'Official Staff Presence Roster'}</span>
+        </div>
+      </div>
 
-            return (
-              <div
-                key={day.index}
-                className={`p-3.5 rounded-2xl border transition-all ${
-                  isToday
-                    ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs'
-                    : isWorkingDay
-                    ? 'bg-slate-50/70 border-slate-200'
-                    : 'bg-slate-100/50 border-slate-200/60 opacity-60'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`text-xs font-black ${isToday ? 'text-indigo-900' : 'text-slate-800'}`}>
-                    {isKhmer ? day.shortKm : day.shortEn}
-                  </span>
-                  {isToday && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
-                      {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
+      {/* 4. Tab Content Rendering */}
+      {activeTab === 'monthly_present' && (
+        <EmployeeMonthlyPresentCalendar
+          initialEmployee={employeeProfile}
+          onNavigateToHistory={onNavigateToHistory}
+        />
+      )}
+
+      {/* 5. Weekly Work Schedule (Mon - Sun) */}
+      {activeTab === 'weekly_shifts' && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-indigo-600" />
+              <h3 className="font-black text-base text-slate-900">
+                {isKhmer ? 'កាលវិភាគការងារប្រចាំសប្តាហ៍ (Weekly Shift Schedule)' : 'Weekly Work Shift Schedule'}
+              </h3>
+            </div>
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              {assignedSchedule.daysOfWeek?.length || 6} {isKhmer ? 'ថ្ងៃ / សប្តាហ៍' : 'Days / Week'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+            {weekDays.map(day => {
+              const isToday = day.index === currentDayIndex;
+              const isWorkingDay = assignedSchedule.daysOfWeek?.includes(day.index) ?? (day.index !== 0);
+
+              return (
+                <div
+                  key={day.index}
+                  className={`p-3.5 rounded-2xl border transition-all ${
+                    isToday
+                      ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs'
+                      : isWorkingDay
+                      ? 'bg-slate-50/70 border-slate-200'
+                      : 'bg-slate-100/50 border-slate-200/60 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-black ${isToday ? 'text-indigo-900' : 'text-slate-800'}`}>
+                      {isKhmer ? day.shortKm : day.shortEn}
                     </span>
+                    {isToday && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
+                        {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
+                      </span>
+                    )}
+                  </div>
+
+                  {isWorkingDay ? (
+                    <div className="space-y-1 text-xs">
+                      <div className="font-bold text-slate-700 text-[11px]">
+                        {assignedSchedule.startTime} - {assignedSchedule.endTime}
+                      </div>
+                      {assignedSchedule.breakStart && (
+                        <div className="text-[10px] text-slate-500">
+                          {isKhmer ? 'សម្រាក' : 'Break'}: {assignedSchedule.breakStart}
+                        </div>
+                      )}
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-800">
+                        {isKhmer ? 'ថ្ងៃធ្វើការ' : 'Duty'}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="py-2 text-center">
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {isKhmer ? 'ឈប់សម្រាក' : 'Off Day'}
+                      </span>
+                    </div>
                   )}
                 </div>
-
-                {isWorkingDay ? (
-                  <div className="space-y-1 text-xs">
-                    <div className="font-bold text-slate-700 text-[11px]">
-                      {assignedSchedule.startTime} - {assignedSchedule.endTime}
-                    </div>
-                    {assignedSchedule.breakStart && (
-                      <div className="text-[10px] text-slate-500">
-                        {isKhmer ? 'សម្រាក' : 'Break'}: {assignedSchedule.breakStart}
-                      </div>
-                    )}
-                    <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-800">
-                      {isKhmer ? 'ថ្ងៃធ្វើការ' : 'Duty'}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="py-2 text-center">
-                    <span className="text-[10px] font-bold text-slate-400">
-                      {isKhmer ? 'ឈប់សម្រាក' : 'Off Day'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. Upcoming Holidays & School Off Days */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-3">
-        <div className="flex items-center gap-2">
-          <Palmtree className="w-5 h-5 text-emerald-600" />
-          <h3 className="font-black text-base text-slate-900">
-            {isKhmer ? 'ប្រតិទិនថ្ងៃឈប់សម្រាកសាលា (School Holidays)' : 'School Holidays & Official Breaks'}
-          </h3>
-        </div>
-
-        {holidays.length === 0 ? (
-          <p className="text-xs text-slate-400 py-3 text-center">
-            {isKhmer ? 'មិនមានថ្ងៃឈប់សម្រាកនាពេលខាងមុខទេ' : 'No upcoming school holidays listed.'}
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-            {holidays.slice(0, 6).map(h => (
-              <div
-                key={h.id}
-                className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-200/70 flex items-start gap-2.5"
-              >
-                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-xs text-slate-900 truncate">
-                    {isKhmer ? h.khmerName || h.name : h.name}
-                  </h4>
-                  <p className="text-[11px] text-emerald-800 font-medium mt-0.5">
-                    {h.date} {h.endDate && h.endDate !== h.date ? `→ ${h.endDate}` : ''}
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* 6. Upcoming Holidays & School Off Days */}
+      {activeTab === 'holidays' && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <Palmtree className="w-5 h-5 text-emerald-600" />
+            <h3 className="font-black text-base text-slate-900">
+              {isKhmer ? 'ប្រតិទិនថ្ងៃឈប់សម្រាកសាលា (School Holidays)' : 'School Holidays & Official Breaks'}
+            </h3>
+          </div>
+
+          {holidays.length === 0 ? (
+            <p className="text-xs text-slate-400 py-3 text-center">
+              {isKhmer ? 'មិនមានថ្ងៃឈប់សម្រាកនាពេលខាងមុខទេ' : 'No upcoming school holidays listed.'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {holidays.slice(0, 6).map(h => (
+                <div
+                  key={h.id}
+                  className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-200/70 flex items-start gap-2.5"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-xs text-slate-900 truncate">
+                      {isKhmer ? h.khmerName || h.name : h.name}
+                    </h4>
+                    <p className="text-[11px] text-emerald-800 font-medium mt-0.5">
+                      {h.date} {h.endDate && h.endDate !== h.date ? `→ ${h.endDate}` : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );

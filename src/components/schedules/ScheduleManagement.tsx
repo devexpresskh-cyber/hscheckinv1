@@ -28,13 +28,19 @@ import {
   Sliders,
   LogIn,
   LogOut,
-  Lock
+  Lock,
+  Table,
+  LayoutGrid,
+  ArrowUpDown,
+  Layers,
+  List
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
 import { MonSatWeeklyTimetable } from './MonSatWeeklyTimetable.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
 import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
+import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 
 export const ScheduleManagement: React.FC = () => {
@@ -49,7 +55,11 @@ export const ScheduleManagement: React.FC = () => {
   const [viewMode, setViewMode] = useState<'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards'>(
     () => (isTeacher ? 'daily_schedule' : 'weekly_timetable')
   );
-  const [dailyGroupMode, setDailyGroupMode] = useState<'period' | 'flat'>('period');
+  const [dailyLayoutMode, setDailyLayoutMode] = useState<'table' | 'cards'>(() => (!isTeacher ? 'table' : 'cards'));
+  const [dailyGroupMode, setDailyGroupMode] = useState<DailyGroupMode>('period');
+  const [dailySortBy, setDailySortBy] = useState<DailySortColumn>('time');
+  const [dailySortOrder, setDailySortOrder] = useState<'asc' | 'desc'>('asc');
+  const [dailySearchQuery, setDailySearchQuery] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
@@ -552,15 +562,27 @@ export const ScheduleManagement: React.FC = () => {
     });
   }, [filteredSubjectSchedules, selectedDay, todayDayIndex, attendanceList, activeTeacher, currentUser, todayStr]);
 
+  // Daily classes filtered with search query
+  const dailyClassesFiltered = useMemo(() => {
+    let list = dailyClasses;
+    if (dailySearchQuery.trim()) {
+      const q = dailySearchQuery.toLowerCase().trim();
+      list = list.filter(
+        sub =>
+          sub.subject.toLowerCase().includes(q) ||
+          (sub.khmerSubject && sub.khmerSubject.toLowerCase().includes(q)) ||
+          sub.gradeClass.toLowerCase().includes(q) ||
+          sub.room.toLowerCase().includes(q) ||
+          sub.teacherName.toLowerCase().includes(q) ||
+          (sub.khmerTeacherName && sub.khmerTeacherName.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [dailyClasses, dailySearchQuery]);
+
   // Group and order daily classes by Period
   const dailyClassesGroupedByPeriod = useMemo(() => {
-    const list = filteredSubjectSchedules.filter(sub => {
-      if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
-        return sub.daysOfWeek.includes(selectedDay);
-      }
-      return sub.dayOfWeek === selectedDay;
-    });
-
+    const list = dailyClassesFiltered;
     if (list.length === 0) return [];
 
     const isClassToday = selectedDay === todayDayIndex;
@@ -645,7 +667,57 @@ export const ScheduleManagement: React.FC = () => {
         isCompleted
       };
     });
-  }, [filteredSubjectSchedules, selectedDay, todayDayIndex, periods]);
+  }, [dailyClassesFiltered, selectedDay, todayDayIndex, periods]);
+
+  // Group daily classes by Teacher
+  const dailyClassesGroupedByTeacher = useMemo(() => {
+    const list = dailyClassesFiltered;
+    if (list.length === 0) return [];
+
+    const map = new Map<
+      string,
+      {
+        teacherId: string;
+        teacherName: string;
+        khmerName?: string;
+        department?: string;
+        classes: TeacherSubjectSchedule[];
+      }
+    >();
+
+    list.forEach(sub => {
+      const key = sub.teacherId || sub.teacherName;
+      const teacherObj = teachers.find(
+        t =>
+          t.id === sub.teacherId ||
+          t.teacherId?.toLowerCase() === sub.teacherId?.toLowerCase() ||
+          t.fullName.toLowerCase() === sub.teacherName.toLowerCase()
+      );
+
+      if (!map.has(key)) {
+        map.set(key, {
+          teacherId: key,
+          teacherName: teacherObj?.fullName || sub.teacherName,
+          khmerName: teacherObj?.khmerName || sub.khmerTeacherName,
+          department: teacherObj?.department || 'Academic Faculty',
+          classes: []
+        });
+      }
+
+      map.get(key)!.classes.push(sub);
+    });
+
+    const groups = Array.from(map.values()).sort((a, b) => a.teacherName.localeCompare(b.teacherName));
+    groups.forEach(g => {
+      g.classes.sort((a, b) => {
+        const timeDiff = a.startTime.localeCompare(b.startTime);
+        if (timeDiff !== 0) return timeDiff;
+        return a.gradeClass.localeCompare(b.gradeClass);
+      });
+    });
+
+    return groups;
+  }, [dailyClassesFiltered, teachers]);
 
   const weekDayTabs = [
     { index: 1, shortEn: 'Mon', shortKm: 'ចន្ទ', fullEn: 'Monday', fullKm: 'ថ្ងៃចន្ទ' },
@@ -1124,8 +1196,9 @@ export const ScheduleManagement: React.FC = () => {
           
           {/* Day Selector Navigation Pills & Toolbar */}
           <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5">
-            {/* Top Toolbar: Teacher Filter & Group Mode Switcher */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            {/* Top Toolbar: Teacher Filter, Search, Layout & Group Switchers, Sort */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              {/* Left Controls: Teacher Filter & Search */}
               <div className="flex flex-wrap items-center gap-2.5">
                 {!isTeacher ? (
                   <div className="flex items-center gap-2">
@@ -1150,40 +1223,134 @@ export const ScheduleManagement: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-xs font-bold text-slate-800">
-                      {isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃតាមវេនម៉ោង' : 'Daily Schedule Grouped by Period'}
+                      {isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ' : 'Daily Teaching Schedule'}
                     </span>
                   </div>
                 )}
+
+                {/* Search Input for Daily Classes */}
+                <div className="relative w-full sm:w-56">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder={isKhmer ? 'ស្វែងរកមុខវិជ្ជា, ថ្នាក់, បន្ទប់...' : 'Search subject, class, room...'}
+                    value={dailySearchQuery}
+                    onChange={e => setDailySearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-7 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                  {dailySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setDailySearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Group By Period vs Flat Switcher */}
-              <div className="flex items-center gap-2 self-end sm:self-auto">
+              {/* Right Controls: View Layout, Group By & Sort */}
+              <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+                {/* Layout Switcher: Table vs Cards */}
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setDailyLayoutMode('table')}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      dailyLayoutMode === 'table'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title={isKhmer ? 'ទិដ្ឋភាពតារាង (Table View)' : 'Table View'}
+                  >
+                    <Table className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'តារាង (Table)' : 'Table'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyLayoutMode('cards')}
+                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      dailyLayoutMode === 'cards'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title={isKhmer ? 'ទិដ្ឋភាពកាត (Cards View)' : 'Cards View'}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'កាត (Cards)' : 'Cards'}</span>
+                  </button>
+                </div>
+
+                {/* Group By Switcher */}
                 <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
                   <button
                     type="button"
                     onClick={() => setDailyGroupMode('period')}
-                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
                       dailyGroupMode === 'period'
                         ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
-                    title={isKhmer ? 'តម្រៀបតាមវេនម៉ោង (Group order by Period)' : 'Group order by Period'}
+                    title={isKhmer ? 'តាមវេនម៉ោង (By Period)' : 'Group By Period'}
                   >
                     <Sliders className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{isKhmer ? 'តាមវេនម៉ោង (By Period)' : 'By Period'}</span>
+                    <span>{isKhmer ? 'តាមវេន' : 'Period'}</span>
                   </button>
+                  {!isTeacher && (
+                    <button
+                      type="button"
+                      onClick={() => setDailyGroupMode('teacher')}
+                      className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                        dailyGroupMode === 'teacher'
+                          ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title={isKhmer ? 'តាមគ្រូបង្រៀន (By Teacher)' : 'Group By Teacher'}
+                    >
+                      <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>{isKhmer ? 'តាមគ្រូ' : 'Teacher'}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setDailyGroupMode('flat')}
-                    className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
                       dailyGroupMode === 'flat'
                         ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
-                    title={isKhmer ? 'បញ្ជីកាតសរុប (Flat Cards)' : 'Flat Cards'}
+                    title={isKhmer ? 'បញ្ជីសរុប (Flat / None)' : 'Flat / No Grouping'}
                   >
                     <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{isKhmer ? 'កាតសរុប (Flat)' : 'Flat'}</span>
+                    <span>{isKhmer ? 'សរុប' : 'Flat'}</span>
+                  </button>
+                </div>
+
+                {/* Sort By Dropdown & Order Toggle */}
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
+                  <ArrowUpDown className="w-3 h-3 text-slate-500" />
+                  <select
+                    value={dailySortBy}
+                    onChange={e => setDailySortBy(e.target.value as DailySortColumn)}
+                    className="text-[11px] font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+                    title={isKhmer ? 'តម្រៀបទិន្នន័យ' : 'Sort Classes'}
+                  >
+                    <option value="time">{isKhmer ? 'តម្រៀប៖ ម៉ោង' : 'Sort: Time'}</option>
+                    <option value="period">{isKhmer ? 'តម្រៀប៖ វេន' : 'Sort: Period'}</option>
+                    <option value="teacher">{isKhmer ? 'តម្រៀប៖ គ្រូ' : 'Sort: Teacher'}</option>
+                    <option value="subject">{isKhmer ? 'តម្រៀប៖ មុខវិជ្ជា' : 'Sort: Subject'}</option>
+                    <option value="grade">{isKhmer ? 'តម្រៀប៖ ថ្នាក់' : 'Sort: Class'}</option>
+                    <option value="room">{isKhmer ? 'តម្រៀប៖ បន្ទប់' : 'Sort: Room'}</option>
+                    <option value="status">{isKhmer ? 'តម្រៀប៖ វត្តមាន' : 'Sort: Status'}</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setDailySortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
+                    className="p-1 rounded text-slate-600 hover:text-indigo-600 hover:bg-white transition-all cursor-pointer font-bold"
+                    title={dailySortOrder === 'asc' ? 'Ascending (A-Z, 0-9)' : 'Descending (Z-A, 9-0)'}
+                  >
+                    <span className="text-[11px] font-mono font-black">{dailySortOrder === 'asc' ? '↑' : '↓'}</span>
                   </button>
                 </div>
               </div>
@@ -1199,7 +1366,7 @@ export const ScheduleManagement: React.FC = () => {
               </div>
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl">
-                  {dailyClasses.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes'}
+                  {dailyClassesFiltered.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes'}
                 </span>
                 <span className="text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
                   {dailyClassesGroupedByPeriod.length} {isKhmer ? 'វេនម៉ោង' : 'Periods'}
@@ -1247,9 +1414,9 @@ export const ScheduleManagement: React.FC = () => {
             </div>
           </div>
 
-          {/* Classes for Selected Day */}
+          {/* Classes for Selected Day: Table View vs Cards View */}
           <div className="space-y-4">
-            {dailyClasses.length === 0 ? (
+            {dailyClassesFiltered.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center shadow-xs">
                 <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center mb-3">
                   <Calendar className="w-6 h-6" />
@@ -1260,11 +1427,43 @@ export const ScheduleManagement: React.FC = () => {
                 <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
                   {isKhmer
                     ? 'អ្នកមិនមានកាលវិភាគបង្រៀនសម្រាប់ថ្ងៃនេះឡើយ។ អ្នកអាចជ្រើសរើសថ្ងៃផ្សេងទៀតដើម្បីពិនិត្យ។'
-                    : 'You do not have any teaching sessions on this day. Use the day switcher above to view other days.'}
+                    : 'You do not have any teaching sessions matching this day or search filter.'}
                 </p>
               </div>
+            ) : dailyLayoutMode === 'table' ? (
+              /* Table View with Group By and Sort */
+              <DailyScheduleTableView
+                classes={dailyClassesFiltered}
+                periods={periods}
+                teachers={teachers}
+                attendanceList={attendanceList}
+                selectedDay={selectedDay}
+                todayDayIndex={todayDayIndex}
+                todayStr={todayStr}
+                isTeacher={isTeacher}
+                currentUser={currentUser}
+                activeTeacher={activeTeacher}
+                groupMode={dailyGroupMode}
+                sortBy={dailySortBy}
+                sortOrder={dailySortOrder}
+                onSortChange={col => {
+                  if (dailySortBy === col) {
+                    setDailySortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+                  } else {
+                    setDailySortBy(col);
+                    setDailySortOrder('asc');
+                  }
+                }}
+                onCheckIn={handleTeacherClassCheckIn}
+                onCheckOut={handleTeacherClassCheckOut}
+                onEdit={hasPermission('schedules.edit') && !isTeacher ? handleOpenEditSubject : undefined}
+                onDelete={hasPermission('schedules.delete') && !isTeacher ? handleDeleteSubject : undefined}
+                canEdit={hasPermission('schedules.edit') && !isTeacher}
+                canDelete={hasPermission('schedules.delete') && !isTeacher}
+                isKhmer={isKhmer}
+              />
             ) : dailyGroupMode === 'period' ? (
-              /* Grouped and Ordered by Period */
+              /* Cards View Grouped by Period */
               <div className="space-y-5">
                 {dailyClassesGroupedByPeriod.map(group => {
                   return (
@@ -1294,10 +1493,16 @@ export const ScheduleManagement: React.FC = () => {
                               {group.sessionType && (
                                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                   {group.sessionType === 'Morning'
-                                    ? (isKhmer ? 'វេនព្រឹក' : 'Morning')
+                                    ? isKhmer
+                                      ? 'វេនព្រឹក'
+                                      : 'Morning'
                                     : group.sessionType === 'Afternoon'
-                                    ? (isKhmer ? 'វេនរសៀល' : 'Afternoon')
-                                    : (isKhmer ? 'វេនយប់' : 'Evening')}
+                                    ? isKhmer
+                                      ? 'វេនរសៀល'
+                                      : 'Afternoon'
+                                    : isKhmer
+                                    ? 'វេនយប់'
+                                    : 'Evening'}
                                 </span>
                               )}
                             </div>
@@ -1306,7 +1511,9 @@ export const ScheduleManagement: React.FC = () => {
                           {/* Period Bell Time Badge */}
                           <span className="text-xs font-mono font-bold text-slate-700 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl flex items-center gap-1.5 shadow-2xs">
                             <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>{group.startTime} – {group.endTime}</span>
+                            <span>
+                              {group.startTime} – {group.endTime}
+                            </span>
                           </span>
                         </div>
 
@@ -1343,10 +1550,52 @@ export const ScheduleManagement: React.FC = () => {
                   );
                 })}
               </div>
+            ) : dailyGroupMode === 'teacher' ? (
+              /* Cards View Grouped by Teacher */
+              <div className="space-y-5">
+                {dailyClassesGroupedByTeacher.map(group => {
+                  return (
+                    <div
+                      key={group.teacherId}
+                      className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5"
+                    >
+                      {/* Teacher Header Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                            {group.teacherName.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-black text-sm text-slate-900">
+                                {group.khmerName ? `${group.khmerName} (${group.teacherName})` : group.teacherName}
+                              </h4>
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                {group.department}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl">
+                            {group.classes.length} {isKhmer ? 'ម៉ោងបង្រៀន' : group.classes.length === 1 ? 'class' : 'classes'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Class Cards for this Teacher */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {group.classes.map((sub, idx) => renderClassCard(sub, idx))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               /* Flat Cards View */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {dailyClasses.map((sub, idx) => renderClassCard(sub, idx))}
+                {dailyClassesFiltered.map((sub, idx) => renderClassCard(sub, idx))}
               </div>
             )}
           </div>
@@ -1375,6 +1624,8 @@ export const ScheduleManagement: React.FC = () => {
       {viewMode === 'monthly_calendar' && (
         <TeacherMonthlyCalendar
           initialTeacher={activeTeacher}
+          onCheckIn={handleTeacherClassCheckIn}
+          onCheckOut={handleTeacherClassCheckOut}
           onAddScheduleForDay={hasPermission('schedules.create') && !isTeacher ? (dayOfWeek) => {
             handleOpenAddSubjectForSlot(dayOfWeek);
           } : undefined}
