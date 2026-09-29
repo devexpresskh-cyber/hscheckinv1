@@ -198,6 +198,20 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
 
     const workingDays = assignedSchedule.daysOfWeek || [1, 2, 3, 4, 5, 6];
 
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth();
+    const nowDay = now.getDate();
+
+    const formatLocalDate = (y: number, m: number, d: number) => {
+      const targetDate = new Date(y, m, d);
+      const ty = targetDate.getFullYear();
+      const tm = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const td = String(targetDate.getDate()).padStart(2, '0');
+      return `${ty}-${tm}-${td}`;
+    };
+    const todayStr = formatLocalDate(nowYear, nowMonth, nowDay);
+
     interface CalendarDayCell {
       dayNumber: number;
       date: Date;
@@ -221,7 +235,7 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = prevMonthLastDay - i;
       const d = new Date(currentYear, currentMonth - 1, dayNum);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(currentYear, currentMonth - 1, dayNum);
       const dow = d.getDay();
       cells.push({
         dayNumber: dayNum,
@@ -240,10 +254,10 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
     // Current month cells
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const d = new Date(currentYear, currentMonth, day);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(currentYear, currentMonth, day);
       const dow = d.getDay(); // 0 = Sun, 1 = Mon, 6 = Sat
 
-      const isToday = dateStr === todayStr;
+      const isToday = currentYear === nowYear && currentMonth === nowMonth && day === nowDay;
       const isPast = dateStr < todayStr;
       const isFuture = dateStr > todayStr;
       const isWorkingDay = workingDays.includes(dow);
@@ -718,29 +732,36 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
                     });
                   }
                 }}
-                className={`min-h-[110px] sm:min-h-[125px] p-2 sm:p-2.5 flex flex-col justify-between transition-all select-none group ${
+                className={`min-h-[110px] sm:min-h-[125px] p-2 sm:p-2.5 flex flex-col justify-between transition-all select-none group relative ${
                   !cell.isCurrentMonth
                     ? 'bg-slate-50/40 text-slate-300 opacity-50 cursor-default'
                     : cell.isToday
-                    ? 'bg-indigo-50/50 hover:bg-indigo-50/80 cursor-pointer ring-2 ring-indigo-500/20 shadow-xs'
+                    ? 'bg-indigo-50/90 hover:bg-indigo-100/90 cursor-pointer ring-2 ring-indigo-600 ring-inset shadow-md z-10'
                     : isWeekend
                     ? 'bg-slate-50/25 hover:bg-slate-50 cursor-pointer'
                     : 'bg-white hover:bg-slate-50/80 cursor-pointer'
                 }`}
               >
-                {/* Cell Header: Day Number + Top Status Icon */}
+                {/* Cell Header: Day Number + Today Badge + Top Status Icon */}
                 <div className="flex items-center justify-between gap-1 mb-1">
-                  <span
-                    className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-black ${
-                      cell.isToday
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : cell.isCurrentMonth
-                        ? 'text-slate-800'
-                        : 'text-slate-300'
-                    }`}
-                  >
-                    {cell.dayNumber}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`w-6.5 h-6.5 flex items-center justify-center rounded-full text-xs font-black ${
+                        cell.isToday
+                          ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300'
+                          : cell.isCurrentMonth
+                          ? 'text-slate-800'
+                          : 'text-slate-300'
+                      }`}
+                    >
+                      {cell.dayNumber}
+                    </span>
+                    {cell.isToday && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs">
+                        {isKhmer ? 'ថ្ងៃនេះ' : 'TODAY'}
+                      </span>
+                    )}
+                  </div>
 
                   {cell.isCurrentMonth && (
                     <div className="flex items-center gap-1">

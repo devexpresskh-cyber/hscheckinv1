@@ -7,6 +7,7 @@ import {
   TelegramSettings,
   SystemSettings,
   Teacher,
+  Employee,
   Schedule,
   TeacherSubjectSchedule
 } from '../types/index.ts';
@@ -167,6 +168,20 @@ export const DEFAULT_USERS: UserAccount[] = [
     pinCode: '1234',
     avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop',
     createdAt: new Date().toISOString()
+  },
+  {
+    id: 'usr-emp-001',
+    email: 'heng.sophea@edutrack.edu.kh',
+    fullName: 'Heng Sophea',
+    khmerName: 'ហេង សុភា',
+    role: 'employee',
+    department: 'Administration',
+    phone: '+855 12 654 321',
+    personId: 'emp-001',
+    status: 'Active',
+    pinCode: '1234',
+    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop',
+    createdAt: new Date().toISOString()
   }
 ];
 
@@ -238,6 +253,47 @@ export const DEFAULT_TEACHERS: Teacher[] = [
     assignedScheduleId: 'sch-standard-fulltime',
     hourlyRate: 28.00,
     currency: 'USD',
+    pinCode: '1234'
+  }
+];
+
+export const DEFAULT_EMPLOYEES: Employee[] = [
+  {
+    id: 'emp-001',
+    employeeId: 'EMP-2026-001',
+    fullName: 'Heng Sophea',
+    khmerName: 'ហេង សុភា',
+    phone: '+855 12 654 321',
+    email: 'heng.sophea@edutrack.edu.kh',
+    telegramChatId: '',
+    department: 'Administration',
+    position: 'Administrative Coordinator',
+    supervisor: 'Super Administrator',
+    employmentType: 'Full-time',
+    joinDate: '2023-01-10',
+    workLocation: 'Main Campus - Central Building',
+    assignedScheduleId: 'sch-standard-fulltime',
+    status: 'Active',
+    photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop',
+    pinCode: '1234'
+  },
+  {
+    id: 'emp-002',
+    employeeId: 'EMP-2026-002',
+    fullName: 'Ly Chantha',
+    khmerName: 'លី ចាន់ថា',
+    phone: '+855 16 111 222',
+    email: 'ly.chantha@edutrack.edu.kh',
+    telegramChatId: '',
+    department: 'Academic & Curriculum',
+    position: 'Academic Affairs Officer',
+    supervisor: 'Principal Singsa',
+    employmentType: 'Full-time',
+    joinDate: '2022-09-01',
+    workLocation: 'Main Campus - Central Building',
+    assignedScheduleId: 'sch-standard-fulltime',
+    status: 'Active',
+    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=200&fit=crop',
     pinCode: '1234'
   }
 ];

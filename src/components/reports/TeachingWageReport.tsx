@@ -25,11 +25,18 @@ import {
   UserCheck
 } from 'lucide-react';
 
-export const TeachingWageReport: React.FC = () => {
-  const { canAccessDepartment } = useAuth();
+interface TeachingWageReportProps {
+  lockedTeacherId?: string;
+}
+
+export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTeacherId }) => {
+  const { canAccessDepartment, currentUser } = useAuth();
   const { showToast } = useNotification();
   const { isKhmer } = useLanguage();
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+
+  const isTeacherRole = currentUser.role === 'teacher';
+  const effectiveTeacherId = lockedTeacherId || (isTeacherRole ? (currentUser.personId || currentUser.id) : undefined);
 
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
@@ -45,6 +52,7 @@ export const TeachingWageReport: React.FC = () => {
   const [endDate, setEndDate] = useState('2026-09-30');
   const [selectedDept, setSelectedDept] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [lateDeductionMode, setLateDeductionMode] = useState<'deduct' | 'non_deduct'>('non_deduct');
   const [selectedTeacherForDetail, setSelectedTeacherForDetail] = useState<TeacherWageSummary | null>(null);
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
 
@@ -62,6 +70,16 @@ export const TeachingWageReport: React.FC = () => {
 
   // Filtered teachers list
   const filteredTeachers = useMemo(() => {
+    if (effectiveTeacherId || isTeacherRole) {
+      const match = teachers.find(t => 
+        (effectiveTeacherId && (t.id === effectiveTeacherId || t.teacherId.toLowerCase() === effectiveTeacherId.toLowerCase())) ||
+        (currentUser.personId && (t.id === currentUser.personId || t.teacherId.toLowerCase() === currentUser.personId.toLowerCase())) ||
+        t.fullName.toLowerCase() === currentUser.fullName.toLowerCase()
+      );
+      if (match) return [match];
+      if (teachers.length > 0) return [teachers[0]];
+    }
+
     return teachers.filter(t => {
       if (!canAccessDepartment(t.department)) return false;
       if (selectedDept !== 'All' && t.department !== selectedDept) return false;
@@ -76,7 +94,7 @@ export const TeachingWageReport: React.FC = () => {
       }
       return true;
     });
-  }, [teachers, selectedDept, searchQuery, canAccessDepartment]);
+  }, [teachers, selectedDept, searchQuery, canAccessDepartment, effectiveTeacherId, isTeacherRole, currentUser]);
 
   // Calculate Teaching Wage Summaries
   const wageSummaries: TeacherWageSummary[] = useMemo(() => {
@@ -198,7 +216,11 @@ export const TeachingWageReport: React.FC = () => {
         ? Math.round(((totalCompletedClasses - totalLateClasses) / totalCompletedClasses) * 100)
         : 100;
 
-      const netWage = grossWage;
+      const lateDeduction = lateDeductionMode === 'deduct'
+        ? Number(((totalLateMinutes / 60) * baseHourlyRate).toFixed(2))
+        : 0;
+
+      const netWage = Math.max(0, grossWage - lateDeduction);
 
       return {
         teacherId: teacher.id,
@@ -222,17 +244,19 @@ export const TeachingWageReport: React.FC = () => {
         completionRate,
         punctualityRate,
         grossWage: Number(grossWage.toFixed(2)),
-        lateDeductions: 0,
+        lateDeductions: Number(lateDeduction.toFixed(2)),
         netWage: Number(netWage.toFixed(2)),
         classSessions
       };
     });
-  }, [filteredTeachers, allAttendance, subjectSchedules, selectedMonth, dateFilterMode, startDate, endDate]);
+  }, [filteredTeachers, allAttendance, subjectSchedules, selectedMonth, dateFilterMode, startDate, endDate, lateDeductionMode]);
 
   // Overall Aggregate KPIs
   const overallKPIs = useMemo(() => {
     const totalFaculty = wageSummaries.length;
     const totalHours = wageSummaries.reduce((sum, s) => sum + s.completedHours, 0);
+    const totalGrossWage = wageSummaries.reduce((sum, s) => sum + s.grossWage, 0);
+    const totalLateDeductions = wageSummaries.reduce((sum, s) => sum + s.lateDeductions, 0);
     const totalWage = wageSummaries.reduce((sum, s) => sum + s.netWage, 0);
     const totalClasses = wageSummaries.reduce((sum, s) => sum + s.totalCompletedClasses, 0);
     const avgRate = totalFaculty > 0
@@ -245,6 +269,8 @@ export const TeachingWageReport: React.FC = () => {
     return {
       totalFaculty,
       totalHours: Number(totalHours.toFixed(1)),
+      totalGrossWage: Number(totalGrossWage.toFixed(2)),
+      totalLateDeductions: Number(totalLateDeductions.toFixed(2)),
       totalWage: Number(totalWage.toFixed(2)),
       totalClasses,
       avgRate: Number(avgRate.toFixed(2)),
@@ -492,6 +518,37 @@ export const TeachingWageReport: React.FC = () => {
               ))}
             </select>
           </div>
+
+          {/* Late Wage Deduction Policy Toggle (Deduct Late vs Non-Deduct Late) */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <span className="text-[11px] font-bold text-slate-500 pl-2 pr-1.5 hidden md:inline">
+              {isKhmer ? 'កាត់ប្រាក់ម៉ោងយឺត៖' : 'Late Policy:'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setLateDeductionMode('non_deduct')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                lateDeductionMode === 'non_deduct'
+                  ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-200 font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={isKhmer ? 'មិនកាត់ប្រាក់ម៉ោងយឺត (គិតប្រាក់ពេញ)' : 'Non-deduct late: Full compensation without penalties'}
+            >
+              <span>{isKhmer ? 'មិនកាត់ (Non-Deduct)' : 'Non-Deduct Late'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLateDeductionMode('deduct')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                lateDeductionMode === 'deduct'
+                  ? 'bg-rose-600 text-white shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-rose-700'
+              }`}
+              title={isKhmer ? 'កាត់ប្រាក់ម៉ោងយឺតតាមអត្រាកម្រៃបង្រៀន' : 'Deduct late: Prorated deduction based on hourly rate'}
+            >
+              <span>{isKhmer ? 'កាត់ម៉ោងយឺត (Deduct)' : 'Deduct Late'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -549,14 +606,16 @@ export const TeachingWageReport: React.FC = () => {
                 <th className="p-3.5 text-center">Classes (Done / Sched)</th>
                 <th className="p-3.5 text-center">Taught Hours</th>
                 <th className="p-3.5 text-center">Punctuality</th>
-                <th className="p-3.5 text-right font-black text-emerald-800">Auto Wage ($)</th>
+                <th className="p-3.5 text-right font-bold text-slate-700">Gross Wage ($)</th>
+                <th className="p-3.5 text-center font-bold">Late Deduction</th>
+                <th className="p-3.5 text-right font-black text-emerald-800">Net Wage ($)</th>
                 <th className="p-3.5 pr-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {wageSummaries.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400 text-xs">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 text-xs">
                     No teaching records found for the selected criteria.
                   </td>
                 </tr>
@@ -640,14 +699,34 @@ export const TeachingWageReport: React.FC = () => {
                       )}
                     </td>
 
-                    {/* Calculated Wage */}
+                    {/* Gross Wage */}
+                    <td className="p-3.5 text-right font-mono text-slate-800 font-semibold">
+                      ${summary.grossWage.toFixed(2)}
+                    </td>
+
+                    {/* Late Deduction */}
+                    <td className="p-3.5 text-center">
+                      {lateDeductionMode === 'deduct' ? (
+                        summary.lateDeductions > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 font-mono">
+                            -${summary.lateDeductions.toFixed(2)}
+                            <span className="text-[9px] font-normal text-rose-500 ml-1">({summary.totalLateMinutes}m)</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">$0.00</span>
+                        )
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200" title="Non-deduct late policy active">
+                          $0.00 (Waived)
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Net Wage */}
                     <td className="p-3.5 text-right">
                       <div className="inline-flex flex-col items-end">
                         <span className="font-black text-sm sm:text-base text-emerald-700 font-mono bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-xl shadow-xs">
                           ${summary.netWage.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-[10px] text-slate-400 mt-0.5">
-                          {summary.completedHours}h × ${summary.hourlyRate}
                         </span>
                       </div>
                     </td>
@@ -656,7 +735,7 @@ export const TeachingWageReport: React.FC = () => {
                     <td className="p-3.5 pr-5 text-right">
                       <button
                         onClick={() => openTeacherDetail(summary)}
-                        className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-colors inline-flex items-center gap-1 shadow-xs"
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-colors inline-flex items-center gap-1 shadow-xs cursor-pointer"
                       >
                         <FileText className="w-3 h-3 text-slate-500" />
                         <span>Breakdown</span>
@@ -753,27 +832,62 @@ export const TeachingWageReport: React.FC = () => {
                 </div>
               </div>
 
-              {/* Wage Math Highlights */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Wage Math Highlights: 4 Metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-blue-50/70 border border-blue-200 p-3 rounded-xl text-center">
-                  <div className="text-[10px] font-bold text-blue-700 uppercase">Total Classes</div>
+                  <div className="text-[10px] font-bold text-blue-700 uppercase">Classes Taught</div>
                   <div className="text-lg font-black text-blue-950 mt-0.5">
-                    {selectedTeacherForDetail.totalCompletedClasses}
+                    {selectedTeacherForDetail.totalCompletedClasses} / {selectedTeacherForDetail.totalScheduledClasses}
                   </div>
                 </div>
 
                 <div className="bg-indigo-50/70 border border-indigo-200 p-3 rounded-xl text-center">
-                  <div className="text-[10px] font-bold text-indigo-700 uppercase">Hours Delivered</div>
-                  <div className="text-lg font-black text-indigo-950 mt-0.5">
-                    {selectedTeacherForDetail.completedHours} hrs
+                  <div className="text-[10px] font-bold text-indigo-700 uppercase">Taught Hours</div>
+                  <div className="text-lg font-black text-indigo-950 mt-0.5 font-mono">
+                    {selectedTeacherForDetail.completedHours}h
                   </div>
                 </div>
 
-                <div className="bg-emerald-50 border border-emerald-300 p-3 rounded-xl text-center">
-                  <div className="text-[10px] font-bold text-emerald-700 uppercase">Net Wage Payable</div>
-                  <div className="text-lg font-black text-emerald-800 mt-0.5 font-mono">
-                    ${selectedTeacherForDetail.netWage.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-center">
+                  <div className="text-[10px] font-bold text-slate-600 uppercase">Gross Wage</div>
+                  <div className="text-lg font-black text-slate-900 mt-0.5 font-mono">
+                    ${selectedTeacherForDetail.grossWage.toFixed(2)}
                   </div>
+                </div>
+
+                <div className={`p-3 rounded-xl text-center border ${
+                  lateDeductionMode === 'deduct' && selectedTeacherForDetail.lateDeductions > 0
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
+                  <div className="text-[10px] font-bold uppercase">
+                    {lateDeductionMode === 'deduct' ? 'Late Deduction' : 'Late (Waived)'}
+                  </div>
+                  <div className="text-lg font-black mt-0.5 font-mono">
+                    {lateDeductionMode === 'deduct'
+                      ? (selectedTeacherForDetail.lateDeductions > 0 ? `-$${selectedTeacherForDetail.lateDeductions.toFixed(2)}` : '$0.00')
+                      : '$0.00'}
+                  </div>
+                  <span className="text-[9px] block text-slate-500 font-medium">
+                    {selectedTeacherForDetail.totalLateMinutes}m late
+                  </span>
+                </div>
+              </div>
+
+              {/* Net Payable Highlight Card */}
+              <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-2xl shadow-md flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100 block">
+                    {isKhmer ? 'ប្រាក់ឈ្នួលត្រូវបើកសរុប (Net Payable)' : 'Net Payable Teaching Compensation'}
+                  </span>
+                  <p className="text-xs text-emerald-100/90 mt-0.5">
+                    {lateDeductionMode === 'deduct'
+                      ? 'Gross wage minus prorated late minutes deduction'
+                      : 'Non-deduct late policy applied (Full gross wage awarded)'}
+                  </p>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black font-mono">
+                  ${selectedTeacherForDetail.netWage.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
 

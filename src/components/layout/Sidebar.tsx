@@ -20,7 +20,9 @@ import {
   HelpCircle,
   BookOpen,
   X,
-  LogOut
+  LogOut,
+  DollarSign,
+  Languages
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 
@@ -31,6 +33,7 @@ export type NavTab =
   | 'employees'
   | 'departments'
   | 'schedules'
+  | 'monthly_calendar'
   | 'attendance'
   | 'leave'
   | 'holidays'
@@ -57,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose
 }) => {
   const { currentUser, currentRole, hasPermission, logout } = useAuth();
-  const { t, isKhmer } = useLanguage();
+  const { t, isKhmer, language, setLanguage } = useLanguage();
 
   interface NavItem {
     id: NavTab;
@@ -75,14 +78,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Dashboard',
       khmer: 'ផ្ទាំងគ្រប់គ្រង',
       icon: LayoutDashboard,
-      section: 'overview'
-    },
-    {
-      id: 'kiosk',
-      label: 'Check-in Terminal',
-      khmer: 'ចំណុចស្កេនវត្តមាន',
-      icon: Clock,
-      badge: 'Live',
       section: 'overview'
     },
     // Academic & People
@@ -112,10 +107,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     // Scheduling & Attendance
     {
+      id: 'monthly_calendar',
+      label: 'Monthly Calendar',
+      khmer: 'ប្រតិទិនប្រចាំខែ',
+      icon: CalendarDays,
+      permission: 'schedules.view',
+      section: 'attendance'
+    },
+    {
       id: 'schedules',
       label: 'Schedules & Calendar',
       khmer: 'កាលវិភាគការងារ',
-      icon: CalendarDays,
+      icon: Clock,
       permission: 'schedules.view',
       section: 'attendance'
     },
@@ -219,11 +222,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const visibleItems = navItems.map(item => {
     // Customize labels for employee and teacher accounts
     if (isEmployee) {
+      if (item.id === 'monthly_calendar') {
+        return {
+          ...item,
+          label: 'Monthly Present Calendar',
+          khmer: 'ប្រតិទិនវត្តមានប្រចាំខែ',
+          badge: 'Monthly',
+          icon: CalendarDays,
+          section: 'overview' as const
+        };
+      }
       if (item.id === 'schedules') {
         return {
           ...item,
-          label: 'Staff Calendar',
-          khmer: 'ប្រតិទិនការងារបុគ្គលិក',
+          label: 'Work Shifts & Roster',
+          khmer: 'កាលវិភាគវេនការងារ',
+          icon: Clock,
           section: 'overview' as const
         };
       }
@@ -232,24 +246,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ...item,
           label: 'Staff Check-in History',
           khmer: 'ប្រវត្តិវត្តមានបុគ្គលិក',
+          icon: CheckCircle2,
           section: 'overview' as const
         };
       }
-      if (item.id === 'kiosk') {
+      if (item.id === 'leave') {
         return {
           ...item,
-          label: 'Check-in Terminal',
-          khmer: 'ចំណុចស្កេនវត្តមាន',
+          label: 'My Leave Requests',
+          khmer: 'ការសុំច្បាប់ឈប់សម្រាក',
+          icon: CalendarCheck,
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'holidays') {
+        return {
+          ...item,
+          label: 'School Holidays Calendar',
+          khmer: 'ប្រតិទិនថ្ងៃឈប់សម្រាក',
+          icon: Palmtree,
           section: 'overview' as const
         };
       }
     }
     if (currentUser.role === 'teacher') {
+      if (item.id === 'monthly_calendar') {
+        return {
+          ...item,
+          label: 'Monthly Schedule Calendar',
+          khmer: 'ប្រតិទិនកាលវិភាគប្រចាំខែ',
+          badge: 'Monthly',
+          icon: CalendarDays,
+          section: 'overview' as const
+        };
+      }
       if (item.id === 'schedules') {
         return {
           ...item,
-          label: 'Teaching Timetable',
-          khmer: 'កាលវិភាគបង្រៀន',
+          label: 'Weekly & Daily Timetable',
+          khmer: 'កាលវិភាគបង្រៀន (សប្តាហ៍/ថ្ងៃ)',
+          icon: Clock,
           section: 'overview' as const
         };
       }
@@ -258,15 +294,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ...item,
           label: 'My Attendance History',
           khmer: 'ប្រវត្តិវត្តមានរបស់ខ្ញុំ',
+          icon: CheckCircle2,
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'reports') {
+        return {
+          ...item,
+          label: 'Wage & Payroll History',
+          khmer: 'ប្រវត្តិប្រាក់បៀវត្ស និងប្រាក់ឈ្នួល',
+          badge: 'Wage',
+          icon: DollarSign,
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'holidays') {
+        return {
+          ...item,
+          label: 'School Holidays Calendar',
+          khmer: 'ប្រតិទិនថ្ងៃឈប់សម្រាក',
+          icon: Palmtree,
+          section: 'overview' as const
+        };
+      }
+      if (item.id === 'leave') {
+        return {
+          ...item,
+          label: 'My Leave Requests',
+          khmer: 'ការសុំច្បាប់ឈប់សម្រាក',
+          icon: CalendarCheck,
           section: 'overview' as const
         };
       }
     }
     return item;
   }).filter(item => {
-    // If logged in as an Employee, strictly show ONLY Staff Calendar and Staff Check-in History
+    // If logged in as an Employee, show Monthly Present Calendar, Staff Shifts, Check-in History, Leave Requests, and Holidays
     if (isEmployee) {
-      return item.id === 'schedules' || item.id === 'attendance';
+      return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'leave' || item.id === 'holidays';
+    }
+
+    // If logged in as a Teacher, show Monthly Schedule Calendar, Weekly Timetable, Attendance History, Wage History, Holidays, and Leave
+    if (currentUser.role === 'teacher') {
+      return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'reports' || item.id === 'holidays' || item.id === 'leave';
     }
 
     // Explicitly disallow teachers and employees from accessing telegram setting and system setting
@@ -288,6 +358,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getSectionTitle = (secKey: string) => {
     if (isEmployee) {
       return isKhmer ? 'ផតថលបុគ្គលិក (STAFF PORTAL)' : 'STAFF WORK PORTAL';
+    }
+    if (currentUser.role === 'teacher') {
+      return isKhmer ? 'ផតថលគ្រូបង្រៀន (TEACHER PORTAL)' : 'TEACHER FACULTY PORTAL';
     }
     switch (secKey) {
       case 'overview':
@@ -362,6 +435,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Install Mobile App Shortcut in Sidebar */}
       <div className="px-3 pt-2 pb-1 shrink-0">
         <PWAInstallButton variant="sidebar" />
+      </div>
+
+      {/* Language Switcher in Sidebar */}
+      <div className="px-3 py-2 border-t border-slate-800/80 shrink-0">
+        <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1.5 px-0.5">
+          <span className="flex items-center gap-1.5">
+            <Languages className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{isKhmer ? 'ភាសាប្រព័ន្ធ' : 'Language'}</span>
+          </span>
+          <span className="text-[10px] text-slate-500 font-mono">
+            {language === 'km' ? 'Khmer' : 'English'}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setLanguage('km')}
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              language === 'km'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <span>🇰🇭</span>
+            <span>ភាសាខ្មែរ</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              language === 'en'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <span>🇬🇧</span>
+            <span>English</span>
+          </button>
+        </div>
       </div>
 
       {/* Current User Session Bar at bottom of sidebar */}

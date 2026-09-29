@@ -711,7 +711,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
               </span>
             </div>
             <h2 className="text-lg sm:text-2xl font-black mt-1">
-              {isKhmer ? 'ចំណុចស្កេនវត្តមានគ្រូ និងបុគ្គលិក' : 'Teacher & Employee Kiosk'}
+              {isKhmer ? 'ផ្ទាំងស្កេនវត្តមានជាក់ស្តែង' : 'Attendance Check-in Terminal'}
             </h2>
             <p className="text-xs text-slate-300 mt-0.5">
               {isKhmer

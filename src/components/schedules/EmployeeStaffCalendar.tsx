@@ -27,17 +27,26 @@ import {
 import confetti from 'canvas-confetti';
 
 interface EmployeeStaffCalendarProps {
+  initialTab?: 'monthly_present' | 'weekly_shifts' | 'holidays';
   onNavigateToHistory?: () => void;
 }
 
-export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ onNavigateToHistory }) => {
+export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ initialTab, onNavigateToHistory }) => {
   const { currentUser } = useAuth();
   const { showToast } = useNotification();
   const { isKhmer } = useLanguage();
 
   const [timeStr, setTimeStr] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'monthly_present' | 'weekly_shifts' | 'holidays'>('monthly_present');
+  const [activeTab, setActiveTab] = useState<'monthly_present' | 'weekly_shifts' | 'holidays'>(
+    initialTab || 'monthly_present'
+  );
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Storage data
   const [employees, setEmployees] = useState<Employee[]>(() => StorageService.getEmployees());
@@ -266,151 +275,45 @@ export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ on
         </div>
       </div>
 
-      {/* 2. Today's Duty & Quick Check-in/Check-out Card */}
-      <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl shadow-indigo-950/20 relative overflow-hidden">
-        {/* Subtle background graphic */}
-        <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-indigo-200 text-xs font-semibold backdrop-blur-xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>{isKhmer ? 'វេនការងារថ្ងៃនេះ (Today\'s Shift)' : 'Today\'s Work Shift'}</span>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              {isKhmer ? assignedSchedule.khmerName || assignedSchedule.name : assignedSchedule.name}
-            </h3>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-indigo-200 font-medium">
-              <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
-                <Clock className="w-3.5 h-3.5 text-indigo-300" />
-                <span>{assignedSchedule.startTime} - {assignedSchedule.endTime}</span>
-              </div>
-              {assignedSchedule.breakStart && assignedSchedule.breakEnd && (
-                <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
-                  <span>{isKhmer ? 'សម្រាកបាយ៖' : 'Lunch Break:'} {assignedSchedule.breakStart} - {assignedSchedule.breakEnd}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
-                <MapPin className="w-3.5 h-3.5 text-rose-300" />
-                <span>{assignedSchedule.location || 'Heart School Campus'}</span>
-              </div>
-            </div>
-
-            {/* Current Duty State Badge */}
-            <div className="pt-1">
-              {!todayRecord ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {isKhmer ? 'មិនទាន់ស្កេនចូលនៅឡើយ (Not Checked In)' : 'Scheduled • Not Checked In Yet'}
-                </span>
-              ) : todayRecord.checkOutTime ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  {isKhmer ? `បានបញ្ចប់ការងារថ្ងៃនេះ (ម៉ោង ${todayRecord.checkInTime} - ${todayRecord.checkOutTime})` : `Shift Completed (In: ${todayRecord.checkInTime} • Out: ${todayRecord.checkOutTime})`}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-                  {isKhmer ? `កំពុងបម្រើការ (ស្កេនចូលម៉ោង ${todayRecord.checkInTime})` : `On Duty (Checked in at ${todayRecord.checkInTime})`}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Action Button: Check In / Check Out */}
-          <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
-            {!todayRecord ? (
-              <button
-                type="button"
-                onClick={handleCheckIn}
-                disabled={isSubmitting}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/25 transition-all duration-200 active:scale-98 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <LogIn className="w-4 h-4" />
-                    <span>{isKhmer ? 'ស្កេនវត្តមានចូល (Check In)' : 'Check In Now'}</span>
-                  </>
-                )}
-              </button>
-            ) : !todayRecord.checkOutTime ? (
-              <button
-                type="button"
-                onClick={handleCheckOut}
-                disabled={isSubmitting}
-                className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition-all duration-200 active:scale-98 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <LogOut className="w-4 h-4" />
-                    <span>{isKhmer ? 'ស្កេនវត្តមានចេញ (Check Out)' : 'Check Out Now'}</span>
-                  </>
-                )}
-              </button>
-            ) : (
-              <div className="px-5 py-3 rounded-2xl bg-white/10 text-center text-xs font-bold text-emerald-200 border border-white/15">
-                ✓ {isKhmer ? 'បានកត់ត្រាវត្តមានពេញលេញ' : 'Attendance Logged'}
-              </div>
-            )}
-
-            {onNavigateToHistory && (
-              <button
-                type="button"
-                onClick={onNavigateToHistory}
-                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors"
-              >
-                <History className="w-3.5 h-3.5" />
-                <span>{isKhmer ? 'មើលប្រវត្តិវត្តមានរបស់ខ្ញុំ' : 'View Check-in History'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Navigation View Switcher (Monthly Present Calendar | Weekly Shifts | Holidays) */}
+      {/* 2. Primary Navigation Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2 sm:p-2.5 rounded-3xl border border-slate-200 shadow-2xs">
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl w-full sm:w-auto">
           <button
             type="button"
-            onClick={() => setActiveTab('monthly_present')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'monthly_present'
-                ? 'bg-white text-indigo-700 shadow-xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <CalendarDays className="w-4 h-4 text-indigo-600" />
-            <span>{isKhmer ? 'ប្រតិទិនវត្តមានប្រចាំខែ (Monthly Present)' : 'Monthly Present Calendar'}</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveTab('weekly_shifts')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'weekly_shifts'
-                ? 'bg-white text-indigo-700 shadow-xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-indigo-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900 bg-white/60'
             }`}
           >
-            <Clock className="w-4 h-4 text-indigo-600" />
+            <Clock className="w-4 h-4" />
             <span>{isKhmer ? 'កាលវិភាគវេនការងារ (Weekly Shifts)' : 'Weekly Shift Roster'}</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('holidays')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'holidays'
-                ? 'bg-white text-indigo-700 shadow-xs font-black'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setActiveTab('monthly_present')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'monthly_present'
+                ? 'bg-indigo-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900 bg-white/60'
             }`}
           >
-            <Palmtree className="w-4 h-4 text-emerald-600" />
+            <CalendarDays className="w-4 h-4" />
+            <span>{isKhmer ? 'ប្រតិទិនវត្តមានប្រចាំខែ (Monthly Present)' : 'Monthly Present Calendar'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('holidays')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'holidays'
+                ? 'bg-indigo-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900 bg-white/60'
+            }`}
+          >
+            <Palmtree className="w-4 h-4" />
             <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាក (Holidays)' : 'School Holidays'}</span>
           </button>
         </div>
@@ -421,7 +324,7 @@ export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ on
         </div>
       </div>
 
-      {/* 4. Tab Content Rendering */}
+      {/* 3. Tab Content Rendering */}
       {activeTab === 'monthly_present' && (
         <EmployeeMonthlyPresentCalendar
           initialEmployee={employeeProfile}
@@ -429,72 +332,180 @@ export const EmployeeStaffCalendar: React.FC<EmployeeStaffCalendarProps> = ({ on
         />
       )}
 
-      {/* 5. Weekly Work Schedule (Mon - Sun) */}
+      {/* 4. Weekly Shifts & Today's Duty View */}
       {activeTab === 'weekly_shifts' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-black text-base text-slate-900">
-                {isKhmer ? 'កាលវិភាគការងារប្រចាំសប្តាហ៍ (Weekly Shift Schedule)' : 'Weekly Work Shift Schedule'}
-              </h3>
-            </div>
-            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
-              {assignedSchedule.daysOfWeek?.length || 6} {isKhmer ? 'ថ្ងៃ / សប្តាហ៍' : 'Days / Week'}
-            </span>
-          </div>
+        <div className="space-y-5">
+          {/* Today's Duty & Quick Check-in/Check-out Card */}
+          <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl shadow-indigo-950/20 relative overflow-hidden">
+            <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
-            {weekDays.map(day => {
-              const isToday = day.index === currentDayIndex;
-              const isWorkingDay = assignedSchedule.daysOfWeek?.includes(day.index) ?? (day.index !== 0);
-
-              return (
-                <div
-                  key={day.index}
-                  className={`p-3.5 rounded-2xl border transition-all ${
-                    isToday
-                      ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs'
-                      : isWorkingDay
-                      ? 'bg-slate-50/70 border-slate-200'
-                      : 'bg-slate-100/50 border-slate-200/60 opacity-60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-black ${isToday ? 'text-indigo-900' : 'text-slate-800'}`}>
-                      {isKhmer ? day.shortKm : day.shortEn}
-                    </span>
-                    {isToday && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
-                        {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
-                      </span>
-                    )}
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-indigo-200 text-xs font-semibold backdrop-blur-xs">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isKhmer ? 'វេនការងារថ្ងៃនេះ (Today\'s Shift)' : 'Today\'s Work Shift'}</span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                  {isKhmer ? assignedSchedule.khmerName || assignedSchedule.name : assignedSchedule.name}
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-indigo-200 font-medium">
+                  <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
+                    <Clock className="w-3.5 h-3.5 text-indigo-300" />
+                    <span>{assignedSchedule.startTime} - {assignedSchedule.endTime}</span>
                   </div>
-
-                  {isWorkingDay ? (
-                    <div className="space-y-1 text-xs">
-                      <div className="font-bold text-slate-700 text-[11px]">
-                        {assignedSchedule.startTime} - {assignedSchedule.endTime}
-                      </div>
-                      {assignedSchedule.breakStart && (
-                        <div className="text-[10px] text-slate-500">
-                          {isKhmer ? 'សម្រាក' : 'Break'}: {assignedSchedule.breakStart}
-                        </div>
-                      )}
-                      <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-800">
-                        {isKhmer ? 'ថ្ងៃធ្វើការ' : 'Duty'}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="py-2 text-center">
-                      <span className="text-[10px] font-bold text-slate-400">
-                        {isKhmer ? 'ឈប់សម្រាក' : 'Off Day'}
-                      </span>
+                  {assignedSchedule.breakStart && assignedSchedule.breakEnd && (
+                    <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
+                      <span>{isKhmer ? 'សម្រាកបាយ៖' : 'Lunch Break:'} {assignedSchedule.breakStart} - {assignedSchedule.breakEnd}</span>
                     </div>
                   )}
+                  <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
+                    <MapPin className="w-3.5 h-3.5 text-rose-300" />
+                    <span>{assignedSchedule.location || 'Heart School Campus'}</span>
+                  </div>
                 </div>
-              );
-            })}
+
+                {/* Current Duty State Badge */}
+                <div className="pt-1">
+                  {!todayRecord ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {isKhmer ? 'មិនទាន់ស្កេនចូលនៅឡើយ (Not Checked In)' : 'Scheduled • Not Checked In Yet'}
+                    </span>
+                  ) : todayRecord.checkOutTime ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {isKhmer ? `បានបញ្ចប់ការងារថ្ងៃនេះ (ម៉ោង ${todayRecord.checkInTime} - ${todayRecord.checkOutTime})` : `Shift Completed (In: ${todayRecord.checkInTime} • Out: ${todayRecord.checkOutTime})`}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                      {isKhmer ? `កំពុងបម្រើការ (ស្កេនចូលម៉ោង ${todayRecord.checkInTime})` : `On Duty (Checked in at ${todayRecord.checkInTime})`}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Button: Check In / Check Out */}
+              <div className="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
+                {!todayRecord ? (
+                  <button
+                    type="button"
+                    onClick={handleCheckIn}
+                    disabled={isSubmitting}
+                    className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/25 transition-all duration-200 active:scale-98 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <LogIn className="w-4 h-4" />
+                        <span>{isKhmer ? 'ស្កេនវត្តមានចូល (Check In)' : 'Check In Now'}</span>
+                      </>
+                    )}
+                  </button>
+                ) : !todayRecord.checkOutTime ? (
+                  <button
+                    type="button"
+                    onClick={handleCheckOut}
+                    disabled={isSubmitting}
+                    className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 transition-all duration-200 active:scale-98 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <LogOut className="w-4 h-4" />
+                        <span>{isKhmer ? 'ស្កេនវត្តមានចេញ (Check Out)' : 'Check Out Now'}</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <div className="px-5 py-3 rounded-2xl bg-white/10 text-center text-xs font-bold text-emerald-200 border border-white/15">
+                    ✓ {isKhmer ? 'បានកត់ត្រាវត្តមានពេញលេញ' : 'Attendance Logged'}
+                  </div>
+                )}
+
+                {onNavigateToHistory && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToHistory}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>{isKhmer ? 'មើលប្រវត្តិវត្តមានរបស់ខ្ញុំ' : 'View Check-in History'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Weekly Work Schedule (Mon - Sun) */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-black text-base text-slate-900">
+                  {isKhmer ? 'កាលវិភាគការងារប្រចាំសប្តាហ៍ (Weekly Shift Schedule)' : 'Weekly Work Shift Schedule'}
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                {assignedSchedule.daysOfWeek?.length || 6} {isKhmer ? 'ថ្ងៃ / សប្តាហ៍' : 'Days / Week'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+              {weekDays.map(day => {
+                const isToday = day.index === currentDayIndex;
+                const isWorkingDay = assignedSchedule.daysOfWeek?.includes(day.index) ?? (day.index !== 0);
+
+                return (
+                  <div
+                    key={day.index}
+                    className={`p-3.5 rounded-2xl border transition-all ${
+                      isToday
+                        ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs'
+                        : isWorkingDay
+                        ? 'bg-slate-50/70 border-slate-200'
+                        : 'bg-slate-100/50 border-slate-200/60 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-black ${isToday ? 'text-indigo-900' : 'text-slate-800'}`}>
+                        {isKhmer ? day.shortKm : day.shortEn}
+                      </span>
+                      {isToday && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
+                          {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
+                        </span>
+                      )}
+                    </div>
+
+                    {isWorkingDay ? (
+                      <div className="space-y-1 text-xs">
+                        <div className="font-bold text-slate-700 text-[11px]">
+                          {assignedSchedule.startTime} - {assignedSchedule.endTime}
+                        </div>
+                        {assignedSchedule.breakStart && (
+                          <div className="text-[10px] text-slate-500">
+                            {isKhmer ? 'សម្រាក' : 'Break'}: {assignedSchedule.breakStart}
+                          </div>
+                        )}
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100 text-emerald-800">
+                          {isKhmer ? 'ថ្ងៃធ្វើការ' : 'Duty'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="py-2 text-center">
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {isKhmer ? 'ឈប់សម្រាក' : 'Off Day'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

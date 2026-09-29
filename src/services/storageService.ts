@@ -25,6 +25,7 @@ import {
   DEFAULT_ROLES,
   DEFAULT_USERS,
   DEFAULT_TEACHERS,
+  DEFAULT_EMPLOYEES,
   DEFAULT_SCHEDULES,
   DEFAULT_DEPARTMENTS,
   DEFAULT_LOCATIONS,
@@ -116,7 +117,7 @@ let cache = {
   roles: initialRoles,
   users: getStored<UserAccount[]>(STORAGE_KEYS.USERS, DEFAULT_USERS),
   teachers: getStored<Teacher[]>(STORAGE_KEYS.TEACHERS, DEFAULT_TEACHERS),
-  employees: getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, []),
+  employees: getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, DEFAULT_EMPLOYEES),
   schedules: getStored<Schedule[]>(STORAGE_KEYS.SCHEDULES, DEFAULT_SCHEDULES),
   periods: getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, DEFAULT_TIMETABLE_PERIODS),
   subjectSchedules: getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, DEFAULT_SUBJECT_SCHEDULES),
@@ -780,6 +781,14 @@ export const StorageService = {
 
   // Employees
   getEmployees(): Employee[] {
+    if (!cache.employees || cache.employees.length === 0) {
+      const stored = getStored<Employee[]>(STORAGE_KEYS.EMPLOYEES, DEFAULT_EMPLOYEES);
+      if (stored && stored.length > 0) {
+        cache.employees = stored;
+        return stored;
+      }
+      return DEFAULT_EMPLOYEES;
+    }
     return cache.employees;
   },
   saveEmployees(employees: Employee[]) {

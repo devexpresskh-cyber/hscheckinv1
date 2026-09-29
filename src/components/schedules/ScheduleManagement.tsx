@@ -43,7 +43,11 @@ import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 
-export const ScheduleManagement: React.FC = () => {
+interface ScheduleManagementProps {
+  initialView?: 'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards';
+}
+
+export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialView }) => {
   const { currentUser, hasPermission } = useAuth();
   const { showToast } = useNotification();
   const { t, isKhmer } = useLanguage();
@@ -53,8 +57,14 @@ export const ScheduleManagement: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<number>(todayDayIndex);
 
   const [viewMode, setViewMode] = useState<'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards'>(
-    () => (isTeacher ? 'daily_schedule' : 'weekly_timetable')
+    () => initialView || 'daily_schedule'
   );
+
+  useEffect(() => {
+    if (initialView) {
+      setViewMode(initialView);
+    }
+  }, [initialView]);
   const [dailyLayoutMode, setDailyLayoutMode] = useState<'table' | 'cards'>(() => (!isTeacher ? 'table' : 'cards'));
   const [dailyGroupMode, setDailyGroupMode] = useState<DailyGroupMode>('period');
   const [dailySortBy, setDailySortBy] = useState<DailySortColumn>('time');
@@ -1060,52 +1070,52 @@ export const ScheduleManagement: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* View Toggle */}
-          <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1 border border-slate-200">
+          {/* View Toggle: Daily > Weekly > Monthly */}
+          <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-200">
             <button
               onClick={() => setViewMode('daily_schedule')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'daily_schedule' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'daily_schedule' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <Clock className="w-3.5 h-3.5" />
+              <Clock className="w-4 h-4" />
               <span>{isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ (Daily)' : 'Daily Schedule'}</span>
             </button>
             <button
               onClick={() => setViewMode('weekly_timetable')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'weekly_timetable' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'weekly_timetable' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{isKhmer ? 'កាលវិភាគពេញមួយសប្តាហ៍' : 'Weekly Timetable'}</span>
+              <Calendar className="w-4 h-4" />
+              <span>{isKhmer ? 'កាលវិភាគពេញមួយសប្តាហ៍ (Weekly)' : 'Weekly Timetable'}</span>
             </button>
             <button
               onClick={() => setViewMode('monthly_calendar')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'monthly_calendar' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'monthly_calendar' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <CalendarDays className="w-3.5 h-3.5" />
+              <CalendarDays className="w-4 h-4" />
               <span>{isKhmer ? 'កាលវិភាគប្រចាំខែ (Monthly)' : 'Monthly Calendar'}</span>
             </button>
             <button
               onClick={() => setViewMode('subject_schedules')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'subject_schedules' ? 'bg-white text-indigo-700 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'subject_schedules' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5" />
+              <BookOpen className="w-4 h-4" />
               <span>{isKhmer ? 'កាតមុខវិជ្ជា' : 'Subject Cards'}</span>
             </button>
             {!isTeacher && (
               <button
                 onClick={() => setViewMode('cards')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  viewMode === 'cards' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'cards' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
                 }`}
               >
-                <Building className="w-3.5 h-3.5" />
+                <Building className="w-4 h-4" />
                 <span>{isKhmer ? 'វេនទូទៅ' : 'General Shifts'}</span>
               </button>
             )}

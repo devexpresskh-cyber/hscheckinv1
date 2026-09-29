@@ -296,6 +296,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ) {
         return false;
       }
+      // Guaranteed permissions for teacher and employee faculty & staff calendars
+      if (
+        permission === 'schedules.view' ||
+        permission === 'attendance.view' ||
+        permission === 'attendance.checkin' ||
+        permission === 'attendance.checkout'
+      ) {
+        return true;
+      }
     }
     if (currentUser.role === 'super_admin') return true;
     return currentRole.permissions.includes(permission);

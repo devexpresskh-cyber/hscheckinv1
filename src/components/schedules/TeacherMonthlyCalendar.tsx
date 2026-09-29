@@ -271,6 +271,19 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     // Convert so Monday = 0, Sunday = 6
     const firstDayIndex = (firstDayOfMonth.getDay() + 6) % 7;
 
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth();
+    const nowDay = now.getDate();
+
+    const formatLocalDate = (y: number, m: number, d: number) => {
+      const targetDate = new Date(y, m, d);
+      const ty = targetDate.getFullYear();
+      const tm = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const td = String(targetDate.getDate()).padStart(2, '0');
+      return `${ty}-${tm}-${td}`;
+    };
+
     const cells: Array<{
       dayNumber: number;
       date: Date;
@@ -288,7 +301,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = prevMonthLastDay - i;
       const d = new Date(currentYear, currentMonth - 1, dayNum);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(currentYear, currentMonth - 1, dayNum);
       const dow = d.getDay();
       cells.push({
         dayNumber: dayNum,
@@ -302,11 +315,11 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     }
 
     // Current month cells
-    const todayStr = new Date().toISOString().split('T')[0];
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const d = new Date(currentYear, currentMonth, day);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(currentYear, currentMonth, day);
       const dow = d.getDay(); // 0 = Sun, 1 = Mon, 6 = Sat
+      const isToday = currentYear === nowYear && currentMonth === nowMonth && day === nowDay;
 
       // Check holidays on this date
       const holiday = holidays.find(h => h.date === dateStr);
@@ -331,7 +344,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
         date: d,
         dateStr,
         isCurrentMonth: true,
-        isToday: dateStr === todayStr,
+        isToday,
         dayOfWeek: dow,
         classes: matchingClasses,
         holiday,
@@ -344,7 +357,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     const remaining = (7 - (totalCells % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
       const d = new Date(currentYear, currentMonth + 1, i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatLocalDate(currentYear, currentMonth + 1, i);
       cells.push({
         dayNumber: i,
         date: d,
@@ -573,29 +586,36 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                     });
                   }
                 }}
-                className={`min-h-[105px] sm:min-h-[125px] p-2 flex flex-col justify-between transition-colors cursor-pointer select-none group ${
+                className={`min-h-[105px] sm:min-h-[125px] p-2 flex flex-col justify-between transition-all cursor-pointer select-none group relative ${
                   !cell.isCurrentMonth
                     ? 'bg-slate-50/50 text-slate-300 opacity-60 cursor-default'
                     : cell.isToday
-                    ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
+                    ? 'bg-indigo-50/90 hover:bg-indigo-100/90 ring-2 ring-indigo-600 ring-inset shadow-md z-10'
                     : isWeekend
                     ? 'bg-slate-50/20 hover:bg-slate-50'
                     : 'bg-white hover:bg-slate-50'
                 }`}
               >
-                {/* Cell Header: Day Number + Holiday / Attendance Badges */}
+                {/* Cell Header: Day Number + Today Badge + Holiday / Attendance Badges */}
                 <div className="flex items-center justify-between gap-1 mb-1">
-                  <span
-                    className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                      cell.isToday
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : cell.isCurrentMonth
-                        ? 'text-slate-800'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {cell.dayNumber}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`w-6.5 h-6.5 flex items-center justify-center rounded-full text-xs font-black ${
+                        cell.isToday
+                          ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300'
+                          : cell.isCurrentMonth
+                          ? 'text-slate-800'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {cell.dayNumber}
+                    </span>
+                    {cell.isToday && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs">
+                        {isKhmer ? 'ថ្ងៃនេះ' : 'TODAY'}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1">
                     {/* Holiday indicator */}

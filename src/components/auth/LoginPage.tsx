@@ -26,7 +26,7 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { loginWithGoogle, loginWithCredentials, loginWithPin, loginWithPhone, authError, setAuthError, isLoading } = useAuth();
+  const { loginWithGoogle, loginWithCredentials, loginWithPin, loginWithPhone, authError, setAuthError, isLoading, switchUser, allUsers } = useAuth();
   const { isKhmer, toggleLanguage, language } = useLanguage();
 
   // Mode: 'phone' for phone number + PIN (No Google phone auth), 'pin' for Staff ID + PIN, 'standard' for password & Google

@@ -22,6 +22,7 @@ import { AuditLogViewer } from './components/audit/AuditLogViewer.tsx';
 import { SystemSettingsView } from './components/settings/SystemSettingsView.tsx';
 import { SystemUserManual } from './components/manual/SystemUserManual.tsx';
 import { EmployeeStaffCalendar } from './components/schedules/EmployeeStaffCalendar.tsx';
+import { EmployeeMonthlyPresentCalendar } from './components/schedules/EmployeeMonthlyPresentCalendar.tsx';
 import { StorageService } from './services/storageService.ts';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator.tsx';
 import { FirstLoginInstallModal } from './components/pwa/FirstLoginInstallModal.tsx';
@@ -76,47 +77,54 @@ const MainLayout: React.FC = () => {
   const { currentUser } = useAuth();
   const isEmployee = currentUser.role === 'employee';
   const isTeacher = currentUser.role === 'teacher';
-  // Both Teacher and Employee land directly on their Schedules / Teaching Timetable, not the admin dashboard
-  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isTeacher || isEmployee ? 'schedules' : 'dashboard'));
+  // Both Teacher and Employee land directly on their Monthly Calendar!
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isTeacher || isEmployee ? 'monthly_calendar' : 'dashboard'));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const { isKhmer } = useLanguage();
 
   const isRestrictedStaff = isTeacher || isEmployee;
 
-  // Automatically enforce guard: employee only sees staff Calendar and check-in history, teacher lands on teaching schedule
+  // Automatically enforce guard: teacher and employee land directly on their Monthly Calendar!
   React.useEffect(() => {
     if (isEmployee) {
-      if (currentTab !== 'schedules' && currentTab !== 'attendance') {
-        setCurrentTab('schedules');
+      if (currentTab !== 'monthly_calendar' && currentTab !== 'schedules' && currentTab !== 'attendance') {
+        setCurrentTab('monthly_calendar');
       }
       return;
     }
 
     if (isTeacher) {
-      if (
-        currentTab === 'telegram' ||
-        currentTab === 'settings' ||
-        currentTab === 'architecture' ||
-        currentTab === 'users' ||
-        currentTab === 'roles' ||
-        currentTab === 'audit' ||
-        currentTab === 'teachers' ||
-        currentTab === 'employees' ||
-        currentTab === 'departments'
-      ) {
-        setCurrentTab('schedules');
+      if (currentTab !== 'monthly_calendar' && currentTab !== 'schedules' && currentTab !== 'attendance') {
+        setCurrentTab('monthly_calendar');
       }
+      return;
     }
-  }, [isEmployee, isTeacher, currentTab]);
+  }, [isEmployee, isTeacher, currentUser.id]);
 
   const renderContent = () => {
-    // If logged in as Employee, strictly allow ONLY Staff Calendar and Staff Check-in History
+    // If logged in as Employee, allow Monthly Present Calendar, Staff Shifts, and Staff Check-in History
     if (isEmployee) {
       if (currentTab === 'attendance') {
         return <AttendanceList />;
       }
-      return <EmployeeStaffCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
+      if (currentTab === 'schedules') {
+        return <EmployeeStaffCalendar initialTab="weekly_shifts" onNavigateToHistory={() => setCurrentTab('attendance')} />;
+      }
+      // Monthly Present Calendar directly
+      return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
+    }
+
+    // If logged in as Teacher, allow Monthly Schedule Calendar, Weekly Timetable, and Attendance History
+    if (isTeacher) {
+      if (currentTab === 'attendance') {
+        return <AttendanceList />;
+      }
+      if (currentTab === 'schedules') {
+        return <ScheduleManagement initialView="weekly_timetable" />;
+      }
+      // Monthly Schedule Calendar directly
+      return <ScheduleManagement initialView="monthly_calendar" />;
     }
 
     switch (currentTab) {
@@ -135,8 +143,10 @@ const MainLayout: React.FC = () => {
         return <EmployeeManagement />;
       case 'departments':
         return <DepartmentManagement />;
+      case 'monthly_calendar':
+        return <ScheduleManagement initialView="monthly_calendar" />;
       case 'schedules':
-        return <ScheduleManagement />;
+        return <ScheduleManagement initialView={isTeacher ? "weekly_timetable" : "weekly_timetable"} />;
       case 'attendance':
         return <AttendanceList />;
       case 'reports':
@@ -188,8 +198,6 @@ const MainLayout: React.FC = () => {
       
       {/* Top Global Header with zero overlap */}
       <Header
-        onToggleMobileKiosk={() => setIsCheckInModalOpen(!isCheckInModalOpen)}
-        isMobileKioskOpen={isCheckInModalOpen}
         onOpenTelegram={() => setCurrentTab('telegram')}
         onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         onOpenManual={() => setCurrentTab('manual')}
