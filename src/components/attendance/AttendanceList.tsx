@@ -758,12 +758,12 @@ export const AttendanceList: React.FC = () => {
                                         {subjectCode}
                                       </span>
                                       {record.subject && (
-                                        <span className="text-slate-600 font-medium truncate">
+                                        <span className="hidden sm:inline text-slate-600 font-medium truncate">
                                           {record.subject} {record.gradeClass ? `(${record.gradeClass})` : ''}
                                         </span>
                                       )}
                                       {record.room && (
-                                        <span className="text-slate-400 text-[10px]">
+                                        <span className="hidden sm:inline text-slate-400 text-[10px]">
                                           • {record.room}
                                         </span>
                                       )}
@@ -942,11 +942,11 @@ export const AttendanceList: React.FC = () => {
                                         {reqSubjectCode}
                                       </span>
                                       {matchedAtt?.subject ? (
-                                        <span className="text-slate-600 font-medium truncate">
+                                        <span className="hidden sm:inline text-slate-600 font-medium truncate">
                                           {matchedAtt.subject} {matchedAtt.gradeClass ? `(${matchedAtt.gradeClass})` : ''}
                                         </span>
                                       ) : (
-                                        <span className="text-slate-600 font-medium">{req.department}</span>
+                                        <span className="hidden sm:inline text-slate-600 font-medium">{req.department}</span>
                                       )}
                                     </>
                                   ) : (
