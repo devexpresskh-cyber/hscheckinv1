@@ -103,5 +103,78 @@
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
+
+  /* Teacher Wage & Payroll Report & Payslip Print Optimizations */
+  .standard-report-wrapper {
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+  }
+
+  .standard-report-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .standard-report-table th,
+  .standard-report-table td {
+    page-break-inside: avoid !important;
+  }
+
+  /* When printing the payslip voucher specifically */
+  body.printing-payslip-active {
+    background: #ffffff !important;
+  }
+
+  body.printing-payslip-active .main-report-container,
+  body.printing-payslip-active .standard-admin-report-header,
+  body.printing-payslip-active .standard-admin-report-footer {
+    display: none !important;
+  }
+
+  body.printing-payslip-active #teacher-payslip-modal-wrapper {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.printing-payslip-active #teacher-payslip-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.printing-payslip-active #teacher-payslip-print {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.printing-payslip-active .payslip-modal-header,
+  body.printing-payslip-active .payslip-modal-footer {
+    display: none !important;
+  }
+
+  body.printing-payslip-active .payslip-sessions-table-wrapper {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* When NOT printing payslip, hide the payslip modal in print */
+  body:not(.printing-payslip-active) #teacher-payslip-modal-wrapper {
+    display: none !important;
+  }
 }
 

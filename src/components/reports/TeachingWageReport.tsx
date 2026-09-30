@@ -22,8 +22,345 @@ import {
   X,
   Award,
   BookOpen,
-  UserCheck
+  UserCheck,
+  ShieldCheck,
+  FileCheck
 } from 'lucide-react';
+
+function buildPayslipHtml(
+  summary: TeacherWageSummary,
+  systemSettings: any,
+  periodStr: string,
+  lateDeductionMode: 'deduct' | 'non_deduct'
+): string {
+  const orgName = systemSettings?.organizationName || 'EDUCATION MANAGEMENT SYSTEM';
+  const khmerOrgName = systemSettings?.khmerOrgName || '';
+  const currentDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const voucherNo = `VCH-${summary.teacherCode || 'TCH'}-${Date.now().toString().slice(-6)}`;
+
+  const sessionsRows = summary.classSessions.length > 0
+    ? summary.classSessions.map((session, idx) => `
+      <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+        <td style="padding: 6px 8px; text-align: center; color: #64748b;">${idx + 1}</td>
+        <td style="padding: 6px 8px; font-family: monospace; font-weight: 600;">${session.date}</td>
+        <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">
+          ${session.subject}
+          <div style="font-size: 10px; color: #64748b; font-weight: 400;">${session.gradeClass || ''} ${session.room ? '• ' + session.room : ''}</div>
+        </td>
+        <td style="padding: 6px 8px; text-align: center; font-family: monospace;">
+          ${session.checkInTime ? `${session.checkInTime} - ${session.checkOutTime || 'Ongoing'}` : `<span style="color:#94a3b8;">${session.scheduledStart}</span>`}
+        </td>
+        <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: #2563eb; font-family: monospace;">${session.actualTaughtHours}h</td>
+        <td style="padding: 6px 8px; text-align: center; font-family: monospace;">$${session.rateApplied.toFixed(2)}</td>
+        <td style="padding: 6px 8px; text-align: right; font-weight: 800; color: #047857; font-family: monospace;">$${session.wageEarned.toFixed(2)}</td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="7" style="padding: 16px; text-align: center; color: #94a3b8; font-size: 11px;">No individual punch logs recorded. Baseline scheduled calculation applied.</td></tr>`;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Payslip Voucher - ${summary.teacherName} - ${periodStr}</title>
+      <style>
+        @page {
+          size: portrait;
+          margin: 10mm 12mm;
+        }
+        * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Khmer OS", "Khmer OS Battambang";
+          color: #0f172a;
+          background: #ffffff;
+          margin: 0;
+          padding: 0;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .voucher-container {
+          width: 100%;
+          max-width: 800px;
+          margin: 0 auto;
+          border: 2px solid #0f172a;
+          padding: 20px 24px;
+        }
+        .header {
+          text-align: center;
+          border-bottom: 2px solid #0f172a;
+          padding-bottom: 12px;
+          margin-bottom: 16px;
+        }
+        .org-name {
+          font-size: 18px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #0f172a;
+          margin: 0;
+        }
+        .khmer-org {
+          font-size: 14px;
+          font-weight: 700;
+          color: #1e293b;
+          margin: 2px 0 0 0;
+        }
+        .voucher-title {
+          font-size: 14px;
+          font-weight: 800;
+          text-transform: uppercase;
+          color: #047857;
+          letter-spacing: 1px;
+          margin-top: 6px;
+        }
+        .meta-strip {
+          display: flex;
+          justify-content: space-between;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 11px;
+          margin-bottom: 16px;
+        }
+        .meta-item strong {
+          color: #0f172a;
+        }
+        .profile-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 16px;
+          margin-bottom: 16px;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          padding: 12px 14px;
+          border-radius: 6px;
+        }
+        .profile-table {
+          width: 100%;
+          font-size: 11px;
+          border-collapse: collapse;
+        }
+        .profile-table td {
+          padding: 3px 0;
+        }
+        .rate-box {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          padding: 10px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .kpi-row {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        .kpi-card {
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          padding: 8px;
+          text-align: center;
+          background: #f8fafc;
+        }
+        .kpi-title {
+          font-size: 9px;
+          text-transform: uppercase;
+          font-weight: 700;
+          color: #64748b;
+        }
+        .kpi-val {
+          font-size: 15px;
+          font-weight: 900;
+          color: #0f172a;
+          margin-top: 2px;
+          font-family: monospace;
+        }
+        .net-banner {
+          background: #047857;
+          color: #ffffff;
+          padding: 12px 16px;
+          border-radius: 6px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+        .sessions-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+        }
+        .sessions-table th {
+          background: #f1f5f9;
+          border: 1px solid #cbd5e1;
+          padding: 7px 8px;
+          font-size: 10px;
+          text-transform: uppercase;
+          font-weight: 800;
+          color: #334155;
+        }
+        .sessions-table td {
+          border: 1px solid #e2e8f0;
+        }
+        .signatures {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+          text-align: center;
+          margin-top: 24px;
+          padding-top: 12px;
+          page-break-inside: avoid;
+        }
+        .sig-line {
+          height: 55px;
+          border-bottom: 1px solid #0f172a;
+          margin-bottom: 6px;
+        }
+        .sig-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: #0f172a;
+        }
+        .sig-sub {
+          font-size: 9px;
+          color: #64748b;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="voucher-container">
+        <div class="header">
+          <div class="org-name">${orgName}</div>
+          ${khmerOrgName ? `<div class="khmer-org">${khmerOrgName}</div>` : ''}
+          <div class="voucher-title">TEACHER TEACHING COMPENSATION PAYSLIP VOUCHER</div>
+          <div style="font-size: 11px; color: #475569; font-weight: 600; margin-top: 2px;">
+            ប័ណ្ណទូទាត់ប្រាក់ឈ្នួលបង្រៀនគ្រូផ្លូវការ
+          </div>
+        </div>
+
+        <div class="meta-strip">
+          <div class="meta-item"><strong>Voucher No:</strong> <span style="font-family: monospace;">${voucherNo}</span></div>
+          <div class="meta-item"><strong>Period:</strong> ${periodStr}</div>
+          <div class="meta-item"><strong>Date Issued:</strong> ${currentDate}</div>
+        </div>
+
+        <div class="profile-grid">
+          <div>
+            <table class="profile-table">
+              <tr>
+                <td style="width: 110px; color: #64748b; font-weight: 600;">Teacher Name:</td>
+                <td style="font-weight: 800; font-size: 13px; color: #0f172a;">${summary.teacherName} ${summary.khmerName ? `(${summary.khmerName})` : ''}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b; font-weight: 600;">Faculty ID / Code:</td>
+                <td style="font-family: monospace; font-weight: 700;">${summary.teacherCode}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b; font-weight: 600;">Department:</td>
+                <td>${summary.department}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b; font-weight: 600;">Position / Title:</td>
+                <td>${summary.position} • ${summary.employmentType}</td>
+              </tr>
+            </table>
+          </div>
+          <div class="rate-box">
+            <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Hourly Rate</div>
+            <div style="font-size: 18px; font-weight: 900; color: #0f172a; font-family: monospace; margin-top: 3px;">
+              $${summary.hourlyRate.toFixed(2)} <span style="font-size: 11px; font-weight: 600; color: #64748b;">/hr</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-title">Classes Delivered</div>
+            <div class="kpi-val">${summary.totalCompletedClasses} / ${summary.totalScheduledClasses}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">Taught Hours</div>
+            <div class="kpi-val" style="color: #2563eb;">${summary.completedHours.toFixed(1)} hrs</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-title">Gross Earnings</div>
+            <div class="kpi-val">$${summary.grossWage.toFixed(2)}</div>
+          </div>
+          <div class="kpi-card" style="${lateDeductionMode === 'deduct' && summary.lateDeductions > 0 ? 'background: #fff1f2; border-color: #fecdd3;' : ''}">
+            <div class="kpi-title">Late Deduction</div>
+            <div class="kpi-val" style="${lateDeductionMode === 'deduct' && summary.lateDeductions > 0 ? 'color: #e11d48;' : 'color: #059669;'}">
+              ${lateDeductionMode === 'deduct' && summary.lateDeductions > 0 ? `-$${summary.lateDeductions.toFixed(2)}` : '$0.00'}
+            </div>
+            <div style="font-size: 8px; color: #64748b;">${summary.totalLateMinutes} mins late</div>
+          </div>
+        </div>
+
+        <div class="net-banner">
+          <div>
+            <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9;">
+              Net Compensation Payable / ប្រាក់ឈ្នួលត្រូវបើកសុទ្ធ
+            </div>
+            <div style="font-size: 11px; opacity: 0.85; margin-top: 2px;">
+              ${lateDeductionMode === 'deduct' ? 'Net after prorated tardiness deduction' : 'Full compensation (late penalty waived policy)'}
+            </div>
+          </div>
+          <div style="font-size: 26px; font-weight: 900; font-family: monospace;">
+            $${summary.netWage.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD
+          </div>
+        </div>
+
+        <div style="margin-bottom: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #1e293b;">
+          Itemized Teaching Sessions Log (${summary.classSessions.length} classes recorded)
+        </div>
+
+        <table class="sessions-table">
+          <thead>
+            <tr>
+              <th style="width: 32px;">No.</th>
+              <th style="width: 75px;">Date</th>
+              <th>Subject & Class</th>
+              <th style="width: 120px;">Actual Scan</th>
+              <th style="width: 60px;">Hours</th>
+              <th style="width: 65px;">Rate</th>
+              <th style="width: 75px; text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sessionsRows}
+          </tbody>
+        </table>
+
+        <div class="signatures">
+          <div>
+            <div class="sig-line"></div>
+            <div class="sig-title">Prepared by (HR / Payroll)</div>
+            <div class="sig-sub">អ្នករៀបចំ</div>
+          </div>
+          <div>
+            <div class="sig-line"></div>
+            <div class="sig-title">Academic Director</div>
+            <div class="sig-sub">ប្រធានដេប៉ាតឺម៉ង់ / នាយកសិក្សា</div>
+          </div>
+          <div>
+            <div class="sig-line"></div>
+            <div class="sig-title">Teacher Acknowledgment</div>
+            <div class="sig-sub">ហត្ថលេខាគ្រូទទួល</div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
 
 interface TeachingWageReportProps {
   lockedTeacherId?: string;
@@ -338,6 +675,56 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
     window.print();
   };
 
+  const handlePrintPayslip = () => {
+    if (!selectedTeacherForDetail) return;
+    const periodStr = dateFilterMode === 'month' ? selectedMonth : `${startDate} to ${endDate}`;
+
+    try {
+      let iframe = document.getElementById('payslip-print-iframe') as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'payslip-print-iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        document.body.appendChild(iframe);
+      }
+
+      const voucherHtml = buildPayslipHtml(
+        selectedTeacherForDetail,
+        systemSettings,
+        periodStr,
+        lateDeductionMode
+      );
+
+      const iframeDoc = iframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(voucherHtml);
+        iframeDoc.close();
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 250);
+        return;
+      }
+    } catch (e) {
+      console.warn('Iframe print failed, falling back to window.print():', e);
+    }
+
+    // Direct fallback
+    document.body.classList.add('printing-payslip-active');
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove('printing-payslip-active');
+    }, 1200);
+  };
+
   const openTeacherDetail = (summary: TeacherWageSummary) => {
     setSelectedTeacherForDetail(summary);
     setIsPayslipModalOpen(true);
@@ -564,22 +951,69 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+      {/* Main Table Container: Standard Form on Admin */}
+      <div className="standard-report-wrapper bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
         
-        {/* Printable Org Banner */}
-        <div className="hidden print:block p-6 border-b border-slate-200 text-center">
-          <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
-            {systemSettings.organizationName}
-          </h1>
-          {systemSettings.khmerOrgName && (
-            <p className="text-sm font-khmer font-bold text-slate-800 mt-0.5">
-              {systemSettings.khmerOrgName}
-            </p>
-          )}
-          <p className="text-xs text-slate-600 mt-1">
-            Faculty Teaching Hours & Wage Compensation Report • Period: {dateFilterMode === 'month' ? selectedMonth : `${startDate} to ${endDate}`}
-          </p>
+        {/* Institutional Standard Form Header (Visible on Admin Screen and in Print) */}
+        <div className="standard-admin-report-header p-5 sm:p-7 border-b border-slate-200 bg-white">
+          <div className="text-center pb-4 border-b border-slate-200">
+            <div className="text-xs font-khmer font-bold text-slate-700 tracking-wider">
+              ព្រះរាជាណាចក្រកម្ពុជា • ជាតិ សាសនា ព្រះមហាក្សត្រ
+            </div>
+            <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-0.5">
+              Kingdom of Cambodia • Nation Religion King
+            </div>
+            <div className="w-16 h-0.5 bg-slate-300 mx-auto my-2 rounded-full" />
+            
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight uppercase">
+              {systemSettings.organizationName}
+            </h1>
+            {systemSettings.khmerOrgName && (
+              <p className="text-sm sm:text-base font-khmer font-bold text-slate-800 mt-0.5">
+                {systemSettings.khmerOrgName}
+              </p>
+            )}
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">
+              {isKhmer ? 'ការិយាល័យកិច្ចការគ្រូបង្រៀន និងគណនេយ្យបៀវត្សរ៍' : 'Faculty Affairs, Academic Operations & Payroll Division'}
+            </div>
+          </div>
+
+          <div className="text-center my-4">
+            <h2 className="text-base sm:text-lg font-black text-slate-900 font-khmer tracking-wide">
+              តារាងសង្ខេបម៉ោងបង្រៀន និងបើកប្រាក់កម្រៃបង្រៀនគ្រូ
+            </h2>
+            <h3 className="text-xs sm:text-sm font-black text-emerald-800 uppercase tracking-wider mt-0.5">
+              Standard Faculty Teaching Hours & Payroll Compensation Statement
+            </h3>
+          </div>
+
+          {/* Administrative Reference Matrix */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 text-xs">
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Reference No. (លេខយោង)</span>
+              <span className="font-mono font-bold text-slate-800">
+                REP-PAY-${dateFilterMode === 'month' ? selectedMonth.replace('-', '') : 'PAY'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Payroll Cycle (ការបរិច្ឆេទ)</span>
+              <span className="font-bold text-slate-800">
+                {dateFilterMode === 'month' ? `Month ${selectedMonth}` : `${startDate} to ${endDate}`}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Department (ដេប៉ាតឺម៉ង់)</span>
+              <span className="font-bold text-slate-800">
+                {selectedDept === 'All' ? (isKhmer ? 'គ្រប់ដេប៉ាតឺម៉ង់ (All)' : 'All Departments') : selectedDept}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Late Policy (គោលការណ៍យឺត)</span>
+              <span className={`font-bold ${lateDeductionMode === 'deduct' ? 'text-rose-700' : 'text-indigo-700'}`}>
+                {lateDeductionMode === 'deduct' ? 'Deduct Late Mins' : 'Non-Deduct (Full Rate)'}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
@@ -597,10 +1031,11 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="standard-report-table w-full text-left text-xs border-collapse">
             <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
               <tr>
-                <th className="p-3.5 pl-5">Teacher Profile</th>
+                <th className="p-3.5 text-center w-12">No. (ល.រ)</th>
+                <th className="p-3.5 pl-3">Teacher Profile</th>
                 <th className="p-3.5">Department & Subject</th>
                 <th className="p-3.5 text-center">Hourly Rate</th>
                 <th className="p-3.5 text-center">Classes (Done / Sched)</th>
@@ -609,21 +1044,26 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                 <th className="p-3.5 text-right font-bold text-slate-700">Gross Wage ($)</th>
                 <th className="p-3.5 text-center font-bold">Late Deduction</th>
                 <th className="p-3.5 text-right font-black text-emerald-800">Net Wage ($)</th>
-                <th className="p-3.5 pr-5 text-right">Actions</th>
+                <th className="p-3.5 pr-5 text-right print:hidden">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {wageSummaries.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400 text-xs">
+                  <td colSpan={11} className="p-8 text-center text-slate-400 text-xs">
                     No teaching records found for the selected criteria.
                   </td>
                 </tr>
               ) : (
-                wageSummaries.map(summary => (
+                wageSummaries.map((summary, idx) => (
                   <tr key={summary.teacherId} className="hover:bg-slate-50/70 transition-colors">
+                    {/* Seq # */}
+                    <td className="p-3.5 text-center text-slate-400 font-bold font-mono">
+                      {idx + 1}
+                    </td>
+
                     {/* Teacher profile */}
-                    <td className="p-3.5 pl-5">
+                    <td className="p-3.5 pl-3">
                       <div className="flex items-center gap-3">
                         {summary.photoUrl && summary.photoUrl.trim() ? (
                           <img
@@ -732,7 +1172,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                     </td>
 
                     {/* Actions */}
-                    <td className="p-3.5 pr-5 text-right">
+                    <td className="p-3.5 pr-5 text-right print:hidden">
                       <button
                         onClick={() => openTeacherDetail(summary)}
                         className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-colors inline-flex items-center gap-1 shadow-xs cursor-pointer"
@@ -745,17 +1185,156 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                 ))
               )}
             </tbody>
+
+            {/* Standard Form Table Footer with Grand Totals */}
+            <tfoot className="bg-slate-100/90 text-slate-900 font-black border-t-2 border-slate-300 text-xs">
+              <tr>
+                <td className="p-3.5 text-center text-slate-400 font-bold">--</td>
+                <td className="p-3.5 pl-3">
+                  <div className="text-slate-900 uppercase font-black tracking-wider">
+                    {isKhmer ? 'សរុបរួម (GRAND TOTAL)' : 'GRAND TOTAL / សរុប'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-normal">
+                    {wageSummaries.length} Faculty Members Monitored
+                  </div>
+                </td>
+                <td className="p-3.5 text-slate-500 font-normal text-[11px]">
+                  All Active Subjects
+                </td>
+                <td className="p-3.5 text-center font-mono">
+                  <span className="text-[11px] text-slate-600 font-bold bg-white px-2 py-0.5 rounded border border-slate-200">
+                    Avg ${overallKPIs.avgRate.toFixed(2)}/hr
+                  </span>
+                </td>
+                <td className="p-3.5 text-center font-mono font-black">
+                  {overallKPIs.totalClasses} classes
+                </td>
+                <td className="p-3.5 text-center font-mono font-black text-blue-700 text-sm">
+                  {overallKPIs.totalHours.toFixed(1)} hrs
+                </td>
+                <td className="p-3.5 text-center">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-200 text-slate-800">
+                    {overallKPIs.avgCompletion}% Avg
+                  </span>
+                </td>
+                <td className="p-3.5 text-right font-mono font-black text-slate-900">
+                  ${overallKPIs.totalGrossWage.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="p-3.5 text-center font-mono font-black text-rose-700">
+                  {lateDeductionMode === 'deduct' && overallKPIs.totalLateDeductions > 0
+                    ? `-$${overallKPIs.totalLateDeductions.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                    : '$0.00'}
+                </td>
+                <td className="p-3.5 text-right font-mono font-black text-emerald-800 text-base">
+                  ${overallKPIs.totalWage.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="p-3.5 print:hidden"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
+
+        {/* Institutional Standard Form Footer (Signatures & Certification) */}
+        <div className="standard-admin-report-footer p-6 sm:p-8 border-t border-slate-200 bg-slate-50/70">
+          {/* Official Certification Statement */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-2xs">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-600 leading-relaxed">
+                <strong className="text-slate-800 font-bold block mb-0.5">
+                  {isKhmer ? 'សេចក្តីបញ្ជាក់ត្រួតពិនិត្យផ្លូវការ (Administrative Certification):' : 'Official Administrative Certification:'}
+                </strong>
+                {isKhmer
+                  ? 'យើងខ្ញុំសូមបញ្ជាក់ និងទទួលខុសត្រូវថា តារាងម៉ោងបង្រៀន និងប្រាក់ឈ្នួលគ្រូខាងលើ ត្រូវបានត្រួតពិនិត្យផ្ទៀងផ្ទាត់យ៉ាងហ្មត់ចត់ស្របតាមទិន្នន័យស្កេនជាក់ស្តែងពីប្រព័ន្ធ Terminal Check-in និងគោលការណ៍គ្រឹះស្ថាន។'
+                  : 'We hereby certify and confirm that all faculty teaching hours, delivery timestamps, and calculated compensations stated in this document have been fully audited, reconciled with terminal scan logs, and prepared in accordance with institutional financial guidelines.'}
+              </div>
+            </div>
+          </div>
+
+          {/* Signatures 3 Columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+            {/* Column 1 */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  {isKhmer ? 'អ្នករៀបចំ (Prepared By)' : 'Prepared By (HR / Payroll)'}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  {currentUser.role === 'admin_hr' || currentUser.role === 'super_admin' ? 'HR & Compensation Officer' : currentUser.role}
+                </p>
+              </div>
+              <div className="my-8">
+                <div className="h-10 border-b border-dashed border-slate-300 w-3/4 mx-auto" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 text-xs">{currentUser.fullName}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Date: {new Date().toLocaleDateString('en-GB')}
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2 */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  {isKhmer ? 'អ្នកត្រួតពិនិត្យ (Verified By)' : 'Verified By (Finance & Audit)'}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Head of Accounting / Financial Auditor
+                </p>
+              </div>
+              <div className="my-8">
+                <div className="h-10 border-b border-dashed border-slate-300 w-3/4 mx-auto" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-400 text-xs">____________________________</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Date: ____ / ____ / 2026
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3 */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between relative overflow-hidden">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  {isKhmer ? 'អ្នកអនុម័ត (Approved By)' : 'Approved By (Director / President)'}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  School Board / Executive Director
+                </p>
+              </div>
+              <div className="my-8 flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase rotate-[-12deg]">
+                  Official Stamp
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-slate-400 text-xs">____________________________</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Date: ____ / ____ / 2026
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Watermark / Control info */}
+          <div className="mt-6 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-400 gap-2">
+            <span>Generated from EduTrack Academic & Attendance Management System</span>
+            <span>Confidential Financial Document • For Internal Administrative Use Only</span>
+          </div>
+        </div>
+
       </div>
 
       {/* Individual Teacher Itemized Payslip Modal */}
       {isPayslipModalOpen && selectedTeacherForDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in-50 zoom-in-95 my-auto">
+        <div id="teacher-payslip-modal-wrapper" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div id="teacher-payslip-card" className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in-50 zoom-in-95 my-auto">
             
             {/* Modal Header */}
-            <div className="bg-slate-900 text-white px-6 py-4.5 flex items-center justify-between shrink-0">
+            <div className="payslip-modal-header bg-slate-900 text-white px-6 py-4.5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
                   <DollarSign className="w-5 h-5" />
@@ -771,7 +1350,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
               </div>
               <button
                 onClick={() => setIsPayslipModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -903,7 +1482,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                     No individual clock punch records found. Estimated wage is based on recurring schedule baseline.
                   </div>
                 ) : (
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
+                  <div className="payslip-sessions-table-wrapper border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 border-b border-slate-200">
                         <tr>
@@ -972,19 +1551,19 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0">
+            <div className="payslip-modal-footer bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={() => setIsPayslipModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 Close
               </button>
 
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors shadow-xs"
+                onClick={handlePrintPayslip}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer active:scale-95"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Payslip Voucher</span>
