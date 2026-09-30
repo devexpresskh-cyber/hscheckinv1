@@ -58,7 +58,7 @@ export const TelegramService = {
       type: params.type,
       message: params.text,
       status: sendStatus,
-      error: errorMessage,
+      error: errorMessage || '',
       sentAt: now
     };
     StorageService.addTelegramLog(log);

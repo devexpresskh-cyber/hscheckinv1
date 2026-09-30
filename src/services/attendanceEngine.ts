@@ -250,20 +250,33 @@ export const AttendanceEngine = {
     });
 
     // 1. Direct subjectScheduleId match (with teacher ownership confirmation)
-    const directWithTeacher = dateRecords.find(a => a.subjectScheduleId === sub.id && isTeacherOwner(a));
+    const directWithTeacher = dateRecords.find(
+      a => (a.subjectScheduleId === sub.id || a.scheduleId === sub.id) && isTeacherOwner(a)
+    );
     if (directWithTeacher) return directWithTeacher;
 
-    const directAny = dateRecords.find(a => a.subjectScheduleId === sub.id);
+    const directAny = dateRecords.find(
+      a => a.subjectScheduleId === sub.id || a.scheduleId === sub.id
+    );
     if (directAny) return directAny;
 
     // Filter to this teacher's records for today
     const teacherRecords = dateRecords.filter(isTeacherOwner);
     if (teacherRecords.length === 0) return undefined;
 
-    // 2. Exact subject name & scheduled start time
+    // Strictly exclude any records that are already bound to a DIFFERENT subject schedule ID
+    // This prevents cross-contamination between different, overlapping, or future classes.
+    const unclaimedTeacherRecords = teacherRecords.filter(a => {
+      if (a.subjectScheduleId && a.subjectScheduleId !== sub.id) return false;
+      if (a.scheduleId && a.scheduleId !== sub.id && a.scheduleId.startsWith('sch-sub-')) return false;
+      return true;
+    });
+    if (unclaimedTeacherRecords.length === 0) return undefined;
+
+    // 2. Exact subject name & scheduled start time (among unclaimed records only)
     const lowSubName = (sub.subject || '').trim().toLowerCase();
     const khmerSubName = (sub.khmerSubject || '').trim();
-    const bySubAndStart = teacherRecords.find(a => {
+    const bySubAndStart = unclaimedTeacherRecords.find(a => {
       const matchStart = a.scheduledStart === sub.startTime;
       const matchSubject =
         (a.subject && a.subject.trim().toLowerCase() === lowSubName) ||
@@ -274,30 +287,28 @@ export const AttendanceEngine = {
     if (bySubAndStart) return bySubAndStart;
 
     // 3. Exact scheduled start time
-    const byStart = teacherRecords.find(a => a.scheduledStart === sub.startTime);
+    const byStart = unclaimedTeacherRecords.find(a => a.scheduledStart === sub.startTime);
     if (byStart) return byStart;
 
     // 4. Exact periodName
     if (sub.periodName) {
       const lowPeriod = sub.periodName.trim().toLowerCase();
-      const byPeriod = teacherRecords.find(a => a.periodName && a.periodName.trim().toLowerCase() === lowPeriod);
+      const byPeriod = unclaimedTeacherRecords.find(a => a.periodName && a.periodName.trim().toLowerCase() === lowPeriod);
       if (byPeriod) return byPeriod;
     }
 
     // 5. Match by check-in time during class window [startTime - 30m, endTime + 15m]
     const subStartMins = this.timeToMinutes(sub.startTime);
     const subEndMins = this.timeToMinutes(sub.endTime);
-    const byTimeWindow = teacherRecords.find(a => {
+    const byTimeWindow = unclaimedTeacherRecords.find(a => {
       if (!a.checkInTime) return false;
-      // If this record has a different subjectScheduleId that exists, do not hijack it
-      if (a.subjectScheduleId && a.subjectScheduleId !== sub.id) return false;
       const inMins = this.timeToMinutes(a.checkInTime);
       return inMins >= Math.max(0, subStartMins - 30) && inMins <= (subEndMins + 15);
     });
     if (byTimeWindow) return byTimeWindow;
 
     // 6. If scheduleId matches sub.id
-    const byScheduleId = teacherRecords.find(a => a.scheduleId === sub.id);
+    const byScheduleId = unclaimedTeacherRecords.find(a => a.scheduleId === sub.id);
     if (byScheduleId) return byScheduleId;
 
     return undefined;
@@ -421,7 +432,17 @@ export const AttendanceEngine = {
       };
     }
 
-    // Validation: Over scheduled end-time check
+    // Validation: Over scheduled end-time check - Teachers cannot scan into overtime or completed schedules under any circumstance
+    if (params.personType === 'teacher' && currentMins >= scheduledEndMins) {
+      const targetLabel = subjectSchedule
+        ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
+        : `shift "${schedule.name}" (${schedule.startTime} - ${schedule.endTime})`;
+      return {
+        success: false,
+        message: `Check-in denied: Schedule period has already ended (${scheduledEndTime}) for ${targetLabel}. Teachers are strictly not allowed to scan into overtime or completed schedules.`
+      };
+    }
+
     if (!params.bypassScheduleWindow && currentMins >= scheduledEndMins) {
       const targetLabel = subjectSchedule
         ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
@@ -432,11 +453,37 @@ export const AttendanceEngine = {
       };
     }
 
+    // Check for ongoing overlapping class session that has not checked out yet
+    // Teachers must complete or checkout of their active class before clocking into another period
+    if (params.personType === 'teacher' && subjectSchedule) {
+      const activeUnfinishedSession = StorageService.getAttendance().find(r => {
+        return (
+          r.personId === params.personId &&
+          r.date === today &&
+          r.checkInTime &&
+          !r.checkOutTime &&
+          r.subjectScheduleId &&
+          r.subjectScheduleId !== subjectSchedule!.id
+        );
+      });
+
+      if (activeUnfinishedSession) {
+        return {
+          success: false,
+          message: `Check-in denied: Teacher is currently checked in to ongoing class "${activeUnfinishedSession.subject || 'Class'}" (${activeUnfinishedSession.periodName || 'period'}) from ${activeUnfinishedSession.checkInTime}. Please check out of that session before starting this new schedule.`
+        };
+      }
+    }
+
     // Check duplicate check-in
-    // If teacher checking in by subject schedule, check duplicate for that specific subject period today
+    // Specifically query and target the active schedule ID to prevent cross-contamination with other overlapping or future schedules
     const existing = StorageService.getAttendance().find(r => {
       if (subjectSchedule) {
-        return r.personId === params.personId && r.date === today && r.subjectScheduleId === subjectSchedule.id;
+        return (
+          r.personId === params.personId &&
+          r.date === today &&
+          (r.subjectScheduleId === subjectSchedule.id || r.scheduleId === subjectSchedule.id)
+        );
       }
       return r.personId === params.personId && r.date === today && !r.subjectScheduleId;
     });
@@ -483,8 +530,9 @@ export const AttendanceEngine = {
       khmerName: params.khmerName,
       department: params.department,
       date: today,
-      scheduleId: schedule.id,
-      scheduleName: schedule.name,
+      // Target active schedule ID specifically for both scheduleId and subjectScheduleId
+      scheduleId: subjectSchedule ? subjectSchedule.id : schedule.id,
+      scheduleName: subjectSchedule ? `${subjectSchedule.subject} (${subjectSchedule.periodName})` : schedule.name,
       // Teacher Subject Schedule properties
       subjectScheduleId: subjectSchedule?.id,
       subject: subjectSchedule?.subject,
@@ -502,7 +550,7 @@ export const AttendanceEngine = {
       earlyLeaveMinutes: 0,
       overtimeMinutes: 0,
       ipAddress: params.ipAddress || '192.168.1.100',
-      deviceInfo: params.deviceInfo || navigator.userAgent.slice(0, 60),
+      deviceInfo: params.deviceInfo || (typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 60) : 'Web Client'),
       locationLatitude: params.latitude ?? null,
       locationLongitude: params.longitude ?? null,
       locationVerified: locationVerified,
@@ -560,9 +608,10 @@ export const AttendanceEngine = {
     customTime?: string;
     attendanceRecordId?: string;
     subjectScheduleId?: string;
+    autoSetToEndOfSchedule?: boolean;
   }): CheckOutResult {
     const today = this.getCurrentDateString();
-    const currentTime = params.customTime || this.getCurrentTimeString();
+    let currentTime = params.customTime || this.getCurrentTimeString();
     
     // Find matching record
     let existing: AttendanceRecord | undefined;
@@ -570,7 +619,10 @@ export const AttendanceEngine = {
       existing = StorageService.getAttendance().find(r => r.id === params.attendanceRecordId);
     } else if (params.subjectScheduleId) {
       existing = StorageService.getAttendance().find(
-        r => r.personId === params.personId && r.date === today && r.subjectScheduleId === params.subjectScheduleId
+        r =>
+          r.personId === params.personId &&
+          r.date === today &&
+          (r.subjectScheduleId === params.subjectScheduleId || r.scheduleId === params.subjectScheduleId)
       );
     } else {
       // Find latest check-in for this person today that is missing check-out
@@ -595,11 +647,20 @@ export const AttendanceEngine = {
     }
 
     const isTeacher = existing.personType === 'teacher' || Boolean(existing.subjectScheduleId);
-    const checkOutMins = this.timeToMinutes(currentTime);
+    let checkOutMins = this.timeToMinutes(currentTime);
     const scheduledEndMins = this.timeToMinutes(existing.scheduledEnd);
 
-    // Strict Universal Validation: Do not allow teacher to check out BEFORE schedule or OVERTIME
-    if (isTeacher) {
+    // Auto-set check-out time to scheduled end of schedule when requested or resolving missing check-out
+    let isAutoSetToEnd = Boolean(params.autoSetToEndOfSchedule);
+    if (isTeacher && (params.autoSetToEndOfSchedule || checkOutMins >= scheduledEndMins)) {
+      // If teacher is scanning out at or after schedule end-time (missing check-out), auto set to schedule end time
+      currentTime = existing.scheduledEnd;
+      checkOutMins = scheduledEndMins;
+      isAutoSetToEnd = true;
+    }
+
+    // Strict Universal Validation: Do not allow teacher to check out BEFORE schedule
+    if (isTeacher && !isAutoSetToEnd) {
       // 1. Check out before schedule
       if (checkOutMins < scheduledEndMins) {
         const earlyMins = scheduledEndMins - checkOutMins;
@@ -609,19 +670,6 @@ export const AttendanceEngine = {
         return {
           success: false,
           message: `Check-out denied: Current time (${currentTime}) is before scheduled end-time (${existing.scheduledEnd}) for ${targetLabel}. Class ends in ${earlyMins} minute(s). Teachers are strictly prohibited from checking out before schedule.`
-        };
-      }
-
-      // 2. Check out overtime (exceeding allowable checkout departure window)
-      const maxCheckoutGrace = 15; // 15-minute allowable checkout departure window
-      if (checkOutMins > scheduledEndMins + maxCheckoutGrace) {
-        const overtimeMins = checkOutMins - scheduledEndMins;
-        const targetLabel = existing.subject
-          ? `"${existing.subject}" (${existing.periodName || 'class'})`
-          : 'scheduled session';
-        return {
-          success: false,
-          message: `Check-out denied: Current time (${currentTime}) is ${overtimeMins} minute(s) past the scheduled end-time (${existing.scheduledEnd}) for ${targetLabel}. Overtime check-out is strictly prohibited for teachers.`
         };
       }
     }
@@ -640,17 +688,19 @@ export const AttendanceEngine = {
     const workingTimeText = `${hours}h ${mins}m`;
 
     let finalStatus = existing.status;
-    if (earlyLeaveMinutes > 0 && existing.status === 'Present') {
+    if (!isAutoSetToEnd && earlyLeaveMinutes > 0 && existing.status === 'Present') {
       finalStatus = 'Early Leave';
+    } else if (existing.status === 'Missing Check-out') {
+      finalStatus = existing.lateMinutes > 0 ? 'Late' : 'Present';
     }
 
     const updatedRecord: AttendanceRecord = {
       ...existing,
       checkOutTime: currentTime,
-      earlyLeaveMinutes,
-      overtimeMinutes,
+      earlyLeaveMinutes: isAutoSetToEnd ? 0 : earlyLeaveMinutes,
+      overtimeMinutes: isAutoSetToEnd ? 0 : overtimeMinutes,
       status: finalStatus,
-      updatedAt: `${today}T${currentTime}:00`
+      updatedAt: `${today}T${this.getCurrentTimeString()}:00`
     };
 
     StorageService.updateAttendanceRecord(existing.id, updatedRecord);
@@ -664,10 +714,12 @@ export const AttendanceEngine = {
       userId: params.personId,
       userName: params.personName,
       userRole: existing.personType,
-      action: 'Check-out Recorded',
+      action: isAutoSetToEnd ? 'Missing Check-out Resolved' : 'Check-out Recorded',
       target: `${params.personName} - ${sessionDesc}`,
-      previousValue: `Checked in at ${existing.checkInTime}`,
-      newValue: `Checked out at ${currentTime} (Class/Work duration: ${workingTimeText})`,
+      previousValue: `Checked in at ${existing.checkInTime} (Check-out was missing)`,
+      newValue: isAutoSetToEnd
+        ? `Checked out at ${currentTime} [Auto-set to schedule end ${existing.scheduledEnd}] (Duration: ${workingTimeText})`
+        : `Checked out at ${currentTime} (Class/Work duration: ${workingTimeText})`,
       ipAddress: existing.ipAddress || '127.0.0.1'
     });
 
@@ -679,14 +731,16 @@ export const AttendanceEngine = {
       department: existing.department,
       checkOutTime: currentTime,
       workingTime: workingTimeText,
-      earlyLeaveMinutes,
-      overtimeMinutes,
+      earlyLeaveMinutes: isAutoSetToEnd ? 0 : earlyLeaveMinutes,
+      overtimeMinutes: isAutoSetToEnd ? 0 : overtimeMinutes,
       subjectInfo: existing.subject ? `${existing.subject} [${existing.gradeClass} - ${existing.room}]` : undefined
     });
 
     return {
       success: true,
-      message: earlyLeaveMinutes > 0
+      message: isAutoSetToEnd
+        ? `Checked out successfully from ${existing.subject || 'session'}. Check-out time was auto-set to schedule end-time (${existing.scheduledEnd}) to resolve missing check-out.`
+        : earlyLeaveMinutes > 0
         ? `Checked out at ${currentTime} for ${existing.subject || 'session'}. (Early Leave by ${earlyLeaveMinutes}m. Duration: ${workingTimeText})`
         : `Checked out successfully from ${existing.subject || 'session'} at ${currentTime}. (Duration: ${workingTimeText})`,
       record: updatedRecord

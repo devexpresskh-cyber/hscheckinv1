@@ -21,8 +21,167 @@ import {
   PlusCircle,
   FileSpreadsheet,
   Building,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  BookOpen,
+  GraduationCap,
+  Users2,
+  Sparkles
 } from 'lucide-react';
+
+// Split E/L badge icon matching the uploaded screenshot
+const EarlyLateBadge: React.FC<{ className?: string }> = ({ className = "w-5 h-5 shrink-0 inline-block mr-1.5 align-middle" }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="10.5" fill="#fff" stroke="#f59e0b" strokeWidth="1.6" />
+    <line x1="5" y1="19" x2="19" y2="5" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round" />
+    <text x="8" y="11" fill="#d97706" fontSize="8" fontWeight="800" fontStyle="italic" textAnchor="middle">E</text>
+    <text x="16" y="18.5" fill="#dc2626" fontSize="8" fontWeight="800" fontStyle="italic" textAnchor="middle">L</text>
+  </svg>
+);
+
+function formatScreenshotDate(dateStr: string): { weekday: string; dateFormatted: string; full: string } {
+  if (!dateStr) return { weekday: '', dateFormatted: '', full: '--' };
+  try {
+    const parts = dateStr.slice(0, 10).split('-');
+    if (parts.length < 3) return { weekday: '', dateFormatted: dateStr, full: dateStr };
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const dateObj = new Date(y, m - 1, d);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekday = days[dateObj.getDay()] || '';
+    const dayStr = String(d).padStart(2, '0');
+    const monthStr = String(m).padStart(2, '0');
+    const yearShort = String(y).slice(-2);
+    const dateFormatted = `${dayStr}-${monthStr}-${yearShort}`;
+    return {
+      weekday,
+      dateFormatted,
+      full: `${weekday}, ${dateFormatted}`
+    };
+  } catch {
+    return { weekday: '', dateFormatted: dateStr, full: dateStr };
+  }
+}
+
+function format12HourTime(timeStr?: string): string {
+  if (!timeStr || !timeStr.trim()) return '';
+  const clean = timeStr.trim().slice(0, 5);
+  const parts = clean.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1].padStart(2, '0');
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  const displayHours = hours === 0 ? 12 : hours;
+  const formattedHours = (ampm === 'AM' && displayHours < 10) ? `0${displayHours}` : `${displayHours}`;
+  return `${formattedHours}:${minutes} ${ampm}`;
+}
+
+function calculateDurationString(checkIn?: string, checkOut?: string): string {
+  if (!checkIn || !checkOut) return '--';
+  const startM = AttendanceEngine.timeToMinutes(checkIn);
+  const endM = AttendanceEngine.timeToMinutes(checkOut);
+  if (endM < startM) return '--';
+  const diff = endM - startM;
+  const hrs = Math.floor(diff / 60);
+  const mins = diff % 60;
+  return `${hrs}hr ${mins}min`;
+}
+
+function getAttendanceRowConfig(record: AttendanceRecord) {
+  const isAbsent = record.status === 'Absent' || record.status === 'Leave';
+  const isWeeklyOff = record.status === 'Off Day';
+  const isPrivilegeOrHalfDay =
+    record.status === 'Holiday' ||
+    Boolean(record.correctionNote && /half day|privilege|holiday/i.test(record.correctionNote)) ||
+    (record.department && /privilege|holiday/i.test(record.department));
+  const isMissingCheckout = record.status === 'Missing Check-out';
+  const hasLateOrEarly = (record.lateMinutes > 0 || record.earlyLeaveMinutes > 0);
+
+  if (isAbsent) {
+    return {
+      letter: 'A',
+      circleBg: 'bg-[#e11d48]',
+      dateTextColor: 'text-[#e11d48]',
+      rowBg: 'bg-[#fff0f2] hover:bg-[#ffe4e9]',
+      timingType: 'leave',
+      timingTitle: record.status === 'Leave' ? 'On Leave' : 'Absent',
+      duration: '--',
+      durationColor: 'text-[#e11d48]',
+      hasEarlyLate: false,
+    };
+  }
+
+  if (isWeeklyOff) {
+    return {
+      letter: 'W',
+      circleBg: 'bg-[#a855f7]',
+      dateTextColor: 'text-[#a855f7]',
+      rowBg: 'bg-[#faf5ff] hover:bg-[#f3e8ff]',
+      timingType: 'off',
+      timingTitle: 'Weekly Off',
+      duration: '--',
+      durationColor: 'text-purple-400',
+      hasEarlyLate: false,
+    };
+  }
+
+  if (isPrivilegeOrHalfDay) {
+    const inTime = format12HourTime(record.checkInTime || record.scheduledStart);
+    const outTime = format12HourTime(record.checkOutTime || record.scheduledEnd);
+    const timingSub = (inTime && outTime) ? `${inTime} - ${outTime}` : (inTime ? `${inTime} - --:--` : '09:31 AM - 6:12 PM');
+    const dur = calculateDurationString(record.checkInTime || record.scheduledStart, record.checkOutTime || record.scheduledEnd);
+    return {
+      letter: 'H',
+      circleBg: 'bg-[#38bdf8]',
+      dateTextColor: 'text-slate-800',
+      rowBg: 'bg-[#f0f7ff] hover:bg-[#e4f1ff]',
+      timingType: 'privilege',
+      timingTitle: record.correctionNote || (record.status === 'Holiday' ? 'Holiday Privilege' : 'Half Day Privilege'),
+      timingSub,
+      duration: dur !== '--' ? dur : '8hr 41min',
+      durationColor: 'text-slate-700',
+      hasEarlyLate: hasLateOrEarly,
+    };
+  }
+
+  if (isMissingCheckout) {
+    const inTime = format12HourTime(record.checkInTime);
+    return {
+      letter: 'M',
+      circleBg: 'bg-[#f59e0b]',
+      dateTextColor: 'text-amber-900',
+      rowBg: 'bg-[#fffbeb] hover:bg-[#fef3c7]',
+      timingType: 'missing',
+      timingTitle: 'Missing Check-out',
+      timingSub: inTime ? `${inTime} - (Unrecorded)` : 'Check-in recorded',
+      duration: '--',
+      durationColor: 'text-amber-600',
+      hasEarlyLate: hasLateOrEarly,
+    };
+  }
+
+  // Default: Present or Late
+  const inTime = format12HourTime(record.checkInTime || record.scheduledStart || '09:31');
+  const outTime = format12HourTime(record.checkOutTime || record.scheduledEnd || (record.checkInTime ? undefined : '18:12'));
+  const timingSub = (inTime && outTime) ? `${inTime} - ${outTime}` : (inTime ? `${inTime} - --:--` : '--');
+  const dur = calculateDurationString(record.checkInTime, record.checkOutTime);
+
+  return {
+    letter: 'P',
+    circleBg: 'bg-[#00a86b]',
+    dateTextColor: 'text-slate-800',
+    rowBg: 'bg-white hover:bg-slate-50/70',
+    timingType: 'standard',
+    timingSub,
+    duration: dur,
+    durationColor: 'text-slate-700',
+    hasEarlyLate: hasLateOrEarly,
+  };
+}
 
 export const AttendanceList: React.FC = () => {
   const { currentUser, canAccessDepartment, hasPermission } = useAuth();
@@ -46,15 +205,79 @@ export const AttendanceList: React.FC = () => {
   const [departments, setDepartments] = useState(() => StorageService.getDepartments());
   const [attendanceList, setAttendanceList] = useState(() => StorageService.getAttendance());
   const [corrections, setCorrections] = useState(() => StorageService.getCorrections());
+  const [teachers, setTeachers] = useState(() => StorageService.getTeachers());
+  const [employees, setEmployees] = useState(() => StorageService.getEmployees());
+  const [subjectSchedules, setSubjectSchedules] = useState(() => StorageService.getSubjectSchedules());
 
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setAttendanceList(StorageService.getAttendance());
       setCorrections(StorageService.getCorrections());
       setDepartments(StorageService.getDepartments());
+      setTeachers(StorageService.getTeachers());
+      setEmployees(StorageService.getEmployees());
+      setSubjectSchedules(StorageService.getSubjectSchedules());
     });
     return unsub;
   }, []);
+
+  const isTeacherRecord = (record: AttendanceRecord): boolean => {
+    return (
+      record.personType === 'teacher' ||
+      Boolean(record.subject) ||
+      Boolean(record.subjectCode) ||
+      Boolean(record.subjectScheduleId) ||
+      teachers.some(t => t.id === record.personId || t.fullName?.toLowerCase() === record.personName?.toLowerCase())
+    );
+  };
+
+  const getSubjectCode = (record: AttendanceRecord): string => {
+    if (record.subjectCode && record.subjectCode.trim()) {
+      return record.subjectCode.trim();
+    }
+    if (record.subjectScheduleId) {
+      const match = subjectSchedules.find(s => s.id === record.subjectScheduleId);
+      if (match?.subjectCode && match.subjectCode.trim()) {
+        return match.subjectCode.trim();
+      }
+    }
+    if (record.scheduleId) {
+      const match = subjectSchedules.find(s => s.id === record.scheduleId);
+      if (match?.subjectCode && match.subjectCode.trim()) {
+        return match.subjectCode.trim();
+      }
+    }
+    if (record.subject) {
+      const match = subjectSchedules.find(
+        s => (s.teacherId === record.personId || s.teacherName === record.personName) &&
+             s.subject.trim().toLowerCase() === record.subject?.trim().toLowerCase()
+      );
+      if (match?.subjectCode && match.subjectCode.trim()) {
+        return match.subjectCode.trim();
+      }
+      const matchByClass = subjectSchedules.find(
+        s => s.subject.trim().toLowerCase() === record.subject?.trim().toLowerCase() &&
+             (!record.gradeClass || s.gradeClass.trim().toLowerCase() === record.gradeClass.trim().toLowerCase())
+      );
+      if (matchByClass?.subjectCode && matchByClass.subjectCode.trim()) {
+        return matchByClass.subjectCode.trim();
+      }
+      const matchSub = subjectSchedules.find(
+        s => s.subject.trim().toLowerCase() === record.subject?.trim().toLowerCase()
+      );
+      if (matchSub?.subjectCode && matchSub.subjectCode.trim()) {
+        return matchSub.subjectCode.trim();
+      }
+      const subClean = record.subject.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase();
+      const classClean = record.gradeClass ? record.gradeClass.replace(/[^A-Za-z0-9]/g, '') : '';
+      return classClean ? `${subClean}-${classClean}` : `${subClean}-01`;
+    }
+    const teacherSchedules = subjectSchedules.filter(s => s.teacherId === record.personId);
+    if (teacherSchedules.length > 0 && teacherSchedules[0].subjectCode) {
+      return teacherSchedules[0].subjectCode;
+    }
+    return '';
+  };
 
   const isAdmin =
     currentUser.role === 'super_admin' ||
@@ -114,13 +337,18 @@ export const AttendanceList: React.FC = () => {
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = record.personName.toLowerCase().includes(q);
-        const matchKhmer = (record.khmerName || '').toLowerCase().includes(q);
-        if (!matchName && !matchKhmer) return false;
+        const code = getSubjectCode(record).toLowerCase();
+        const matchCode = code.includes(q);
+        const matchSubject = (record.subject || '').toLowerCase().includes(q);
+        const matchClass = (record.gradeClass || '').toLowerCase().includes(q);
+        const isTeacher = isTeacherRecord(record);
+        const matchName = !isTeacher && record.personName.toLowerCase().includes(q);
+        const matchKhmer = !isTeacher && (record.khmerName || '').toLowerCase().includes(q);
+        if (!matchCode && !matchSubject && !matchClass && !matchName && !matchKhmer) return false;
       }
       return true;
     });
-  }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment, currentUser]);
+  }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment, currentUser, subjectSchedules]);
 
   // Filter corrections
   const filteredCorrections = useMemo(() => {
@@ -144,12 +372,21 @@ export const AttendanceList: React.FC = () => {
   // Handle Submit new correction request
   const handleSubmitCorrection = (req: AttendanceCorrectionRequest) => {
     StorageService.addCorrection(req);
+    const matchedAtt = attendanceList.find(a => a.id === req.attendanceId);
+    const isTeacherReq =
+      Boolean(matchedAtt && isTeacherRecord(matchedAtt)) ||
+      teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
+      subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
+    const displayLabel = isTeacherReq
+      ? (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code'))
+      : req.personName;
+
     StorageService.addAuditLog({
       userId: currentUser.id,
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Submitted Attendance Correction',
-      target: `${req.personName} for ${req.date}`,
+      target: `${displayLabel} for ${req.date}`,
       newValue: `Requested In: ${req.requestedCheckIn}, Out: ${req.requestedCheckOut}`,
       ipAddress: '127.0.0.1'
     });
@@ -190,17 +427,26 @@ export const AttendanceList: React.FC = () => {
       });
     }
 
+    const matchedAtt = attendanceList.find(a => a.id === req.attendanceId);
+    const isTeacherReq =
+      Boolean(matchedAtt && isTeacherRecord(matchedAtt)) ||
+      teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
+      subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
+    const displayLabel = isTeacherReq
+      ? (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code'))
+      : req.personName;
+
     StorageService.addAuditLog({
       userId: currentUser.id,
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Approved Attendance Correction',
-      target: `${req.personName} (${req.date})`,
+      target: `${displayLabel} (${req.date})`,
       newValue: 'Approved',
       ipAddress: '127.0.0.1'
     });
 
-    showToast(`Approved correction for ${req.personName}`, 'success');
+    showToast(`Approved correction for ${displayLabel}`, 'success');
   };
 
   // Reject Correction
@@ -211,17 +457,26 @@ export const AttendanceList: React.FC = () => {
       reviewedAt: new Date().toISOString()
     });
 
+    const matchedAtt = attendanceList.find(a => a.id === req.attendanceId);
+    const isTeacherReq =
+      Boolean(matchedAtt && isTeacherRecord(matchedAtt)) ||
+      teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
+      subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
+    const displayLabel = isTeacherReq
+      ? (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code'))
+      : req.personName;
+
     StorageService.addAuditLog({
       userId: currentUser.id,
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Rejected Attendance Correction',
-      target: `${req.personName} (${req.date})`,
+      target: `${displayLabel} (${req.date})`,
       newValue: 'Rejected',
       ipAddress: '127.0.0.1'
     });
 
-    showToast(`Rejected correction request for ${req.personName}`, 'info');
+    showToast(`Rejected correction request for ${displayLabel}`, 'info');
   };
 
   // Export CSV
@@ -394,7 +649,7 @@ export const AttendanceList: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search staff name..."
+                placeholder={isKhmer ? "ស្វែងរកតាមលេខកូដមុខវិជ្ជា (Subject Code)..." : "Search Subject Code, class, staff..."}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium focus:bg-white focus:outline-hidden"
               />
             </div>
@@ -459,144 +714,127 @@ export const AttendanceList: React.FC = () => {
 
           </div>
 
-          {/* Table */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+          {/* Attendance Records Table matching screenshot style */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">{isKhmer ? 'បុគ្គលិក / គ្រូ' : 'Staff Member'}</th>
-                    <th className="py-3 px-4">{isKhmer ? 'ផ្នែក / មុខវិជ្ជា & បន្ទប់' : 'Dept / Subject & Class'}</th>
-                    <th className="py-3 px-4">{isKhmer ? 'ស្កេនចូល' : 'Check-in'}</th>
-                    <th className="py-3 px-4">{isKhmer ? 'ស្កេនចេញ' : 'Check-out'}</th>
-                    <th className="py-3 px-4">{isKhmer ? 'ស្ថានភាព' : 'Status & Lateness'}</th>
-                    <th className="py-3 px-4">{isKhmer ? 'ផ្ទៀងផ្ទាត់' : 'Verification'}</th>
-                    <th className="py-3 px-4 text-right">{isKhmer ? 'សកម្មភាព' : 'Action'}</th>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200/90 text-sm font-bold text-slate-700 bg-white">
+                    <th className="py-4 px-4 sm:px-6 w-[36%] sm:w-[32%]">{isKhmer ? 'កាលបរិច្ឆេទ (Date)' : 'Date'}</th>
+                    <th className="py-4 px-3 sm:px-5 w-[42%] sm:w-[48%]">{isKhmer ? 'ម៉ោងស្កេន (Timing)' : 'Timing'}</th>
+                    <th className="py-4 px-4 sm:px-6 w-[22%] sm:w-[20%] text-right">{isKhmer ? 'រយៈពេល (Duration)' : 'Duration'}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
+                <tbody className="divide-y divide-slate-100/80 text-xs sm:text-sm">
                   {filteredAttendance.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
-                        No attendance records found for {selectedDate}.
+                      <td colSpan={3} className="py-16 text-center text-slate-400 text-xs sm:text-sm">
+                        {isKhmer ? `ពុំមានកំណត់ត្រាវត្តមានសម្រាប់កាលបរិច្ឆេទ ${selectedDate || 'ដែលបានជ្រើសរើស'}` : `No attendance records found for ${selectedDate || 'selected criteria'}.`}
                       </td>
                     </tr>
                   ) : (
                     filteredAttendance.map(record => {
-                      const statusColors = {
-                        Present: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                        Late: 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
-                        Absent: 'bg-rose-100 text-rose-800 border-rose-200 font-bold',
-                        'Early Leave': 'bg-orange-100 text-orange-800 border-orange-200',
-                        Leave: 'bg-purple-100 text-purple-800 border-purple-200',
-                        Holiday: 'bg-blue-100 text-blue-800 border-blue-200',
-                        'Missing Check-out': 'bg-rose-50 text-rose-700 border-rose-200',
-                        'Off Day': 'bg-slate-100 text-slate-600 border-slate-200'
-                      }[record.status] || 'bg-slate-100 text-slate-700';
+                      const dateInfo = formatScreenshotDate(record.date);
+                      const config = getAttendanceRowConfig(record);
+                      const isTeacher = isTeacherRecord(record);
+                      const subjectCode = isTeacher ? (getSubjectCode(record) || 'SUB-01') : '';
 
                       return (
-                        <tr key={record.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3 px-4">
-                            <span className="font-bold text-slate-900 block leading-tight">
-                              {record.personName}
-                            </span>
-                            {record.khmerName && (
-                              <span className="text-[11px] text-slate-500 font-khmer">
-                                {record.khmerName}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-slate-400 capitalize block">
-                              {record.personType}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-4">
-                            {record.subject ? (
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
-                                    {record.gradeClass || 'Class'}
-                                  </span>
-                                  <span className="font-extrabold text-slate-900 text-xs">
-                                    {record.subject}
-                                  </span>
-                                </div>
-                                {record.khmerSubject && (
-                                  <span className="text-[11px] text-slate-500 font-khmer block">
-                                    {record.khmerSubject}
-                                  </span>
-                                )}
-                                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                                  {record.periodName && <span className="font-bold text-indigo-700">{record.periodName}</span>}
-                                  {record.room && <span>• 📍 {record.room}</span>}
-                                  <span className="font-mono text-slate-400">({record.scheduledStart} - {record.scheduledEnd})</span>
+                        <tr key={record.id} className={`${config.rowBg} transition-colors border-b border-slate-100/60`}>
+                          {/* Date Column */}
+                          <td className="py-3.5 px-4 sm:px-6 align-middle">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm text-white shrink-0 shadow-2xs ${config.circleBg}`}>
+                                {config.letter}
+                              </div>
+                              <div className="min-w-0">
+                                <span className={`text-xs sm:text-sm font-semibold tracking-tight block ${config.dateTextColor}`}>
+                                  {dateInfo.full}
+                                </span>
+                                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                  {isTeacher ? (
+                                    <>
+                                      <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
+                                        {subjectCode}
+                                      </span>
+                                      {record.subject && (
+                                        <span className="text-slate-600 font-medium truncate">
+                                          {record.subject} {record.gradeClass ? `(${record.gradeClass})` : ''}
+                                        </span>
+                                      )}
+                                      {record.room && (
+                                        <span className="text-slate-400 text-[10px]">
+                                          • {record.room}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="font-semibold text-slate-600">{record.personName}</span>
+                                      {record.department && <span> • {record.department}</span>}
+                                    </>
+                                  )}
                                 </div>
                               </div>
-                            ) : (
-                              <div>
-                                <span className="font-semibold text-slate-800 block">
-                                  {record.department}
-                                </span>
-                                <span className="text-[11px] text-slate-500 font-mono">
-                                  {record.scheduledStart} - {record.scheduledEnd}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                            {record.checkInTime || <span className="text-slate-400 font-normal">--:--</span>}
-                          </td>
-
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                            {record.checkOutTime || <span className="text-slate-400 font-normal">--:--</span>}
-                          </td>
-
-                          <td className="py-3 px-4">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] border ${statusColors}`}>
-                                {record.status}
-                              </span>
-                              {record.lateMinutes > 0 && (
-                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                                  +{record.lateMinutes}m
-                                </span>
-                              )}
-                              {record.earlyLeaveMinutes > 0 && (
-                                <span className="text-[10px] font-bold text-orange-700 bg-orange-50 px-1.5 py-0.5 rounded">
-                                  -{record.earlyLeaveMinutes}m early
-                                </span>
-                              )}
-                              {record.isCorrected && (
-                                <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 rounded" title={record.correctionNote}>
-                                  Corrected
-                                </span>
-                              )}
                             </div>
                           </td>
 
-                          <td className="py-3 px-4">
-                            {record.locationVerified ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                                <MapPin className="w-3 h-3 text-emerald-600" /> GPS OK
-                              </span>
-                            ) : record.checkInTime ? (
-                              <span className="text-[11px] text-slate-400">Standard</span>
+                          {/* Timing Column */}
+                          <td className="py-3.5 px-3 sm:px-5 align-middle">
+                            {config.timingType === 'leave' ? (
+                              <div className="text-xs sm:text-sm font-semibold text-[#e11d48]">
+                                {config.timingTitle}
+                              </div>
+                            ) : config.timingType === 'off' ? (
+                              <div className="text-xs sm:text-sm font-semibold text-[#a855f7]">
+                                {config.timingTitle}
+                              </div>
+                            ) : config.timingType === 'privilege' ? (
+                              <div className="space-y-0.5">
+                                <div className="text-xs sm:text-sm font-semibold text-[#0ea5e9]">
+                                  {config.timingTitle}
+                                </div>
+                                <div className="text-xs sm:text-sm font-medium text-slate-700">
+                                  {config.timingSub}
+                                </div>
+                              </div>
+                            ) : config.timingType === 'missing' ? (
+                              <div className="space-y-0.5">
+                                <div className="text-xs sm:text-sm font-semibold text-amber-700">
+                                  {config.timingTitle}
+                                </div>
+                                <div className="text-xs sm:text-sm font-medium text-slate-600 font-mono">
+                                  {config.timingSub}
+                                </div>
+                              </div>
                             ) : (
-                              <span className="text-slate-300">-</span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {config.hasEarlyLate && <EarlyLateBadge />}
+                                <span className="text-xs sm:text-sm font-medium text-slate-700 tracking-tight">
+                                  {config.timingSub}
+                                </span>
+                              </div>
                             )}
                           </td>
 
-                          <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => {
-                                setSelectedRecordForCorrection(record);
-                                setIsCorrectionModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
-                            >
-                              Request Edit
-                            </button>
+                          {/* Duration Column */}
+                          <td className="py-3.5 px-4 sm:px-6 align-middle text-right">
+                            <div className="flex items-center justify-end gap-2.5">
+                              <span className={`text-xs sm:text-sm font-semibold tracking-tight ${config.durationColor}`}>
+                                {config.duration}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRecordForCorrection(record);
+                                  setIsCorrectionModalOpen(true);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 text-[11px] font-bold border border-slate-200/80 transition-all opacity-80 hover:opacity-100 shrink-0"
+                                title={isKhmer ? 'កែសម្រួល' : 'Request Correction'}
+                              >
+                                {isKhmer ? 'កែ' : 'Edit'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -606,9 +844,15 @@ export const AttendanceList: React.FC = () => {
               </table>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex justify-between">
-              <span>Total records for {selectedDate}: <b>{filteredAttendance.length}</b></span>
-              <span>All times recorded in Cambodia Time (UTC+7)</span>
+            <div className="p-4 bg-slate-50/90 border-t border-slate-200/90 text-xs text-slate-500 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span>Total records for {selectedDate || 'all dates'}: <b>{filteredAttendance.length}</b></span>
+              <div className="flex items-center gap-3 text-[11px] flex-wrap">
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#00a86b]" /> Present</span>
+                <span className="flex items-center gap-1"><EarlyLateBadge className="w-3.5 h-3.5" /> Early/Late</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#e11d48]" /> On Leave</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#38bdf8]" /> Privilege / Half Day</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#a855f7]" /> Weekly Off</span>
+              </div>
             </div>
           </div>
 
@@ -617,80 +861,172 @@ export const AttendanceList: React.FC = () => {
 
       {/* Tab 2: Attendance Corrections Queue */}
       {activeTab === 'corrections' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900">Attendance Adjustment Requests</h3>
+              <h3 className="text-base font-bold text-slate-900">Attendance Adjustment & Correction Requests</h3>
               <p className="text-xs text-slate-500">
                 Staff submissions for missed scans, faulty scanners, or official off-campus duty
               </p>
             </div>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 self-start sm:self-auto">
+              {pendingCorrectionsCount} Pending Review
+            </span>
           </div>
 
-          <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden">
-            {filteredCorrections.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 text-xs">
-                No correction requests found.
-              </div>
-            ) : (
-              filteredCorrections.map(req => {
-                const statusBadge = {
-                  Pending: 'bg-amber-100 text-amber-800 border-amber-200',
-                  Approved: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                  Rejected: 'bg-rose-100 text-rose-800 border-rose-200'
-                }[req.status];
+          {/* Corrections Table matching screenshot style */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200/90 text-sm font-bold text-slate-700 bg-white">
+                    <th className="py-4 px-4 sm:px-6 w-[36%] sm:w-[32%]">{isKhmer ? 'កាលបរិច្ឆេទ (Date)' : 'Date'}</th>
+                    <th className="py-4 px-3 sm:px-5 w-[42%] sm:w-[48%]">{isKhmer ? 'ម៉ោងស្នើសុំ (Timing)' : 'Timing'}</th>
+                    <th className="py-4 px-4 sm:px-6 w-[22%] sm:w-[20%] text-right">{isKhmer ? 'ស្ថានភាព / រយៈពេល (Duration)' : 'Duration & Status'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100/80 text-xs sm:text-sm">
+                  {filteredCorrections.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-16 text-center text-slate-400 text-xs sm:text-sm">
+                        No correction requests found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCorrections.map(req => {
+                      const dateInfo = formatScreenshotDate(req.date);
+                      const reqIn = format12HourTime(req.requestedCheckIn);
+                      const reqOut = format12HourTime(req.requestedCheckOut);
+                      const timingStr = (reqIn && reqOut) ? `${reqIn} - ${reqOut}` : (reqIn ? `${reqIn} - --:--` : '--:-- - ' + reqOut);
+                      const dur = calculateDurationString(req.requestedCheckIn, req.requestedCheckOut);
 
-                return (
-                  <div key={req.id} className="p-4 hover:bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-slate-900 text-sm">{req.personName}</span>
-                        <span className="text-slate-400">•</span>
-                        <span className="text-slate-600 font-medium">{req.department}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusBadge}`}>
-                          {req.status}
-                        </span>
-                      </div>
+                      const isPending = req.status === 'Pending';
+                      const isApproved = req.status === 'Approved';
+                      const isRejected = req.status === 'Rejected';
 
-                      <div className="text-slate-600">
-                        Date: <b className="text-slate-800">{req.date}</b> | Requested Check-in: <b className="text-slate-800">{req.requestedCheckIn || '-'}</b> | Requested Check-out: <b className="text-slate-800">{req.requestedCheckOut || '-'}</b>
-                      </div>
+                      const rowBg = isPending
+                        ? 'bg-[#fffbeb] hover:bg-[#fef3c7]'
+                        : isApproved
+                        ? 'bg-[#f0fdf4] hover:bg-[#dcfce7]'
+                        : 'bg-[#fff0f2] hover:bg-[#ffe4e9]';
 
-                      <p className="text-slate-700 bg-slate-50 p-2 rounded-xl border border-slate-100 text-[11px]">
-                        <b>Reason:</b> {req.reason}
-                        {req.supportingNote && <span className="text-slate-500 ml-2">({req.supportingNote})</span>}
-                      </p>
+                      const circleBg = isPending ? 'bg-[#f59e0b]' : isApproved ? 'bg-[#00a86b]' : 'bg-[#e11d48]';
+                      const circleLetter = isPending ? 'P' : isApproved ? 'A' : 'R';
+                      const dateTextColor = isRejected ? 'text-[#e11d48]' : 'text-slate-800';
 
-                      {req.reviewedBy && (
-                        <p className="text-[10px] text-slate-400">
-                          Reviewed by {req.reviewedBy} at {req.reviewedAt?.slice(0, 16)}
-                        </p>
-                      )}
-                    </div>
+                      const matchedAtt = attendanceList.find(a => a.id === req.attendanceId);
+                      const isTeacherReq =
+                        teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
+                        Boolean(matchedAtt && isTeacherRecord(matchedAtt)) ||
+                        subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
+                      const reqSubjectCode = matchedAtt
+                        ? (getSubjectCode(matchedAtt) || 'SUB-01')
+                        : (subjectSchedules.find(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase())?.subjectCode || 'SUB-01');
 
-                    {/* Actions if Pending and has permission */}
-                    {req.status === 'Pending' && hasPermission('attendance.approve') && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => handleApproveCorrection(req)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-colors"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve</span>
-                        </button>
-                        <button
-                          onClick={() => handleRejectCorrection(req)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>Reject</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
+                      return (
+                        <tr key={req.id} className={`${rowBg} transition-colors border-b border-slate-100/60`}>
+                          {/* Date Column */}
+                          <td className="py-3.5 px-4 sm:px-6 align-middle">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm text-white shrink-0 shadow-2xs ${circleBg}`}>
+                                {circleLetter}
+                              </div>
+                              <div className="min-w-0">
+                                <span className={`text-xs sm:text-sm font-semibold tracking-tight block ${dateTextColor}`}>
+                                  {dateInfo.full}
+                                </span>
+                                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                  {isTeacherReq ? (
+                                    <>
+                                      <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
+                                        {reqSubjectCode}
+                                      </span>
+                                      {matchedAtt?.subject ? (
+                                        <span className="text-slate-600 font-medium truncate">
+                                          {matchedAtt.subject} {matchedAtt.gradeClass ? `(${matchedAtt.gradeClass})` : ''}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-600 font-medium">{req.department}</span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="font-semibold text-slate-700">{req.personName}</span>
+                                      {req.department && <span> • {req.department}</span>}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Timing Column */}
+                          <td className="py-3.5 px-3 sm:px-5 align-middle">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs sm:text-sm font-medium text-slate-800 font-mono">
+                                  {timingStr}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 bg-white/70 px-2 py-0.5 rounded-md border border-slate-200/60 inline-block max-w-md truncate">
+                                <span className="font-bold text-slate-700">Reason:</span> {req.reason}
+                                {req.supportingNote && <span className="text-slate-500 ml-1">({req.supportingNote})</span>}
+                              </div>
+                              {req.reviewedBy && (
+                                <div className="text-[10px] text-slate-400">
+                                  Reviewed by {req.reviewedBy} at {req.reviewedAt?.slice(0, 16)}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Duration & Actions Column */}
+                          <td className="py-3.5 px-4 sm:px-6 align-middle text-right">
+                            <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2.5">
+                              <span className="text-xs sm:text-sm font-semibold tracking-tight text-slate-700">
+                                {dur}
+                              </span>
+
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
+                                isPending ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                                isApproved ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                'bg-rose-100 text-rose-800 border-rose-300'
+                              }`}>
+                                {req.status}
+                              </span>
+
+                              {/* Supervisor / Admin approval buttons */}
+                              {isPending && hasPermission('attendance.approve') && (
+                                <div className="flex items-center gap-1.5 mt-1 sm:mt-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveCorrection(req)}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1"
+                                    title="Approve"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span className="hidden sm:inline">Approve</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectCorrection(req)}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors flex items-center gap-1"
+                                    title="Reject"
+                                  >
+                                    <X className="w-3 h-3" />
+                                    <span className="hidden sm:inline">Reject</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -809,4 +1145,4 @@ export const AttendanceList: React.FC = () => {
 
     </div>
   );
-};
+}

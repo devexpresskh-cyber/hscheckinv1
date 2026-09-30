@@ -270,6 +270,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     }
     if (currentUser.role === 'teacher') {
+      if (item.id === 'schedules') {
+        return {
+          ...item,
+          label: 'Daily Teacher Schedule',
+          khmer: 'កាលវិភាគបង្រៀនប្រចាំថ្ងៃ',
+          badge: 'Daily',
+          icon: Clock,
+          section: 'overview' as const
+        };
+      }
       if (item.id === 'monthly_calendar') {
         return {
           ...item,
@@ -277,15 +287,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           khmer: 'ប្រតិទិនកាលវិភាគប្រចាំខែ',
           badge: 'Monthly',
           icon: CalendarDays,
-          section: 'overview' as const
-        };
-      }
-      if (item.id === 'schedules') {
-        return {
-          ...item,
-          label: 'Weekly & Daily Timetable',
-          khmer: 'កាលវិភាគបង្រៀន (សប្តាហ៍/ថ្ងៃ)',
-          icon: Clock,
           section: 'overview' as const
         };
       }
@@ -334,9 +335,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'leave' || item.id === 'holidays';
     }
 
-    // If logged in as a Teacher, show Monthly Schedule Calendar, Weekly Timetable, Attendance History, Wage History, Holidays, and Leave
+    // If logged in as a Teacher, show Daily Teacher Schedule first, then Monthly Calendar, Attendance History, Wage History, Holidays, and Leave
     if (currentUser.role === 'teacher') {
-      return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'reports' || item.id === 'holidays' || item.id === 'leave';
+      return item.id === 'schedules' || item.id === 'monthly_calendar' || item.id === 'attendance' || item.id === 'reports' || item.id === 'holidays' || item.id === 'leave';
     }
 
     // Explicitly disallow teachers and employees from accessing telegram setting and system setting
@@ -345,6 +346,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
     if (!item.permission) return true;
     return hasPermission(item.permission as any);
+  }).sort((a, b) => {
+    if (currentUser.role === 'teacher') {
+      const order: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'reports', 'holidays', 'leave'];
+      const idxA = order.indexOf(a.id);
+      const idxB = order.indexOf(b.id);
+      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    }
+    return 0;
   });
 
   const sectionKeys: ('overview' | 'staff' | 'attendance' | 'communication' | 'administration')[] = [

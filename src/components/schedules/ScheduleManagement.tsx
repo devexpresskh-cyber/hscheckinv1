@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Plus,
   Clock,
+  ClockAlert,
   MapPin,
   Calendar,
   Building,
@@ -806,6 +807,16 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     const earliestMins = Math.max(0, startMins - earlyBuffer);
     const canOverride = !isTeacher || hasPermission('schedules.create') || hasPermission('attendance.edit') || forceAdminOverride;
 
+    if (isTeacher && curMins >= endMins) {
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបង្រៀន "${sub.khmerSubject || sub.subject}" បានបញ្ចប់នៅម៉ោង ${sub.endTime} រួចហើយ! គ្រូមិនអាចស្កេនចូលកាលវិភាគហួសម៉ោងឡើយ។`
+          : `Cannot check in: Class ended at ${sub.endTime}. Teachers are not allowed to scan into overtime schedules.`,
+        'error'
+      );
+      return;
+    }
+
     if (!canOverride && curMins < earliestMins) {
       const waitMins = startMins - curMins;
       showToast(
@@ -826,7 +837,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       subjectScheduleId: sub.id,
       customTime: curTime,
       allowEarlyCheckInMinutes: 30,
-      bypassScheduleWindow: canOverride || curMins >= endMins
+      bypassScheduleWindow: canOverride
     });
 
     if (result.success) {
@@ -881,11 +892,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       return;
     }
 
+    const isAutoSetToEnd = isTeacher && curMins >= endMins;
     const result = AttendanceEngine.processCheckOut({
       personId: targetTeacherId,
       personName: targetTeacherName,
       subjectScheduleId: sub.id,
-      customTime: curTime
+      customTime: isAutoSetToEnd ? sub.endTime : curTime,
+      autoSetToEndOfSchedule: isAutoSetToEnd
     });
 
     if (result.success) {
@@ -1030,19 +1043,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   </span>
                 </div>
               ) : curMins >= sEnd && isTeacher ? (
-                <button
-                  type="button"
-                  onClick={() => handleTeacherClassCheckIn(sub, true)}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
-                  title="Class period ended. Click to record late attendance"
+                <div
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold cursor-not-allowed"
+                  title="Class period ended. Scanning into overtime schedules is strictly prohibited for teachers."
                 >
-                  <LogIn className="w-3.5 h-3.5" />
+                  <Lock className="w-3.5 h-3.5 text-rose-500" />
                   <span>
                     {isKhmer
-                      ? `ស្កេនចូលម៉ោងបង្រៀន (Late Check In)`
-                      : `Record Late Check-In`}
+                      ? `ហួសម៉ោងបង្រៀន (Overtime — ចប់ ${sub.endTime})`
+                      : `Schedule Ended (Overtime — ${sub.endTime})`}
                   </span>
-                </button>
+                </div>
               ) : (
                 <button
                   type="button"
@@ -1082,6 +1093,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                     <span>{isKhmer ? 'ចេញ' : 'End'}</span>
                   </button>
                 </div>
+              ) : curMins >= sEnd && isTeacher ? (
+                <button
+                  type="button"
+                  onClick={() => handleTeacherClassCheckOut(sub, true)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 via-indigo-600 to-indigo-700 hover:from-amber-500 hover:to-indigo-600 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
+                  title={isKhmer ? `ស្កេនចេញបំពេញម៉ោងខកខាន (កំណត់ស្វ័យប្រវត្តិតាម ${sub.endTime})` : `Scan out missing check-out (auto-set to ${sub.endTime})`}
+                >
+                  <ClockAlert className="w-3.5 h-3.5 text-amber-200" />
+                  <span>
+                    {isKhmer ? `ស្កេនចេញបំពេញម៉ោង (${sub.endTime})` : `Scan Out Missing Check-out (${sub.endTime})`}
+                  </span>
+                </button>
               ) : (
                 <button
                   type="button"

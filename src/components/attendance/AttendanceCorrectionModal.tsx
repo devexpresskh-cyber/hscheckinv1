@@ -18,6 +18,46 @@ export const AttendanceCorrectionModal: React.FC<AttendanceCorrectionModalProps>
   targetRecord
 }) => {
   const { currentUser } = useAuth();
+  const teachers = StorageService.getTeachers();
+  const subjectSchedules = StorageService.getSubjectSchedules();
+
+  const isTeacher = Boolean(
+    targetRecord?.personType === 'teacher' ||
+    targetRecord?.subject ||
+    targetRecord?.subjectCode ||
+    targetRecord?.subjectScheduleId ||
+    currentUser.role === 'teacher' ||
+    (targetRecord?.personId && teachers.some(t => t.id === targetRecord.personId)) ||
+    (targetRecord?.personName && teachers.some(t => t.fullName?.toLowerCase() === targetRecord.personName?.toLowerCase()))
+  );
+
+  const getSubjectCode = (): string => {
+    if (targetRecord?.subjectCode && targetRecord.subjectCode.trim()) {
+      return targetRecord.subjectCode.trim();
+    }
+    if (targetRecord?.subjectScheduleId) {
+      const match = subjectSchedules.find(s => s.id === targetRecord.subjectScheduleId);
+      if (match?.subjectCode && match.subjectCode.trim()) return match.subjectCode.trim();
+    }
+    if (targetRecord?.scheduleId) {
+      const match = subjectSchedules.find(s => s.id === targetRecord.scheduleId);
+      if (match?.subjectCode && match.subjectCode.trim()) return match.subjectCode.trim();
+    }
+    if (targetRecord?.subject) {
+      const match = subjectSchedules.find(
+        s => (s.teacherId === targetRecord.personId || s.teacherName === targetRecord.personName) &&
+             s.subject.trim().toLowerCase() === targetRecord.subject?.trim().toLowerCase()
+      );
+      if (match?.subjectCode && match.subjectCode.trim()) return match.subjectCode.trim();
+      const matchSub = subjectSchedules.find(
+        s => s.subject.trim().toLowerCase() === targetRecord.subject?.trim().toLowerCase()
+      );
+      if (matchSub?.subjectCode && matchSub.subjectCode.trim()) return matchSub.subjectCode.trim();
+    }
+    const tSched = subjectSchedules.find(s => s.teacherId === (targetRecord?.personId || currentUser.personId));
+    if (tSched?.subjectCode) return tSched.subjectCode;
+    return 'SUB-01';
+  };
 
   const [date, setDate] = useState<string>(
     targetRecord?.date || new Date().toISOString().split('T')[0]
@@ -75,25 +115,37 @@ export const AttendanceCorrectionModal: React.FC<AttendanceCorrectionModalProps>
           
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Staff Name & Department
+              {isTeacher ? 'Subject Code & Academic Schedule' : 'Staff Name & Department'}
             </label>
-            <input
-              type="text"
-              disabled
-              value={`${targetRecord?.personName || currentUser.fullName} (${targetRecord?.department || currentUser.department})`}
-              className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-600"
-            />
-            {targetRecord?.subject && (
-              <div className="mt-1.5 p-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-medium flex items-center justify-between">
-                <span>
-                  <strong className="font-bold">{targetRecord.subject}</strong> ({targetRecord.gradeClass} • {targetRecord.room})
-                </span>
-                {targetRecord.periodName && (
-                  <span className="px-1.5 py-0.5 rounded bg-indigo-200 text-indigo-800 font-bold text-[10px]">
-                    {targetRecord.periodName}
+            {isTeacher ? (
+              <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-2 py-0.5 rounded text-xs tracking-wider shadow-2xs">
+                    {getSubjectCode()}
                   </span>
-                )}
+                  {targetRecord?.subject && (
+                    <span className="text-xs font-bold text-slate-800">
+                      {targetRecord.subject} {targetRecord.gradeClass ? `(${targetRecord.gradeClass})` : ''}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                  {targetRecord?.periodName && (
+                    <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold text-[10px]">
+                      {targetRecord.periodName}
+                    </span>
+                  )}
+                  {targetRecord?.room && <span>Room: {targetRecord.room}</span>}
+                  {targetRecord?.department && <span>• {targetRecord.department}</span>}
+                </div>
               </div>
+            ) : (
+              <input
+                type="text"
+                disabled
+                value={`${targetRecord?.personName || currentUser.fullName} (${targetRecord?.department || currentUser.department})`}
+                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-600"
+              />
             )}
           </div>
 

@@ -78,15 +78,15 @@ const MainLayout: React.FC = () => {
   const { currentUser } = useAuth();
   const isEmployee = currentUser.role === 'employee';
   const isTeacher = currentUser.role === 'teacher';
-  // Both Teacher and Employee land directly on their Monthly Calendar!
-  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isTeacher || isEmployee ? 'monthly_calendar' : 'dashboard'));
+  // Teacher lands on Daily Schedule ('schedules') by default; Employee on Monthly Present Calendar
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => (isTeacher ? 'schedules' : isEmployee ? 'monthly_calendar' : 'dashboard'));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const { isKhmer } = useLanguage();
 
   const isRestrictedStaff = isTeacher || isEmployee;
 
-  // Automatically enforce guard: teacher and employee land directly on their Monthly Calendar!
+  // Automatically enforce guard: teacher lands directly on Daily Schedule; employee on Monthly Calendar
   React.useEffect(() => {
     if (isEmployee) {
       const allowedEmployeeTabs: NavTab[] = ['monthly_calendar', 'schedules', 'attendance', 'leave', 'holidays', 'manual'];
@@ -97,9 +97,9 @@ const MainLayout: React.FC = () => {
     }
 
     if (isTeacher) {
-      const allowedTeacherTabs: NavTab[] = ['monthly_calendar', 'schedules', 'attendance', 'reports', 'holidays', 'leave', 'manual'];
+      const allowedTeacherTabs: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'reports', 'holidays', 'leave', 'manual'];
       if (!allowedTeacherTabs.includes(currentTab)) {
-        setCurrentTab('monthly_calendar');
+        setCurrentTab('schedules');
       }
       return;
     }
@@ -127,13 +127,16 @@ const MainLayout: React.FC = () => {
       return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
     }
 
-    // If logged in as Teacher, allow Monthly Schedule Calendar, Weekly Timetable, Attendance History, Wage & Payroll, Holidays, and Leave
+    // If logged in as Teacher, show Daily Teacher Schedule by default, and allow Monthly Schedule Calendar, Attendance History, Wage & Payroll, Holidays, and Leave
     if (isTeacher) {
+      if (currentTab === 'monthly_calendar') {
+        return <ScheduleManagement initialView="monthly_calendar" />;
+      }
       if (currentTab === 'attendance') {
         return <AttendanceList />;
       }
       if (currentTab === 'schedules') {
-        return <ScheduleManagement initialView="weekly_timetable" />;
+        return <ScheduleManagement initialView="daily_schedule" />;
       }
       if (currentTab === 'reports') {
         return <TeachingWageReport />;
@@ -147,8 +150,8 @@ const MainLayout: React.FC = () => {
       if (currentTab === 'manual') {
         return <SystemUserManual />;
       }
-      // Monthly Schedule Calendar directly
-      return <ScheduleManagement initialView="monthly_calendar" />;
+      // Default: Daily Teacher Schedule directly
+      return <ScheduleManagement initialView="daily_schedule" />;
     }
 
     switch (currentTab) {
@@ -170,7 +173,7 @@ const MainLayout: React.FC = () => {
       case 'monthly_calendar':
         return <ScheduleManagement initialView="monthly_calendar" />;
       case 'schedules':
-        return <ScheduleManagement initialView={isTeacher ? "weekly_timetable" : "weekly_timetable"} />;
+        return <ScheduleManagement initialView="daily_schedule" />;
       case 'attendance':
         return <AttendanceList />;
       case 'reports':
@@ -263,18 +266,37 @@ const MainLayout: React.FC = () => {
         onOpenFullMenu={() => setIsMobileMenuOpen(true)}
       />
 
-      {/* Quick Check-in Floating Modal with scroll protection */}
+      {/* Quick Check-in Full Screen Modal with animate from bottom */}
       {isCheckInModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in-50">
-          <div className="relative w-full max-w-2xl max-h-[92vh] flex flex-col bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+        <div className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="relative w-full h-[100dvh] sm:h-auto sm:max-h-[95vh] sm:max-w-2xl flex flex-col bg-white rounded-none sm:rounded-3xl shadow-2xl overflow-hidden border-0 sm:border sm:border-slate-200 animate-in slide-in-from-bottom duration-300 ease-out">
+            {/* Mobile Top Bar */}
+            <div className="sm:hidden flex items-center justify-between px-4 py-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-bold font-khmer">ស្ថានីយស្កេនវត្តមាន</span>
+                <span className="text-[11px] text-slate-400 font-medium">| Attendance Kiosk</span>
+              </div>
+              <button
+                onClick={() => setIsCheckInModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Desktop Close button */}
             <button
               onClick={() => setIsCheckInModalOpen(false)}
-              className="absolute top-4 right-4 z-30 w-8 h-8 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white flex items-center justify-center transition-colors shadow-md"
+              className="hidden sm:flex absolute top-4 right-4 z-30 w-8 h-8 rounded-full bg-slate-900/70 hover:bg-slate-900 text-white items-center justify-center transition-colors shadow-md"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="overflow-y-auto p-1 sm:p-2">
+
+            {/* Scrollable Modal Content */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4 overscroll-contain">
               <CheckInKiosk
                 isMobileModal={true}
                 onCloseMobileModal={() => setIsCheckInModalOpen(false)}

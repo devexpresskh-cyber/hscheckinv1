@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
-import { AttendanceRecord } from '../../types/index.ts';
+import { AttendanceRecord, Teacher, Employee, Department, TeacherSubjectSchedule } from '../../types/index.ts';
 import {
   Users,
   GraduationCap,
@@ -23,7 +23,11 @@ import {
   ArrowUpRight,
   TrendingUp,
   MapPin,
-  BookOpen
+  BookOpen,
+  Clock,
+  Activity,
+  Layers,
+  ChevronRight
 } from 'lucide-react';
 
 export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn?: () => void }> = ({ onNavigate, onOpenCheckIn }) => {
@@ -34,11 +38,82 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [tick, setTick] = useState<number>(0);
 
-  const teachers = StorageService.getTeachers().filter(t => t.status === 'Active');
-  const employees = StorageService.getEmployees().filter(e => e.status === 'Active');
-  const departments = StorageService.getDepartments();
-  const allAttendance = StorageService.getAttendance();
+  // Reactive state synchronized with StorageService to reflect state updates immediately
+  const [teachers, setTeachers] = useState<Teacher[]>(() =>
+    StorageService.getTeachers().filter(t => t.status === 'Active')
+  );
+  const [employees, setEmployees] = useState<Employee[]>(() =>
+    StorageService.getEmployees().filter(e => e.status === 'Active')
+  );
+  const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
+  const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>(() => StorageService.getAttendance());
+  const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() =>
+    StorageService.getSubjectSchedules()
+  );
+
+  // Subscribe to StorageService for immediate real-time state updates
+  useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
+      setEmployees(StorageService.getEmployees().filter(e => e.status === 'Active'));
+      setDepartments(StorageService.getDepartments());
+      setAllAttendance(StorageService.getAttendance());
+      setSubjectSchedules(StorageService.getSubjectSchedules());
+    });
+    return unsub;
+  }, []);
+
+  // Live ticker every 10 seconds to keep live active session statuses fresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayDayIndex = useMemo(() => new Date().getDay(), []);
+  const currentTimeStr = useMemo(() => AttendanceEngine.getCurrentTimeString(), [tick]);
+  const curMins = useMemo(() => AttendanceEngine.timeToMinutes(currentTimeStr), [currentTimeStr]);
+
+  // Compute live active teaching sessions right now across faculty
+  const liveTeachingSessions = useMemo(() => {
+    const todayClasses = subjectSchedules.filter(sub => {
+      if (!sub.isActive) return false;
+      if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
+        return sub.daysOfWeek.includes(todayDayIndex);
+      }
+      return sub.dayOfWeek === todayDayIndex;
+    });
+
+    return todayClasses.map(sub => {
+      const rec = AttendanceEngine.findRecordForSubjectSchedule(sub, allAttendance, todayStr, teachers);
+      const isCheckedIn = Boolean(rec?.checkInTime);
+      const isCheckedOut = Boolean(rec?.checkOutTime);
+      const sStart = AttendanceEngine.timeToMinutes(sub.startTime);
+      const sEnd = AttendanceEngine.timeToMinutes(sub.endTime);
+
+      const isInSession = (isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut);
+      const isUpcoming = curMins < sStart && !isCheckedIn;
+      const isCompleted = isCheckedOut || (curMins >= sEnd && isCheckedIn);
+
+      return {
+        schedule: sub,
+        record: rec,
+        isCheckedIn,
+        isCheckedOut,
+        isInSession,
+        isUpcoming,
+        isCompleted
+      };
+    });
+  }, [subjectSchedules, allAttendance, todayDayIndex, todayStr, teachers, curMins]);
+
+  const currentlyInClass = useMemo(() => {
+    return liveTeachingSessions.filter(s => s.isInSession);
+  }, [liveTeachingSessions]);
 
   // Filter attendance records
   const filteredAttendance = useMemo(() => {
@@ -296,6 +371,130 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
           <p className="text-[10px] text-orange-700 mt-0.5 truncate">{isKhmer ? 'មិនទាន់ស្កេនចេញ' : 'Pending Out'}</p>
         </div>
 
+      </div>
+
+      {/* Live Faculty Teaching & Daily Teacher Schedule Live Section */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">
+                {isKhmer ? 'កាលវិភាគបង្រៀនជាក់ស្តែងថ្ងៃនេះ (Live Daily Faculty Teaching)' : 'Live Faculty Teaching & Daily Teacher Schedule'}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isKhmer
+                ? 'តាមដានគ្រូបង្រៀនកំពុងស្ថិតក្នុងថ្នាក់បង្រៀនជាក់ស្តែង និងស្ថានភាពស្កេនវត្តមានផ្ទាល់'
+                : 'Real-time monitoring of active classroom teaching sessions and check-in states.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{currentlyInClass.length} {isKhmer ? 'ថ្នាក់កំពុងបង្រៀនពេលនេះ' : 'In Class Now'}</span>
+            </span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+              {liveTeachingSessions.length} {isKhmer ? 'ម៉ោងក្នុងកាលវិភាគថ្ងៃនេះ' : 'Scheduled Today'}
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('schedules')}
+              className="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-sm transition-all cursor-pointer"
+            >
+              <span>{isKhmer ? 'មើលកាលវិភាគប្រចាំថ្ងៃ' : 'View Daily Schedule'}</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Active Class Sessions Cards */}
+        {currentlyInClass.length === 0 ? (
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="font-bold text-slate-800 block">
+                  {isKhmer ? 'គ្មានគ្រូកំពុងស្ថិតក្នុងម៉ោងបង្រៀននៅពេលនេះឡើយ' : 'No Faculty In Active Class Session Right Now'}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {isKhmer
+                    ? `ម៉ោងបច្ចុប្បន្ន៖ ${currentTimeStr} • មានកាលវិភាគបង្រៀនសរុប ${liveTeachingSessions.length} ម៉ោងសម្រាប់ថ្ងៃនេះ`
+                    : `Terminal clock: ${currentTimeStr} • ${liveTeachingSessions.length} class periods scheduled for today`}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('schedules')}
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline self-start sm:self-auto cursor-pointer"
+            >
+              {isKhmer ? 'ពិនិត្យកាលវិភាគពេញមួយថ្ងៃ' : "Open Today's Timetable →"}
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {currentlyInClass.map(item => {
+              const sub = item.schedule;
+              const rec = item.record;
+              return (
+                <div
+                  key={sub.id}
+                  className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50/70 via-white to-indigo-50/40 border border-emerald-300 shadow-xs flex flex-col justify-between gap-2.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-600 text-white">
+                      {sub.periodName}
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                      {sub.startTime} - {sub.endTime}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-900 leading-snug">
+                      {sub.subject}
+                    </h4>
+                    {sub.khmerSubject && (
+                      <p className="text-xs text-slate-500 font-khmer mt-0.5">{sub.khmerSubject}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5 text-xs text-slate-600 font-medium">
+                      <span className="font-bold text-indigo-900">{sub.teacherName}</span>
+                      <span className="text-slate-300">•</span>
+                      <span>{sub.gradeClass}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="flex items-center gap-0.5 text-slate-500">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        {sub.room}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    {rec?.checkInTime ? (
+                      <span className="font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                        {isKhmer ? 'បានស្កេនចូល' : 'Checked In'}: {rec.checkInTime} {rec.status === 'Late' ? `(${isKhmer ? 'យឺត' : 'Late'})` : ''}
+                      </span>
+                    ) : (
+                      <span className="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                        {isKhmer ? 'ម៉ោងបច្ចុប្បន្ន • មិនទាន់ស្កេន' : 'In Window • Not Checked In'}
+                      </span>
+                    )}
+
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      ID: {sub.id.slice(0, 14)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Visual Analytics & Breakdown */}

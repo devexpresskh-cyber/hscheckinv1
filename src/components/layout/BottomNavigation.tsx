@@ -182,19 +182,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             </button>
           ) : isTeacher ? (
             <button
-              onClick={() => handleTabClick('monthly_calendar')}
+              onClick={() => handleTabClick('schedules')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'monthly_calendar' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'schedules' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
-                <CalendarDays className={`w-5 h-5 transition-transform ${currentTab === 'monthly_calendar' ? 'scale-110' : ''}`} />
-                {currentTab === 'monthly_calendar' && (
+                <Clock className={`w-5 h-5 transition-transform ${currentTab === 'schedules' ? 'scale-110' : ''}`} />
+                {currentTab === 'schedules' && (
                   <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-600" />
                 )}
               </div>
               <span className={`text-[10px] mt-1 font-bold truncate max-w-[65px] ${isKhmer ? 'font-khmer' : ''}`}>
-                {isKhmer ? 'កាលវិភាគខែ' : 'Monthly'}
+                {isKhmer ? 'កាលវិភាគថ្ងៃនេះ' : 'Daily'}
               </span>
             </button>
           ) : (
@@ -236,19 +236,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             </button>
           ) : isTeacher ? (
             <button
-              onClick={() => handleTabClick('schedules')}
+              onClick={() => handleTabClick('monthly_calendar')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'schedules' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'monthly_calendar' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
-                <Clock className={`w-5 h-5 transition-transform ${currentTab === 'schedules' ? 'scale-110' : ''}`} />
-                {currentTab === 'schedules' && (
+                <CalendarDays className={`w-5 h-5 transition-transform ${currentTab === 'monthly_calendar' ? 'scale-110' : ''}`} />
+                {currentTab === 'monthly_calendar' && (
                   <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-600" />
                 )}
               </div>
               <span className={`text-[10px] mt-1 font-bold truncate max-w-[65px] ${isKhmer ? 'font-khmer' : ''}`}>
-                {isKhmer ? 'កាលវិភាគ' : 'Timetable'}
+                {isKhmer ? 'កាលវិភាគខែ' : 'Monthly'}
               </span>
             </button>
           ) : (

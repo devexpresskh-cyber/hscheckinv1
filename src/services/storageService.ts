@@ -216,9 +216,17 @@ function initFirestoreSync() {
 
   // 4. Employees
   onSnapshot(collection(db, 'employees'), snapshot => {
-    cache.employees = snapshot.docs.map(d => d.data() as Employee);
-    setStored(STORAGE_KEYS.EMPLOYEES, cache.employees);
-    notifyListeners();
+    if (!snapshot.empty) {
+      cache.employees = snapshot.docs.map(d => d.data() as Employee);
+      setStored(STORAGE_KEYS.EMPLOYEES, cache.employees);
+      notifyListeners();
+    } else {
+      DEFAULT_EMPLOYEES.forEach(e => {
+        setDoc(doc(db, 'employees', e.id), e).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `employees/${e.id}`)
+        );
+      });
+    }
   }, err => handleFirestoreError(err, OperationType.GET, 'employees'));
 
   // 5. Schedules
