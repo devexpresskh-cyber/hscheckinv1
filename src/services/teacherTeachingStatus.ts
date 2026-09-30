@@ -1,4 +1,5 @@
 import { Teacher, TeacherSubjectSchedule, AttendanceRecord } from '../types/index.ts';
+import { AttendanceEngine } from './attendanceEngine.ts';
 
 export interface TeacherLiveTeachingInfo {
   teacher: Teacher;
@@ -84,9 +85,31 @@ export const TeacherTeachingService = {
     });
     const totalWeeklyHours = Math.round((totalWeeklyMinutes / 60) * 10) / 10;
 
-    // Check today's attendance record for this teacher (matches ID, teacher code, or full name)
-    const todayAttendance = attendanceRecords.find(a => {
-      const isDate = a.date === todayDateStr;
+    // Determine current, upcoming, completed classes today
+    let currentSchedule: TeacherSubjectSchedule | undefined;
+    const upcomingSchedules: TeacherSubjectSchedule[] = [];
+    const completedSchedules: TeacherSubjectSchedule[] = [];
+
+    todaySchedules.forEach(s => {
+      const startMin = timeStringToMinutes(s.startTime);
+      const endMin = timeStringToMinutes(s.endTime);
+
+      if (currentTotalMinutes >= startMin && currentTotalMinutes <= endMin) {
+        currentSchedule = s;
+      } else if (currentTotalMinutes < startMin) {
+        upcomingSchedules.push(s);
+      } else {
+        completedSchedules.push(s);
+      }
+    });
+
+    // Determine attendance record: check active class record first, then fallback to general/any today record
+    const activeClassAttendance = currentSchedule
+      ? AttendanceEngine.findRecordForSubjectSchedule(currentSchedule, attendanceRecords, todayDateStr, [teacher])
+      : undefined;
+
+    const todayAttendance = activeClassAttendance || attendanceRecords.find(a => {
+      const isDate = String(a.date || '').slice(0, 10) === todayDateStr;
       if (!isDate) return false;
       const isPerson =
         a.personId === teacher.id ||
@@ -95,6 +118,7 @@ export const TeacherTeachingService = {
         (teacher.khmerName && a.khmerName && a.khmerName.trim() === teacher.khmerName.trim());
       return isPerson && Boolean(a.checkInTime);
     });
+
     const isCheckedIn = Boolean(todayAttendance && todayAttendance.checkInTime);
     const checkInTime = todayAttendance?.checkInTime;
     const checkOutTime = todayAttendance?.checkOutTime;
@@ -116,24 +140,6 @@ export const TeacherTeachingService = {
         totalWeeklyHours
       };
     }
-
-    // Determine current, upcoming, completed classes today
-    let currentSchedule: TeacherSubjectSchedule | undefined;
-    const upcomingSchedules: TeacherSubjectSchedule[] = [];
-    const completedSchedules: TeacherSubjectSchedule[] = [];
-
-    todaySchedules.forEach(s => {
-      const startMin = timeStringToMinutes(s.startTime);
-      const endMin = timeStringToMinutes(s.endTime);
-
-      if (currentTotalMinutes >= startMin && currentTotalMinutes <= endMin) {
-        currentSchedule = s;
-      } else if (currentTotalMinutes < startMin) {
-        upcomingSchedules.push(s);
-      } else {
-        completedSchedules.push(s);
-      }
-    });
 
     // Determine overall status
     let status: 'teaching' | 'upcoming' | 'completed' | 'off' = 'off';

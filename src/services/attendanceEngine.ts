@@ -204,6 +204,105 @@ export const AttendanceEngine = {
     return { earlyLeaveMinutes: 0, overtimeMinutes: 0 };
   },
 
+  // Find the matching attendance record for a teacher subject schedule on a given date
+  findRecordForSubjectSchedule(
+    sub: TeacherSubjectSchedule,
+    records: AttendanceRecord[],
+    dateStr: string,
+    teachersList?: Teacher[]
+  ): AttendanceRecord | undefined {
+    if (!sub || !records || records.length === 0) return undefined;
+
+    const allTeachers = teachersList && teachersList.length > 0 ? teachersList : StorageService.getTeachers();
+    const lowSubTeachId = (sub.teacherId || '').trim().toLowerCase();
+    const lowSubTeachName = (sub.teacherName || '').trim().toLowerCase();
+    const khmerSubTeachName = (sub.khmerTeacherName || '').trim();
+
+    const teacherObj = allTeachers.find(
+      t =>
+        (lowSubTeachId && t.id?.toLowerCase() === lowSubTeachId) ||
+        (lowSubTeachId && t.teacherId?.toLowerCase() === lowSubTeachId) ||
+        (lowSubTeachName && t.fullName?.toLowerCase() === lowSubTeachName) ||
+        (khmerSubTeachName && t.khmerName === khmerSubTeachName)
+    );
+
+    const isTeacherOwner = (a: AttendanceRecord) => {
+      const pId = (a.personId || '').trim().toLowerCase();
+      const pName = (a.personName || '').trim().toLowerCase();
+      const pKhmer = (a.khmerName || '').trim();
+
+      if (lowSubTeachId && pId === lowSubTeachId) return true;
+      if (teacherObj) {
+        if (teacherObj.id && pId === teacherObj.id.toLowerCase()) return true;
+        if (teacherObj.teacherId && pId === teacherObj.teacherId.toLowerCase()) return true;
+        if (teacherObj.fullName && pName === teacherObj.fullName.trim().toLowerCase()) return true;
+        if (teacherObj.khmerName && (pKhmer === teacherObj.khmerName || pName === teacherObj.khmerName.toLowerCase())) return true;
+      }
+      if (lowSubTeachName && pName === lowSubTeachName) return true;
+      if (khmerSubTeachName && (pKhmer === khmerSubTeachName || pName === khmerSubTeachName.toLowerCase())) return true;
+      return false;
+    };
+
+    // Filter to records for this date
+    const dateRecords = records.filter(a => {
+      const recDate = String(a.date || '').slice(0, 10);
+      return recDate === dateStr;
+    });
+
+    // 1. Direct subjectScheduleId match (with teacher ownership confirmation)
+    const directWithTeacher = dateRecords.find(a => a.subjectScheduleId === sub.id && isTeacherOwner(a));
+    if (directWithTeacher) return directWithTeacher;
+
+    const directAny = dateRecords.find(a => a.subjectScheduleId === sub.id);
+    if (directAny) return directAny;
+
+    // Filter to this teacher's records for today
+    const teacherRecords = dateRecords.filter(isTeacherOwner);
+    if (teacherRecords.length === 0) return undefined;
+
+    // 2. Exact subject name & scheduled start time
+    const lowSubName = (sub.subject || '').trim().toLowerCase();
+    const khmerSubName = (sub.khmerSubject || '').trim();
+    const bySubAndStart = teacherRecords.find(a => {
+      const matchStart = a.scheduledStart === sub.startTime;
+      const matchSubject =
+        (a.subject && a.subject.trim().toLowerCase() === lowSubName) ||
+        (khmerSubName && a.khmerSubject === khmerSubName) ||
+        (khmerSubName && a.subject === khmerSubName);
+      return matchStart && matchSubject;
+    });
+    if (bySubAndStart) return bySubAndStart;
+
+    // 3. Exact scheduled start time
+    const byStart = teacherRecords.find(a => a.scheduledStart === sub.startTime);
+    if (byStart) return byStart;
+
+    // 4. Exact periodName
+    if (sub.periodName) {
+      const lowPeriod = sub.periodName.trim().toLowerCase();
+      const byPeriod = teacherRecords.find(a => a.periodName && a.periodName.trim().toLowerCase() === lowPeriod);
+      if (byPeriod) return byPeriod;
+    }
+
+    // 5. Match by check-in time during class window [startTime - 30m, endTime + 15m]
+    const subStartMins = this.timeToMinutes(sub.startTime);
+    const subEndMins = this.timeToMinutes(sub.endTime);
+    const byTimeWindow = teacherRecords.find(a => {
+      if (!a.checkInTime) return false;
+      // If this record has a different subjectScheduleId that exists, do not hijack it
+      if (a.subjectScheduleId && a.subjectScheduleId !== sub.id) return false;
+      const inMins = this.timeToMinutes(a.checkInTime);
+      return inMins >= Math.max(0, subStartMins - 30) && inMins <= (subEndMins + 15);
+    });
+    if (byTimeWindow) return byTimeWindow;
+
+    // 6. If scheduleId matches sub.id
+    const byScheduleId = teacherRecords.find(a => a.scheduleId === sub.id);
+    if (byScheduleId) return byScheduleId;
+
+    return undefined;
+  },
+
   // Process Check-in
   processCheckIn(params: {
     personId: string;

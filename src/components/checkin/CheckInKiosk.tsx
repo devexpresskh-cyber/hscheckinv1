@@ -457,17 +457,19 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
     const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
 
-    // Strict validation for teachers: Do not allow check-in before schedule or overtime
+    // Strict validation for teachers: Do not allow check-in before schedule early buffer window or overtime
     if (isTeacher && targetSubject) {
       const startMins = AttendanceEngine.timeToMinutes(targetSubject.startTime);
       const endMins = AttendanceEngine.timeToMinutes(targetSubject.endTime);
+      const earlyBufferMins = 30;
+      const earliestAllowedMins = Math.max(0, startMins - earlyBufferMins);
 
-      if (curMins < startMins) {
+      if (curMins < earliestAllowedMins) {
         const waitMins = startMins - curMins;
         showToast(
           isKhmer
-            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលមុនម៉ោងទេ៖ ម៉ោងបង្រៀន "${targetSubject.khmerSubject || targetSubject.subject}" ចាប់ផ្តើមនៅម៉ោង ${targetSubject.startTime} (នៅសល់ ${waitMins} នាទី)។ ហាមស្កេនចូលមុនម៉ោងកាលវិភាគ។`
-            : `Cannot check in before schedule: "${targetSubject.subject}" starts at ${targetSubject.startTime} (starts in ${waitMins}m). Teachers are not allowed to check in before schedule.`,
+            ? `មិនទាន់ដល់ម៉ោងស្កេនចូលទេ៖ ម៉ោងបង្រៀន "${targetSubject.khmerSubject || targetSubject.subject}" ចាប់ផ្តើមនៅម៉ោង ${targetSubject.startTime} (នៅសល់ ${waitMins} នាទី)។ អាចស្កេនចូលមុនបាន ${earlyBufferMins} នាទី។`
+            : `Cannot check in before window: "${targetSubject.subject}" starts at ${targetSubject.startTime} (starts in ${waitMins}m). Early check-in opens ${earlyBufferMins}m before class.`,
           'error'
         );
         return;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StorageService } from '../../services/storageService.ts';
 import { TeacherTeachingService, TeacherLiveTeachingInfo, TeachingFacultySummary } from '../../services/teacherTeachingStatus.ts';
 import { TelegramService } from '../../services/telegramService.ts';
+import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { Teacher, TeacherSubjectSchedule, Department } from '../../types/index.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
@@ -28,7 +29,8 @@ import {
   ExternalLink,
   Table,
   List,
-  LayoutGrid
+  LayoutGrid,
+  LogIn
 } from 'lucide-react';
 
 interface TeacherOnTeachingListProps {
@@ -143,6 +145,34 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
         : `Dispatched class schedule notification to ${teacher.fullName} via Telegram`,
       'success'
     );
+  };
+
+  const handleAdminScanInTeacher = (teacher: Teacher, sched?: TeacherSubjectSchedule) => {
+    if (!sched) return;
+    const curTime = AttendanceEngine.getCurrentTimeString();
+    const result = AttendanceEngine.processCheckIn({
+      personId: teacher.id,
+      personName: teacher.fullName,
+      khmerName: teacher.khmerName,
+      personType: 'teacher',
+      department: teacher.department || 'Academic',
+      subjectScheduleId: sched.id,
+      customTime: curTime,
+      allowEarlyCheckInMinutes: 30,
+      bypassScheduleWindow: true
+    });
+
+    if (result.success) {
+      showToast(
+        isKhmer
+          ? `បានស្កេនវត្តមានចូលសម្រាប់គ្រូ ${teacher.fullName} (${sched.subject}) ដោយជោគជ័យ!`
+          : `Recorded check-in for ${teacher.fullName} (${sched.subject})`,
+        'success'
+      );
+      setAttendance(StorageService.getAttendance());
+    } else {
+      showToast(result.message, 'error');
+    }
   };
 
   return (
@@ -621,6 +651,16 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="inline-flex items-center gap-1">
+                          {isTeaching && !isCheckedIn && currentSchedule && (
+                            <button
+                              onClick={() => handleAdminScanInTeacher(teacher, currentSchedule)}
+                              className="px-2 py-1 rounded-lg text-white bg-emerald-600 hover:bg-emerald-500 font-bold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer animate-pulse shrink-0"
+                              title={isKhmer ? `ស្កេនវត្តមានចូលសម្រាប់ ${teacher.fullName}` : `Scan In ${teacher.fullName}`}
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              <span>{isKhmer ? 'ស្កេនចូល' : 'Scan In'}</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => onOpenMonthlySchedule && onOpenMonthlySchedule(teacher)}
                             className="p-1.5 rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors cursor-pointer"
@@ -884,6 +924,16 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {isTeaching && !isCheckedIn && currentSchedule && (
+                      <button
+                        onClick={() => handleAdminScanInTeacher(teacher, currentSchedule)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-xs flex items-center gap-1 cursor-pointer animate-pulse shrink-0"
+                        title={isKhmer ? `ស្កេនវត្តមានចូលសម្រាប់ ${teacher.fullName}` : `Scan In ${teacher.fullName}`}
+                      >
+                        <LogIn className="w-3.5 h-3.5" />
+                        <span>{isKhmer ? 'ស្កេនចូល' : 'Scan In'}</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => onOpenMonthlySchedule && onOpenMonthlySchedule(teacher)}
                       className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
@@ -1139,6 +1189,16 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                 {/* Footer Action Buttons */}
                 <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
+                    {isTeaching && !isCheckedIn && currentSchedule && (
+                      <button
+                        onClick={() => handleAdminScanInTeacher(teacher, currentSchedule)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-xs flex items-center gap-1 cursor-pointer animate-pulse shrink-0"
+                        title={isKhmer ? `ស្កេនវត្តមានចូលសម្រាប់ ${teacher.fullName}` : `Scan In ${teacher.fullName}`}
+                      >
+                        <LogIn className="w-3.5 h-3.5" />
+                        <span>{isKhmer ? 'ស្កេនចូល' : 'Scan In'}</span>
+                      </button>
+                    )}
                     {/* View Monthly Calendar Schedule */}
                     <button
                       onClick={() => onOpenMonthlySchedule && onOpenMonthlySchedule(teacher)}

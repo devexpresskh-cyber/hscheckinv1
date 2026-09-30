@@ -827,18 +827,12 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                             (activeTeacher?.teacherId && a.personId.toLowerCase() === activeTeacher.teacherId.toLowerCase()) ||
                             (a.personName && activeTeacher?.fullName && a.personName.toLowerCase() === activeTeacher.fullName.toLowerCase());
 
-                          const classAtt = attendance.find(a => {
-                            if (a.date !== selectedDayDetails.dateStr) return false;
-                            // Direct subject schedule ID match: Attendance was specifically scanned for this class!
-                            if (a.subjectScheduleId) {
-                              return a.subjectScheduleId === cls.id;
-                            }
-                            // Fallback for general schedule check-in matching this specific schedule ID only
-                            if (cls.id && a.scheduleId === cls.id && isOwnerRecord(a)) {
-                              return true;
-                            }
-                            return false;
-                          });
+                          const classAtt = AttendanceEngine.findRecordForSubjectSchedule(
+                            cls,
+                            attendance,
+                            selectedDayDetails.dateStr,
+                            activeTeacher ? [activeTeacher] : undefined
+                          );
 
                           if (classAtt) {
                             return (

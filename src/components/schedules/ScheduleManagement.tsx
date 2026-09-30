@@ -54,6 +54,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const { t, isKhmer } = useLanguage();
 
   const isTeacher = currentUser.role === 'teacher';
+  const canAdminManageAttendance = currentUser.role === 'super_admin' || currentUser.role === 'admin_hr' || currentUser.role === 'supervisor' || hasPermission('attendance.edit') || hasPermission('schedules.create');
   const todayDayIndex = new Date().getDay();
   const [selectedDay, setSelectedDay] = useState<number>(todayDayIndex);
 
@@ -772,12 +773,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   ];
 
   const handleTeacherClassCheckIn = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
-    // Strict requirement: Admin cannot check in teacher's schedule. Only teachers can check in.
-    if (!isTeacher) {
+    // Only teachers or authorized admins/supervisors can check in
+    if (!isTeacher && !canAdminManageAttendance) {
       showToast(
         isKhmer
-          ? 'អភិបាលមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនជំនួសគ្រូបង្រៀនឡើយ។ គ្រូត្រូវតែស្កេនដោយផ្ទាល់។'
-          : 'Admins are not allowed to check in for teacher schedules. Teachers must check in using their own authenticated account.',
+          ? 'លោកអ្នកគ្មានសិទ្ធិស្កេនវត្តមានជំនួសគ្រូបង្រៀនឡើយ។'
+          : 'You do not have permission to check in for teacher schedules.',
         'error'
       );
       return;
@@ -843,12 +844,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   };
 
   const handleTeacherClassCheckOut = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
-    // Strict requirement: Admin cannot check out teacher's schedule.
-    if (!isTeacher) {
+    // Only teachers or authorized admins/supervisors can check out
+    if (!isTeacher && !canAdminManageAttendance) {
       showToast(
         isKhmer
-          ? 'អភិបាលមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនជំនួសគ្រូបង្រៀនឡើយ។'
-          : 'Admins are not allowed to check out for teacher schedules.',
+          ? 'លោកអ្នកគ្មានសិទ្ធិស្កេនចេញជំនួសគ្រូបង្រៀនឡើយ។'
+          : 'You do not have permission to check out for teacher schedules.',
         'error'
       );
       return;
@@ -901,25 +902,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   };
 
   const renderClassCard = (sub: TeacherSubjectSchedule, idx: number) => {
-    // Find attendance record for this class today
+    // Find attendance record for this class today using robust matcher
     const isClassToday = selectedDay === todayDayIndex;
-    const isOwnerAtt = (a: any) =>
-      a.personId === sub.teacherId ||
-      (sub.teacherId && a.personId?.toLowerCase() === sub.teacherId?.toLowerCase()) ||
-      (sub.teacherName && a.personName?.toLowerCase() === sub.teacherName?.toLowerCase());
-
-    const todayRec = attendanceList.find(a => {
-      if (a.date !== todayStr) return false;
-      // Direct subject schedule ID match: Attendance was specifically scanned for this class!
-      if (a.subjectScheduleId) {
-        return a.subjectScheduleId === sub.id;
-      }
-      // Fallback for general schedule check-in matching this specific schedule ID only
-      if (sub.id && a.scheduleId === sub.id && isOwnerAtt(a)) {
-        return true;
-      }
-      return false;
-    });
+    const todayRec = AttendanceEngine.findRecordForSubjectSchedule(sub, attendanceList, todayStr, teachers);
 
     const isCheckedIn = Boolean(todayRec?.checkInTime);
     const isCheckedOut = Boolean(todayRec?.checkOutTime);
@@ -979,6 +964,11 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>{isKhmer ? `ស្កេនចូលម៉ោង ${todayRec?.checkInTime}` : `In: ${todayRec?.checkInTime}`}</span>
                   </span>
+                ) : isCurrentActive ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{isKhmer ? 'កំពុងបង្រៀន (មិនទាន់ស្កេន)' : 'In Session (Unscanned)'}</span>
+                  </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600">
                     {isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}
@@ -1026,8 +1016,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           )}
         </div>
 
-        {/* Quick Attendance Action Buttons for Today (Teachers only for their own assigned classes - Admin cannot check in for teachers) */}
-        {isClassToday && isTeacher && (
+        {/* Quick Attendance Action Buttons for Today (Teachers for their own classes, or Admin/HR with override permission) */}
+        {isClassToday && (isTeacher || canAdminManageAttendance) && (
           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
             {!isCheckedIn ? (
               curMins < sStart - 30 && isTeacher ? (
@@ -1056,15 +1046,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               ) : (
                 <button
                   type="button"
-                  onClick={() => handleTeacherClassCheckIn(sub)}
+                  onClick={() => handleTeacherClassCheckIn(sub, !isTeacher)}
                   className={`w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer ${
-                    curMins < sStart ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500'
+                    isCurrentActive
+                      ? 'bg-amber-600 hover:bg-amber-500 ring-2 ring-amber-400/40 animate-pulse'
+                      : curMins < sStart && isTeacher
+                      ? 'bg-indigo-600 hover:bg-indigo-500'
+                      : 'bg-emerald-600 hover:bg-emerald-500'
                   }`}
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>
                     {!isTeacher
-                      ? (isKhmer ? `ស្កេនវត្តមាន៖ ${sub.teacherName}` : `Record Attendance: ${sub.teacherName}`)
+                      ? (isKhmer ? `ស្កេនចូល (${sub.teacherName})` : `Scan In (${sub.teacherName})`)
                       : curMins < sStart
                       ? (isKhmer ? `ស្កេនចូលមុនម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Early Check In (Starts ${sub.startTime})`)
                       : (isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class')}
@@ -1091,13 +1085,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               ) : (
                 <button
                   type="button"
-                  onClick={() => handleTeacherClassCheckOut(sub)}
+                  onClick={() => handleTeacherClassCheckOut(sub, !isTeacher)}
                   className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-sm transition-all active:scale-98 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>
                     {!isTeacher
-                      ? (isKhmer ? `ស្កេនចេញ៖ ${sub.teacherName}` : `Check Out: ${sub.teacherName}`)
+                      ? (isKhmer ? `ស្កេនចេញ (${sub.teacherName})` : `Scan Out (${sub.teacherName})`)
                       : (isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class')}
                   </span>
                 </button>

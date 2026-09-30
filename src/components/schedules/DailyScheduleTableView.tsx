@@ -88,23 +88,7 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
 
   // Helper to extract attendance info for a class
   const getClassAttendanceInfo = (sub: TeacherSubjectSchedule) => {
-    const isOwnerAtt = (a: any) =>
-      a.personId === sub.teacherId ||
-      (sub.teacherId && a.personId?.toLowerCase() === sub.teacherId?.toLowerCase()) ||
-      (sub.teacherName && a.personName?.toLowerCase() === sub.teacherName?.toLowerCase());
-
-    const todayRec = attendanceList.find(a => {
-      if (a.date !== todayStr) return false;
-      // Direct subject schedule ID match: Attendance was specifically scanned for this class!
-      if (a.subjectScheduleId) {
-        return a.subjectScheduleId === sub.id;
-      }
-      // Fallback for general schedule check-in matching this specific schedule ID only
-      if (sub.id && a.scheduleId === sub.id && isOwnerAtt(a)) {
-        return true;
-      }
-      return false;
-    });
+    const todayRec = AttendanceEngine.findRecordForSubjectSchedule(sub, attendanceList, todayStr, teachers);
 
     const isCheckedIn = Boolean(todayRec?.checkInTime);
     const isCheckedOut = Boolean(todayRec?.checkOutTime);
@@ -515,10 +499,15 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
               )}
             </div>
           ) : info.isCurrentActive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-indigo-600 text-white shadow-2xs animate-pulse">
-              <Sparkles className="w-3 h-3 text-amber-200" />
-              <span>{isKhmer ? 'កំពុងបង្រៀន (Active)' : 'Active Class'}</span>
-            </span>
+            <div className="space-y-0.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-rose-600 text-white shadow-2xs animate-pulse">
+                <Sparkles className="w-3 h-3 text-amber-200" />
+                <span>{isKhmer ? 'កំពុងបង្រៀន (មិនទាន់ស្កេន)' : 'In Session (Not Scanned)'}</span>
+              </span>
+              <div className="text-[10px] text-rose-600 font-semibold pl-1">
+                {isKhmer ? 'ត្រូវការស្កេនវត្តមាន' : 'Needs attendance scan'}
+              </div>
+            </div>
           ) : info.isUpcoming ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200">
               <Clock className="w-3 h-3 text-sky-500" />
@@ -535,22 +524,26 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
         {/* Actions */}
         <td className="py-3 px-3.5 whitespace-nowrap text-right">
           <div className="flex items-center justify-end gap-1.5">
-            {/* Live Attendance Check-In / Check-Out (Teacher role only, admin cannot check in) */}
-            {isClassToday && isTeacher && (
+            {/* Live Attendance Check-In / Check-Out for Teachers and Admin Supervisor Overrides */}
+            {isClassToday && (isTeacher || currentUser.role === 'super_admin' || currentUser.role === 'admin_hr' || currentUser.role === 'supervisor') && (
               <>
                 {!info.isCheckedIn ? (
                   <button
                     type="button"
-                    onClick={() => onCheckIn(sub, !canCheckInNow)}
+                    onClick={() => onCheckIn(sub, !isTeacher || !canCheckInNow)}
                     className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-white transition-all shadow-2xs active:scale-95 cursor-pointer ${
-                      curMins < info.sStart
+                      curMins < info.sStart && isTeacher
                         ? 'bg-indigo-600 hover:bg-indigo-500'
-                        : curMins >= info.sEnd
-                        ? 'bg-amber-500 hover:bg-amber-600'
+                        : info.isCurrentActive || curMins >= info.sEnd
+                        ? 'bg-amber-600 hover:bg-amber-500 ring-2 ring-amber-400/40 animate-pulse'
                         : 'bg-emerald-600 hover:bg-emerald-500'
                     }`}
                     title={
-                      curMins < info.sStart
+                      !isTeacher
+                        ? isKhmer
+                          ? `ស្កេនវត្តមានចូលសម្រាប់គ្រូ ${sub.teacherName}`
+                          : `Admin Scan In for ${sub.teacherName}`
+                        : curMins < info.sStart
                         ? `Early Check In (Starts ${sub.startTime})`
                         : curMins >= info.sEnd
                         ? 'Record Late Attendance'
@@ -559,7 +552,11 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                   >
                     <LogIn className="w-3.5 h-3.5" />
                     <span>
-                      {curMins >= info.sEnd
+                      {!isTeacher
+                        ? isKhmer
+                          ? 'ស្កេនចូល'
+                          : 'Scan In'
+                        : curMins >= info.sEnd
                         ? isKhmer
                           ? 'ស្កេនចូលយឺត'
                           : 'Late Check In'
@@ -573,7 +570,7 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                     type="button"
                     onClick={() => onCheckOut(sub, true)}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-2xs active:scale-95 cursor-pointer"
-                    title="Check out of class"
+                    title={!isTeacher ? `Admin Scan Out for ${sub.teacherName}` : 'Check out of class'}
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>{isKhmer ? 'ស្កេនចេញ' : 'Check Out'}</span>
