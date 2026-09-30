@@ -39,3 +39,17 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
+
+// Register Service Worker for Web Push & PWA notifications
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        console.log('[EduTrack SW] Registered successfully, scope:', reg.scope);
+      })
+      .catch((err) => {
+        console.warn('[EduTrack SW] Registration error:', err);
+      });
+  });
+}

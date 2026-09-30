@@ -149,35 +149,204 @@ class ScheduleAlertEngine {
     }
   }
 
-  async requestNotificationPermission(): Promise<boolean> {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return false;
-    }
-    if (Notification.permission === 'granted') {
+  // Detect if app is running inside an iframe (e.g. AI Studio development environment)
+  isSubframe(): boolean {
+    try {
+      return typeof window !== 'undefined' && window.self !== window.top;
+    } catch {
       return true;
     }
-    if (Notification.permission !== 'denied') {
-      const permission = await Notification.requestPermission();
-      return permission === 'granted';
-    }
-    return false;
   }
 
-  sendBrowserNotification(title: string, body: string, tag?: string) {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
+  // Ensure Service Worker is registered and ready for Web Push
+  async ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      return null;
+    }
+    try {
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      }
+      return reg;
+    } catch (err) {
+      console.warn('ensureServiceWorker error:', err);
+      return null;
+    }
+  }
+
+  getNotificationSupportStatus(): {
+    supported: boolean;
+    permission: NotificationPermission;
+    swSupported: boolean;
+    isIframe: boolean;
+  } {
+    if (typeof window === 'undefined') {
+      return { supported: false, permission: 'default', swSupported: false, isIframe: false };
+    }
+    const supported = 'Notification' in window;
+    const permission = supported ? Notification.permission : 'denied';
+    const swSupported = 'serviceWorker' in navigator;
+    const isIframe = this.isSubframe();
+    return { supported, permission, swSupported, isIframe };
+  }
+
+  async requestNotificationPermission(): Promise<{ granted: boolean; status: NotificationPermission; error?: string }> {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return { granted: false, status: 'denied', error: 'Notifications are not supported by this browser engine.' };
+    }
+
+    if (Notification.permission === 'granted') {
+      await this.ensureServiceWorker();
+      return { granted: true, status: 'granted' };
+    }
+
+    if (Notification.permission === 'denied') {
+      return {
+        granted: false,
+        status: 'denied',
+        error: 'Notification permission is blocked. Please enable notifications in your browser address bar settings.'
+      };
+    }
 
     try {
-      new Notification(title, {
-        body,
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
-        tag: tag || 'edutrack-schedule-alert',
-        silent: false
-      });
-    } catch (e) {
-      console.warn('Failed to send browser notification:', e);
+      // In modern browsers, sub-frames/iframes cannot call requestPermission()
+      if (this.isSubframe()) {
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm === 'granted') {
+            await this.ensureServiceWorker();
+          }
+          return { granted: perm === 'granted', status: perm };
+        } catch (subErr: any) {
+          console.warn('Sub-frame notification request blocked by browser policy:', subErr);
+          return {
+            granted: false,
+            status: Notification.permission,
+            error: 'The browser prohibits requesting notification permission inside sub-frames/iframes. Please open the app in a direct top-level browser tab to allow notifications.'
+          };
+        }
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await this.ensureServiceWorker();
+      }
+      return { granted: permission === 'granted', status: permission };
+    } catch (err: any) {
+      console.warn('Failed to request notification permission:', err);
+      return {
+        granted: false,
+        status: Notification.permission,
+        error: err?.message || 'Could not request notification permission'
+      };
     }
+  }
+
+  async sendBrowserNotification(title: string, body: string, tag?: string): Promise<{ delivered: boolean; method: string }> {
+    if (typeof window === 'undefined') return { delivered: false, method: 'server_env' };
+
+    // Check Notification API
+    if (!('Notification' in window)) {
+      console.warn('Notification API not supported');
+      return { delivered: false, method: 'unsupported' };
+    }
+
+    // Auto-request permission if in default state and not in iframe
+    if (Notification.permission === 'default' && !this.isSubframe()) {
+      try {
+        const p = await Notification.requestPermission();
+        if (p !== 'granted') return { delivered: false, method: 'permission_denied' };
+      } catch {
+        return { delivered: false, method: 'permission_request_failed' };
+      }
+    }
+
+    if (Notification.permission !== 'granted') {
+      return { delivered: false, method: 'permission_not_granted' };
+    }
+
+    const options: any = {
+      body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: tag || 'edutrack-schedule-alert',
+      vibrate: [200, 100, 200],
+      renotify: true,
+      data: {
+        timestamp: Date.now(),
+        url: '/'
+      }
+    };
+
+    // Method 1: ServiceWorkerRegistration.showNotification (Required for mobile PWA, Android Chrome, and iOS Safari 16.4+)
+    try {
+      if ('serviceWorker' in navigator) {
+        let reg: ServiceWorkerRegistration | null | undefined = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+          reg = await this.ensureServiceWorker();
+        }
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification(title, options);
+          return { delivered: true, method: 'service_worker' };
+        }
+      }
+    } catch (swErr) {
+      console.warn('ServiceWorker showNotification failed, trying fallback:', swErr);
+    }
+
+    // Method 2: Service Worker controller message
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title,
+          options
+        });
+        return { delivered: true, method: 'sw_message' };
+      }
+    } catch (msgErr) {
+      console.warn('ServiceWorker postMessage notice:', msgErr);
+    }
+
+    // Method 3: Desktop window.Notification fallback
+    try {
+      new Notification(title, options);
+      return { delivered: true, method: 'desktop_window_notification' };
+    } catch (winErr) {
+      console.warn('window.Notification constructor fallback failed:', winErr);
+    }
+
+    return { delivered: false, method: 'failed' };
+  }
+
+  // Test Web Push notification directly on demand
+  async testWebPushNotification(): Promise<{ success: boolean; method: string; message: string }> {
+    const permResult = await this.requestNotificationPermission();
+    if (!permResult.granted) {
+      return {
+        success: false,
+        method: permResult.status,
+        message: permResult.error || `Notification permission is ${permResult.status}. Please grant permission in browser settings.`
+      };
+    }
+
+    // Play chime sound
+    this.playStartAlertSound();
+
+    const res = await this.sendBrowserNotification(
+      '🔔 Test Web Push Notification (ការសាកល្បង)',
+      'EduTrack Web Push notifications are active and functioning correctly on this device!',
+      'test-alert-' + Date.now()
+    );
+
+    return {
+      success: res.delivered,
+      method: res.method,
+      message: res.delivered
+        ? `Web Push notification successfully delivered via ${res.method}!`
+        : `Could not display system push notification (delivery: ${res.method}). In-app alert logged.`
+    };
   }
 
   // Check schedule for teacher and trigger alerts

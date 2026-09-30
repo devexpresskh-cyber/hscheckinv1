@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
+import { ScheduleAlertService } from '../../services/scheduleAlertService.ts';
 import { SystemSettings } from '../../types/index.ts';
 import {
   Settings,
@@ -17,7 +18,12 @@ import {
   ShieldAlert,
   Trash2,
   AlertTriangle,
-  X
+  X,
+  Bell,
+  Send,
+  Radio,
+  ExternalLink,
+  HelpCircle
 } from 'lucide-react';
 
 export const SystemSettingsView: React.FC = () => {
@@ -98,12 +104,51 @@ export const SystemSettingsView: React.FC = () => {
   const [clearConfirmText, setClearConfirmText] = useState('');
   const [attendanceCount, setAttendanceCount] = useState(() => StorageService.getAttendance().length);
 
+  // Web Push & Device Notification Diagnostics State
+  const [notificationStatus, setNotificationStatus] = useState(() => ScheduleAlertService.getNotificationSupportStatus());
+  const [isTestingPush, setIsTestingPush] = useState(false);
+  const [pushTestResult, setPushTestResult] = useState<string | null>(null);
+
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setAttendanceCount(StorageService.getAttendance().length);
     });
     return unsub;
   }, []);
+
+  const handleRequestPushPermission = async () => {
+    const res = await ScheduleAlertService.requestNotificationPermission();
+    setNotificationStatus(ScheduleAlertService.getNotificationSupportStatus());
+    if (res.granted) {
+      showToast('Notification permission granted!', 'success');
+      await ScheduleAlertService.sendBrowserNotification(
+        '🔔 Web Push Enabled',
+        'System notifications are now active on this browser.'
+      );
+    } else {
+      showToast(res.error || 'Permission was not granted', 'warning');
+    }
+  };
+
+  const handleTestSystemPush = async () => {
+    setIsTestingPush(true);
+    setPushTestResult(null);
+    try {
+      const res = await ScheduleAlertService.testWebPushNotification();
+      setNotificationStatus(ScheduleAlertService.getNotificationSupportStatus());
+      setPushTestResult(res.message);
+      if (res.success) {
+        showToast('🔔 Test push notification delivered successfully!', 'success');
+      } else {
+        showToast(res.message, 'warning');
+      }
+    } catch (e: any) {
+      setPushTestResult(e?.message || 'Error triggering push');
+      showToast('Test push failed', 'error');
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
 
   const handleClearAttendance = async () => {
     try {
@@ -378,6 +423,147 @@ export const SystemSettingsView: React.FC = () => {
         )}
 
       </form>
+
+      {/* Web Push & Device Notification Diagnostics */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <Bell className="w-4 h-4 text-indigo-600" />
+              Web Push Notifications & Service Worker Diagnostics
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Real-time browser notifications, PWA service worker status, and mobile device lock-screen push testing.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 ${
+                notificationStatus.permission === 'granted'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : notificationStatus.permission === 'denied'
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${notificationStatus.permission === 'granted' ? 'bg-emerald-500 animate-pulse' : notificationStatus.permission === 'denied' ? 'bg-rose-500' : 'bg-amber-500'}`} />
+              <span>Permission: {notificationStatus.permission}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+              Browser Engine Support
+            </span>
+            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+              {notificationStatus.supported ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Notification API Supported</span>
+                </>
+              ) : (
+                <>
+                  <X className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span>Not Supported</span>
+                </>
+              )}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+              PWA Service Worker
+            </span>
+            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+              {notificationStatus.swSupported ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>sw.js Ready (Background Push)</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Service Worker Unavailable</span>
+                </>
+              )}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+              Window Context
+            </span>
+            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+              {notificationStatus.isIframe ? (
+                <>
+                  <Radio className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Embedded Sub-Frame / Iframe</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Top-Level Window (Unrestricted)</span>
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {notificationStatus.isIframe && (
+          <div className="p-3 bg-indigo-50/70 rounded-2xl border border-indigo-100 flex items-start justify-between gap-3 text-xs text-indigo-950">
+            <div className="flex items-start gap-2">
+              <HelpCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Notice: Running in Preview / Sub-Frame</span>
+                <span className="text-[11px] text-indigo-800">
+                  Chromium security policies restrict top-level Push Notification dialogs inside iframes. For native lock-screen mobile push, test via a direct top-level browser tab.
+                </span>
+              </div>
+            </div>
+            <a
+              href={window.location.href}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-indigo-200 hover:bg-indigo-50 font-bold text-indigo-700 shadow-2xs"
+            >
+              <span>Open Direct Tab</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        )}
+
+        <div className="pt-2 flex flex-wrap items-center gap-3">
+          {notificationStatus.permission !== 'granted' && (
+            <button
+              type="button"
+              onClick={handleRequestPushPermission}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
+            >
+              <Bell className="w-4 h-4" />
+              <span>Enable Web Push Permissions</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={isTestingPush}
+            onClick={handleTestSystemPush}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+          >
+            <Send className="w-4 h-4 text-emerald-400" />
+            <span>{isTestingPush ? 'Sending Test Push...' : 'Send Test Web Push Notification'}</span>
+          </button>
+        </div>
+
+        {pushTestResult && (
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono text-slate-700">
+            <span className="font-bold text-slate-900 block mb-0.5 font-sans">Diagnostic Output:</span>
+            {pushTestResult}
+          </div>
+        )}
+      </div>
 
       {/* Data Backup & Factory Reset */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">

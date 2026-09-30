@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
+import { useNotification } from '../../context/NotificationContext.tsx';
 import { ScheduleAlertService, AlertPreferences } from '../../services/scheduleAlertService.ts';
 import { StorageService } from '../../services/storageService.ts';
 import { TeacherSubjectSchedule } from '../../types/index.ts';
@@ -16,7 +17,9 @@ import {
   X,
   AlertCircle,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  Send,
+  HelpCircle
 } from 'lucide-react';
 
 interface TeacherScheduleAlertBannerProps {
@@ -28,6 +31,7 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
 }) => {
   const { currentUser } = useAuth();
   const { isKhmer } = useLanguage();
+  const { showToast } = useNotification();
   const isTeacher = currentUser.role === 'teacher';
 
   const [activeAlert, setActiveAlert] = useState<{
@@ -46,6 +50,7 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
     ScheduleAlertService.getPreferences()
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTestingPush, setIsTestingPush] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
     return typeof window !== 'undefined' && 'Notification' in window
       ? Notification.permission
@@ -97,20 +102,40 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
   };
 
   const handleEnableNotifications = async () => {
-    const granted = await ScheduleAlertService.requestNotificationPermission();
+    const res = await ScheduleAlertService.requestNotificationPermission();
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotificationPermission(Notification.permission);
     }
-    const updated = { ...prefs, browserNotificationsEnabled: granted };
+    const updated = { ...prefs, browserNotificationsEnabled: res.granted };
     setPrefs(updated);
     ScheduleAlertService.savePreferences(updated);
-    if (granted) {
-      ScheduleAlertService.sendBrowserNotification(
-        isKhmer ? '🔔 បានបើកការដាស់តឿនជោគជ័យ' : '🔔 Schedule Alerts Enabled',
+    if (res.granted) {
+      ScheduleAlertService.playStartAlertSound();
+      await ScheduleAlertService.sendBrowserNotification(
+        isKhmer ? '🔔 បានបើកការដាស់តឿន Web Push ជោគជ័យ' : '🔔 Web Push Alerts Enabled',
         isKhmer
           ? 'ប្រព័ន្ធនឹងផ្ញើសាររំលឹកមុនម៉ោងបង្រៀនចូល និងចេញ'
           : 'You will receive timely reminders before class begins and ends.'
       );
+      showToast(isKhmer ? 'បានបើកការជូនដំណឹង Web Push ជោគជ័យ' : 'Web Push alerts enabled successfully', 'success');
+    } else if (res.error) {
+      showToast(res.error, 'warning');
+    }
+  };
+
+  const handleTestWebPush = async () => {
+    setIsTestingPush(true);
+    try {
+      const res = await ScheduleAlertService.testWebPushNotification();
+      if (res.success) {
+        showToast(isKhmer ? '🔔 បានផ្ញើការជូនដំណឹង Web Push សាកល្បងជោគជ័យ!' : '🔔 Test Web Push sent successfully!', 'success');
+      } else {
+        showToast(res.message, 'warning');
+      }
+    } catch (e: any) {
+      showToast('Failed to trigger test push: ' + (e?.message || ''), 'error');
+    } finally {
+      setIsTestingPush(false);
     }
   };
 
@@ -368,26 +393,65 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
             </div>
 
             {/* Browser / Mobile Push Notifications */}
-            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-              <div>
-                <p className="font-bold text-slate-900">
-                  {isKhmer ? 'ការជូនដំណឹងលើទូរស័ព្ទ (Web Push)' : 'Phone Web Push Notification'}
-                </p>
-                <p className="text-[10px] text-slate-500">
-                  {notificationPermission === 'granted'
-                    ? (isKhmer ? '✅ បានអនុញ្ញាត' : '✅ Allowed')
-                    : (isKhmer ? '⚠️ មិនទាន់បានអនុញ្ញាត' : '⚠️ Permission needed')}
-                </p>
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <span>{isKhmer ? 'ការជូនដំណឹងលើទូរស័ព្ទ (Web Push)' : 'Mobile & Desktop Web Push'}</span>
+                    <span className={`inline-block w-2 h-2 rounded-full ${notificationPermission === 'granted' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {notificationPermission === 'granted'
+                      ? (isKhmer ? '✅ បានអនុញ្ញាតទទួល Web Push' : '✅ Web Push Active & Allowed')
+                      : notificationPermission === 'denied'
+                      ? (isKhmer ? '❌ បានបិទក្នុង Browser Setting' : '❌ Blocked in browser settings')
+                      : (isKhmer ? '⚠️ មិនទាន់បានអនុញ្ញាត' : '⚠️ Permission needed')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {notificationPermission !== 'granted' ? (
+                    <button
+                      type="button"
+                      onClick={handleEnableNotifications}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-xs cursor-pointer transition-all active:scale-95"
+                    >
+                      {isKhmer ? 'បើក Web Push' : 'Enable Web Push'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isTestingPush}
+                      onClick={handleTestWebPush}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs flex items-center gap-1 cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                      title={isKhmer ? 'ចុចដើម្បីផ្ញើសារ Push សាកល្បង' : 'Send test web push notification'}
+                    >
+                      <Send className="w-3 h-3" />
+                      <span>{isTestingPush ? '...' : (isKhmer ? 'សាកល្បង' : 'Test Push')}</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              {notificationPermission !== 'granted' ? (
-                <button
-                  onClick={handleEnableNotifications}
-                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-xs"
-                >
-                  {isKhmer ? 'បើក' : 'Enable'}
-                </button>
-              ) : (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+
+              {ScheduleAlertService.isSubframe() && (
+                <div className="p-2 bg-indigo-50/70 border border-indigo-100 rounded-lg text-[10px] text-indigo-900 flex items-start gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span>
+                      {isKhmer
+                        ? 'ព័ត៌មានជំនួយ៖ ប្រសិនបើបើកក្នុង Preview iframe Browser អាចនឹងរារាំង Notification។ សូមបើកតាម URL ផ្ទាល់ ឬដំឡើង PWA លើទូរស័ព្ទ។'
+                        : 'Tip: Browsers restrict system push inside iframes. For native lock-screen alerts, install as PWA or open in a direct browser tab.'}
+                    </span>
+                    <a
+                      href={window.location.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-0.5 text-indigo-700 font-bold underline ml-1 hover:text-indigo-900"
+                    >
+                      <span>{isKhmer ? 'បើកផ្ទាំងថ្មី' : 'Open direct'}</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                </div>
               )}
             </div>
 
