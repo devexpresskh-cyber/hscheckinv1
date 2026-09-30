@@ -282,7 +282,8 @@ export const AttendanceList: React.FC = () => {
   const isAdmin =
     currentUser.role === 'super_admin' ||
     currentUser.role === 'admin_hr' ||
-    hasPermission('attendance.delete');
+    currentUser.role === 'supervisor' ||
+    (!['teacher', 'employee'].includes(currentUser.role) && (hasPermission('attendance.delete') || hasPermission('attendance.view')));
 
   const handleClearAllAttendance = async () => {
     try {
@@ -342,13 +343,13 @@ export const AttendanceList: React.FC = () => {
         const matchSubject = (record.subject || '').toLowerCase().includes(q);
         const matchClass = (record.gradeClass || '').toLowerCase().includes(q);
         const isTeacher = isTeacherRecord(record);
-        const matchName = !isTeacher && record.personName.toLowerCase().includes(q);
-        const matchKhmer = !isTeacher && (record.khmerName || '').toLowerCase().includes(q);
+        const matchName = (isAdmin || !isTeacher) && record.personName.toLowerCase().includes(q);
+        const matchKhmer = (isAdmin || !isTeacher) && (record.khmerName || '').toLowerCase().includes(q);
         if (!matchCode && !matchSubject && !matchClass && !matchName && !matchKhmer) return false;
       }
       return true;
     });
-  }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment, currentUser, subjectSchedules]);
+  }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment, currentUser, subjectSchedules, isAdmin]);
 
   // Filter corrections
   const filteredCorrections = useMemo(() => {
@@ -378,7 +379,9 @@ export const AttendanceList: React.FC = () => {
       teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
       subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
     const displayLabel = isTeacherReq
-      ? (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code'))
+      ? (isAdmin
+          ? `${req.personName} (${matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'SUB')})`
+          : (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code')))
       : req.personName;
 
     StorageService.addAuditLog({
@@ -433,7 +436,9 @@ export const AttendanceList: React.FC = () => {
       teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
       subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
     const displayLabel = isTeacherReq
-      ? (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code'))
+      ? (isAdmin
+          ? `${req.personName} (${matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'SUB')})`
+          : (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code')))
       : req.personName;
 
     StorageService.addAuditLog({
@@ -463,7 +468,9 @@ export const AttendanceList: React.FC = () => {
       teachers.some(t => t.id === req.personId || t.fullName?.toLowerCase() === req.personName?.toLowerCase()) ||
       subjectSchedules.some(s => s.teacherId === req.personId || s.teacherName?.toLowerCase() === req.personName?.toLowerCase());
     const displayLabel = isTeacherReq
-      ? (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code'))
+      ? (isAdmin
+          ? `${req.personName} (${matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'SUB')})`
+          : (matchedAtt ? getSubjectCode(matchedAtt) : (subjectSchedules.find(s => s.teacherId === req.personId)?.subjectCode || 'Subject Code')))
       : req.personName;
 
     StorageService.addAuditLog({
@@ -649,7 +656,11 @@ export const AttendanceList: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder={isKhmer ? "ស្វែងរកតាមលេខកូដមុខវិជ្ជា (Subject Code)..." : "Search Subject Code, class, staff..."}
+                placeholder={
+                  isKhmer
+                    ? (isAdmin ? "ស្វែងរកតាមឈ្មោះគ្រូ លេខកូដមុខវិជ្ជា..." : "ស្វែងរកតាមលេខកូដមុខវិជ្ជា (Subject Code)...")
+                    : (isAdmin ? "Search teacher name, subject code, class..." : "Search Subject Code, class, staff...")
+                }
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium focus:bg-white focus:outline-hidden"
               />
             </div>
@@ -753,21 +764,47 @@ export const AttendanceList: React.FC = () => {
                                 </span>
                                 <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
                                   {isTeacher ? (
-                                    <>
-                                      <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
-                                        {subjectCode}
-                                      </span>
-                                      {record.subject && (
-                                        <span className="hidden sm:inline text-slate-600 font-medium truncate">
-                                          {record.subject} {record.gradeClass ? `(${record.gradeClass})` : ''}
+                                    isAdmin ? (
+                                      <>
+                                        <span className="font-semibold text-slate-800 text-xs sm:text-sm">
+                                          {record.personName}
                                         </span>
-                                      )}
-                                      {record.room && (
-                                        <span className="hidden sm:inline text-slate-400 text-[10px]">
-                                          • {record.room}
+                                        {record.khmerName && (
+                                          <span className="text-slate-400 text-[10px] hidden md:inline">
+                                            ({record.khmerName})
+                                          </span>
+                                        )}
+                                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
+                                          {subjectCode}
                                         </span>
-                                      )}
-                                    </>
+                                        {record.subject && (
+                                          <span className="hidden sm:inline text-slate-600 font-medium truncate">
+                                            • {record.subject} {record.gradeClass ? `(${record.gradeClass})` : ''}
+                                          </span>
+                                        )}
+                                        {record.room && (
+                                          <span className="hidden sm:inline text-slate-400 text-[10px]">
+                                            • {record.room}
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
+                                          {subjectCode}
+                                        </span>
+                                        {record.subject && (
+                                          <span className="hidden sm:inline text-slate-600 font-medium truncate">
+                                            {record.subject} {record.gradeClass ? `(${record.gradeClass})` : ''}
+                                          </span>
+                                        )}
+                                        {record.room && (
+                                          <span className="hidden sm:inline text-slate-400 text-[10px]">
+                                            • {record.room}
+                                          </span>
+                                        )}
+                                      </>
+                                    )
                                   ) : (
                                     <>
                                       <span className="font-semibold text-slate-600">{record.personName}</span>
@@ -937,18 +974,36 @@ export const AttendanceList: React.FC = () => {
                                 </span>
                                 <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
                                   {isTeacherReq ? (
-                                    <>
-                                      <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
-                                        {reqSubjectCode}
-                                      </span>
-                                      {matchedAtt?.subject ? (
-                                        <span className="hidden sm:inline text-slate-600 font-medium truncate">
-                                          {matchedAtt.subject} {matchedAtt.gradeClass ? `(${matchedAtt.gradeClass})` : ''}
+                                    isAdmin ? (
+                                      <>
+                                        <span className="font-semibold text-slate-800 text-xs sm:text-sm">
+                                          {req.personName}
                                         </span>
-                                      ) : (
-                                        <span className="hidden sm:inline text-slate-600 font-medium">{req.department}</span>
-                                      )}
-                                    </>
+                                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
+                                          {reqSubjectCode}
+                                        </span>
+                                        {matchedAtt?.subject ? (
+                                          <span className="hidden sm:inline text-slate-600 font-medium truncate">
+                                            • {matchedAtt.subject} {matchedAtt.gradeClass ? `(${matchedAtt.gradeClass})` : ''}
+                                          </span>
+                                        ) : (
+                                          <span className="hidden sm:inline text-slate-600 font-medium">• {req.department}</span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
+                                          {reqSubjectCode}
+                                        </span>
+                                        {matchedAtt?.subject ? (
+                                          <span className="hidden sm:inline text-slate-600 font-medium truncate">
+                                            {matchedAtt.subject} {matchedAtt.gradeClass ? `(${matchedAtt.gradeClass})` : ''}
+                                          </span>
+                                        ) : (
+                                          <span className="hidden sm:inline text-slate-600 font-medium">{req.department}</span>
+                                        )}
+                                      </>
+                                    )
                                   ) : (
                                     <>
                                       <span className="font-semibold text-slate-700">{req.personName}</span>

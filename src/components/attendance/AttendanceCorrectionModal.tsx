@@ -17,9 +17,15 @@ export const AttendanceCorrectionModal: React.FC<AttendanceCorrectionModalProps>
   onSubmit,
   targetRecord
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const teachers = StorageService.getTeachers();
   const subjectSchedules = StorageService.getSubjectSchedules();
+
+  const isAdmin =
+    currentUser.role === 'super_admin' ||
+    currentUser.role === 'admin_hr' ||
+    currentUser.role === 'supervisor' ||
+    (!['teacher', 'employee'].includes(currentUser.role) && (hasPermission('attendance.approve') || hasPermission('attendance.edit')));
 
   const isTeacher = Boolean(
     targetRecord?.personType === 'teacher' ||
@@ -115,10 +121,20 @@ export const AttendanceCorrectionModal: React.FC<AttendanceCorrectionModalProps>
           
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              {isTeacher ? 'Subject Code & Academic Schedule' : 'Staff Name & Department'}
+              {isTeacher ? (isAdmin ? 'Teacher & Academic Schedule' : 'Subject Code & Academic Schedule') : 'Staff Name & Department'}
             </label>
             {isTeacher ? (
               <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5">
+                {isAdmin && (
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/80 mb-1">
+                    <span className="text-xs font-bold text-slate-800">
+                      Teacher: {targetRecord?.personName || currentUser.fullName}
+                    </span>
+                    {targetRecord?.department && (
+                      <span className="text-[11px] text-slate-500 font-medium">{targetRecord.department}</span>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-2 py-0.5 rounded text-xs tracking-wider shadow-2xs">
                     {getSubjectCode()}
@@ -136,7 +152,7 @@ export const AttendanceCorrectionModal: React.FC<AttendanceCorrectionModalProps>
                     </span>
                   )}
                   {targetRecord?.room && <span>Room: {targetRecord.room}</span>}
-                  {targetRecord?.department && <span>• {targetRecord.department}</span>}
+                  {!isAdmin && targetRecord?.department && <span>• {targetRecord.department}</span>}
                 </div>
               </div>
             ) : (
