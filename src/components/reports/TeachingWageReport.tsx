@@ -731,10 +731,10 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-0 main-report-container">
       
-      {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header & Controls (Screen only) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/30">
@@ -754,14 +754,14 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         <div className="flex items-center gap-2.5">
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print Report</span>
           </button>
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export Wage CSV</span>
@@ -769,8 +769,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* KPI Cards (Screen only) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
         <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -840,8 +840,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      {/* Filter Toolbar (Screen only) */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="flex flex-wrap items-center gap-2">
           {/* Period selector */}
           <div className="flex items-center bg-slate-100 p-1 rounded-2xl">
@@ -1016,7 +1016,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           </div>
         </div>
 
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between print:hidden">
           <div>
             <h3 className="text-sm sm:text-base font-black text-slate-900">
               {isKhmer ? 'បញ្ជីប្រាក់ឈ្នួលបង្រៀនលម្អិតតាមគ្រូ' : 'Faculty Teaching Wage Breakdown'}

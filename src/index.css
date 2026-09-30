@@ -109,17 +109,55 @@
     overflow: visible !important;
     border: none !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
     width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .standard-admin-report-header {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    border-radius: 0 !important;
+    padding: 0 0 16px 0 !important;
   }
 
   .standard-report-table {
     width: 100% !important;
+    min-width: 100% !important;
     border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  .standard-report-table thead {
+    display: table-header-group !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .standard-report-table tbody tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   .standard-report-table th,
   .standard-report-table td {
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .standard-report-table tfoot {
+    display: table-footer-group !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .standard-admin-report-footer {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border-radius: 0 !important;
   }
 
   /* When printing the payslip voucher specifically */
