@@ -123,6 +123,11 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
     ScheduleAlertService.savePreferences(updated);
   };
 
+  // Only teachers have scheduled class alert countdowns - admin and employees do not teach
+  if (!isTeacher) {
+    return null;
+  }
+
   // If no upcoming or ongoing class, don't crowd the top
   if (!nextScheduleData && !activeAlert) {
     return null;

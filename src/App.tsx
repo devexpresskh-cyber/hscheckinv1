@@ -14,6 +14,7 @@ import { DepartmentManagement } from './components/departments/DepartmentManagem
 import { ScheduleManagement } from './components/schedules/ScheduleManagement.tsx';
 import { AttendanceList } from './components/attendance/AttendanceList.tsx';
 import { AttendanceReports } from './components/reports/AttendanceReports.tsx';
+import { TeachingWageReport } from './components/reports/TeachingWageReport.tsx';
 import { LeaveManagement } from './components/leave/LeaveManagement.tsx';
 import { HolidayManagement } from './components/holidays/HolidayManagement.tsx';
 import { TelegramCenter } from './components/telegram/TelegramCenter.tsx';
@@ -88,14 +89,16 @@ const MainLayout: React.FC = () => {
   // Automatically enforce guard: teacher and employee land directly on their Monthly Calendar!
   React.useEffect(() => {
     if (isEmployee) {
-      if (currentTab !== 'monthly_calendar' && currentTab !== 'schedules' && currentTab !== 'attendance') {
+      const allowedEmployeeTabs: NavTab[] = ['monthly_calendar', 'schedules', 'attendance', 'leave', 'holidays', 'manual'];
+      if (!allowedEmployeeTabs.includes(currentTab)) {
         setCurrentTab('monthly_calendar');
       }
       return;
     }
 
     if (isTeacher) {
-      if (currentTab !== 'monthly_calendar' && currentTab !== 'schedules' && currentTab !== 'attendance') {
+      const allowedTeacherTabs: NavTab[] = ['monthly_calendar', 'schedules', 'attendance', 'reports', 'holidays', 'leave', 'manual'];
+      if (!allowedTeacherTabs.includes(currentTab)) {
         setCurrentTab('monthly_calendar');
       }
       return;
@@ -103,7 +106,7 @@ const MainLayout: React.FC = () => {
   }, [isEmployee, isTeacher, currentUser.id]);
 
   const renderContent = () => {
-    // If logged in as Employee, allow Monthly Present Calendar, Staff Shifts, and Staff Check-in History
+    // If logged in as Employee, allow Monthly Present Calendar, Staff Shifts, Check-in History, Leave Requests, and Holidays
     if (isEmployee) {
       if (currentTab === 'attendance') {
         return <AttendanceList />;
@@ -111,17 +114,38 @@ const MainLayout: React.FC = () => {
       if (currentTab === 'schedules') {
         return <EmployeeStaffCalendar initialTab="weekly_shifts" onNavigateToHistory={() => setCurrentTab('attendance')} />;
       }
+      if (currentTab === 'leave') {
+        return <LeaveManagement />;
+      }
+      if (currentTab === 'holidays') {
+        return <HolidayManagement />;
+      }
+      if (currentTab === 'manual') {
+        return <SystemUserManual />;
+      }
       // Monthly Present Calendar directly
       return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
     }
 
-    // If logged in as Teacher, allow Monthly Schedule Calendar, Weekly Timetable, and Attendance History
+    // If logged in as Teacher, allow Monthly Schedule Calendar, Weekly Timetable, Attendance History, Wage & Payroll, Holidays, and Leave
     if (isTeacher) {
       if (currentTab === 'attendance') {
         return <AttendanceList />;
       }
       if (currentTab === 'schedules') {
         return <ScheduleManagement initialView="weekly_timetable" />;
+      }
+      if (currentTab === 'reports') {
+        return <TeachingWageReport />;
+      }
+      if (currentTab === 'holidays') {
+        return <HolidayManagement />;
+      }
+      if (currentTab === 'leave') {
+        return <LeaveManagement />;
+      }
+      if (currentTab === 'manual') {
+        return <SystemUserManual />;
       }
       // Monthly Schedule Calendar directly
       return <ScheduleManagement initialView="monthly_calendar" />;

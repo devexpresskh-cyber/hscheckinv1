@@ -52,11 +52,17 @@ export const TeacherTeachingService = {
     const currentHours = currentDate.getHours();
     const currentMinutes = currentDate.getMinutes();
     const currentTotalMinutes = currentHours * 60 + currentMinutes;
-    const todayDateStr = currentDate.toISOString().split('T')[0];
+    const ty = currentDate.getFullYear();
+    const tm = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const td = String(currentDate.getDate()).padStart(2, '0');
+    const todayDateStr = `${ty}-${tm}-${td}`;
 
     // Filter all active schedules for this teacher
     const teacherWeeklySchedules = allSubjectSchedules.filter(
-      s => s.teacherId === teacher.id && s.isActive
+      s => (s.teacherId === teacher.id ||
+            (teacher.teacherId && s.teacherId?.toLowerCase() === teacher.teacherId.toLowerCase()) ||
+            (s.teacherName && teacher.fullName && s.teacherName.trim().toLowerCase() === teacher.fullName.trim().toLowerCase())) &&
+           s.isActive
     );
 
     // Filter schedules active for today
@@ -78,10 +84,17 @@ export const TeacherTeachingService = {
     });
     const totalWeeklyHours = Math.round((totalWeeklyMinutes / 60) * 10) / 10;
 
-    // Check today's attendance record for this teacher
-    const todayAttendance = attendanceRecords.find(
-      a => a.personId === teacher.id && a.date === todayDateStr
-    );
+    // Check today's attendance record for this teacher (matches ID, teacher code, or full name)
+    const todayAttendance = attendanceRecords.find(a => {
+      const isDate = a.date === todayDateStr;
+      if (!isDate) return false;
+      const isPerson =
+        a.personId === teacher.id ||
+        (teacher.teacherId && a.personId.toLowerCase() === teacher.teacherId.toLowerCase()) ||
+        (a.personName && teacher.fullName && a.personName.trim().toLowerCase() === teacher.fullName.trim().toLowerCase()) ||
+        (teacher.khmerName && a.khmerName && a.khmerName.trim() === teacher.khmerName.trim());
+      return isPerson && Boolean(a.checkInTime);
+    });
     const isCheckedIn = Boolean(todayAttendance && todayAttendance.checkInTime);
     const checkInTime = todayAttendance?.checkInTime;
     const checkOutTime = todayAttendance?.checkOutTime;

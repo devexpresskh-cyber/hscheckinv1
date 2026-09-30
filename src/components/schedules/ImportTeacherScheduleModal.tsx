@@ -244,13 +244,15 @@ export const ImportTeacherScheduleModal: React.FC<ImportTeacherScheduleModalProp
       const periodName = (colPeriodName !== -1 ? cols[colPeriodName] : '') || `Period ${periodNumber}`;
       const startTime = normalizeTime(colStart !== -1 ? cols[colStart] : '07:30');
       const endTime = normalizeTime(colEnd !== -1 ? cols[colEnd] : '09:00');
-      const rawGrace = colGrace !== -1 ? parseInt(cols[colGrace], 10) : 10;
-      const gracePeriodMinutes = isNaN(rawGrace) ? 10 : rawGrace;
-      const rawRate = colRate !== -1 ? parseFloat(cols[colRate]) : undefined;
-      const hourlyRate = rawRate && !isNaN(rawRate) ? rawRate : undefined;
-
       const matched = matchTeacher(rawTeacher);
       const daysOfWeek = parseDaysOfWeek(daysStr);
+
+      const sysSettings = StorageService.getSettings();
+      const defaultSettingGrace = sysSettings.defaultGracePeriodMinutes ?? sysSettings.defaultGracePeriod ?? 15;
+      const rawGrace = colGrace !== -1 ? parseInt(cols[colGrace], 10) : defaultSettingGrace;
+      const gracePeriodMinutes = isNaN(rawGrace) ? defaultSettingGrace : rawGrace;
+      const rawRate = colRate !== -1 ? parseFloat(cols[colRate]) : undefined;
+      const hourlyRate = rawRate !== undefined && !isNaN(rawRate) ? rawRate : matched?.hourlyRate;
 
       // Validation
       const errors: string[] = [];

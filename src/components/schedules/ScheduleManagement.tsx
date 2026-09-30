@@ -33,7 +33,8 @@ import {
   LayoutGrid,
   ArrowUpDown,
   Layers,
-  List
+  List,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
@@ -87,7 +88,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [teachers, setTeachers] = useState<Teacher[]>(() => StorageService.getTeachers().filter(t => t.status === 'Active'));
   const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
   const [locations, setLocations] = useState<WorkLocation[]>(() => StorageService.getLocations());
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSettings());
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState(false);
+
+  const systemGraceMinutes = useMemo(() => {
+    return systemSettings?.defaultGracePeriodMinutes ?? systemSettings?.defaultGracePeriod ?? 15;
+  }, [systemSettings]);
 
   // Identify teacher role and matching profile for owned-only schedule access
   const activeTeacher = useMemo(() => {
@@ -124,54 +130,71 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       setTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
       setDepartments(StorageService.getDepartments());
       setLocations(StorageService.getLocations());
+      setSystemSettings(StorageService.getSettings());
     });
     return unsub;
   }, []);
 
-  const [subjectFormData, setSubjectFormData] = useState<TeacherSubjectSchedule>({
-    id: '',
-    teacherId: teachers[0]?.id || '',
-    teacherName: teachers[0]?.fullName || '',
-    khmerTeacherName: teachers[0]?.khmerName || '',
-    subject: '',
-    khmerSubject: '',
-    subjectCode: '',
-    gradeClass: 'Grade 12A',
-    room: 'Room 201',
-    dayOfWeek: 1,
-    daysOfWeek: [1, 2, 3, 4, 5, 6],
-    periodNumber: 1,
-    periodName: 'Period 1',
-    startTime: '07:30',
-    endTime: '09:00',
-    gracePeriodMinutes: 10,
-    color: '#4F46E5',
-    isActive: true
+  const [subjectFormData, setSubjectFormData] = useState<TeacherSubjectSchedule>(() => {
+    const s = StorageService.getSettings();
+    const g = s.defaultGracePeriodMinutes ?? s.defaultGracePeriod ?? 15;
+    const t = StorageService.getTeachers().find(x => x.status === 'Active');
+    return {
+      id: '',
+      teacherId: t?.id || '',
+      teacherName: t?.fullName || '',
+      khmerTeacherName: t?.khmerName || '',
+      subject: '',
+      khmerSubject: '',
+      subjectCode: '',
+      gradeClass: 'Grade 12A',
+      room: 'Room 201',
+      dayOfWeek: 1,
+      daysOfWeek: [1, 2, 3, 4, 5, 6],
+      periodNumber: 1,
+      periodName: 'Period 1',
+      startTime: '07:30',
+      endTime: '09:00',
+      gracePeriodMinutes: g,
+      hourlyRate: t?.hourlyRate,
+      color: '#4F46E5',
+      isActive: true
+    };
   });
 
-  const [formData, setFormData] = useState<Schedule>({
-    id: '',
-    name: '',
-    department: 'Academic & Curriculum',
-    targetType: 'Standard',
-    daysOfWeek: [1, 2, 3, 4, 5],
-    startTime: '07:30',
-    endTime: '11:30',
-    breakStart: '11:30',
-    breakEnd: '13:30',
-    afternoonStartTime: '13:30',
-    afternoonEndTime: '17:00',
-    gracePeriodMinutes: 10,
-    absenceDetectionMinutes: 60,
-    requiredCheckIn: true,
-    requiredCheckOut: true,
-    location: 'Main Campus - Central Building',
-    isActive: true,
-    color: '#3B82F6'
+  const selectedSubjectTeacher = useMemo(() => {
+    return teachers.find(t => t.id === subjectFormData.teacherId);
+  }, [teachers, subjectFormData.teacherId]);
+
+  const [formData, setFormData] = useState<Schedule>(() => {
+    const s = StorageService.getSettings();
+    const g = s.defaultGracePeriodMinutes ?? s.defaultGracePeriod ?? 15;
+    return {
+      id: '',
+      name: '',
+      department: 'Academic & Curriculum',
+      targetType: 'Standard',
+      daysOfWeek: [1, 2, 3, 4, 5],
+      startTime: '07:30',
+      endTime: '11:30',
+      breakStart: '11:30',
+      breakEnd: '13:30',
+      afternoonStartTime: '13:30',
+      afternoonEndTime: '17:00',
+      gracePeriodMinutes: g,
+      absenceDetectionMinutes: s.absenceDetectionMinutes ?? 60,
+      requiredCheckIn: true,
+      requiredCheckOut: true,
+      location: 'Main Campus - Central Building',
+      isActive: true,
+      color: '#3B82F6'
+    };
   });
 
   const handleOpenAdd = () => {
     setEditingSchedule(null);
+    const s = StorageService.getSettings();
+    const defaultGrace = s.defaultGracePeriodMinutes ?? s.defaultGracePeriod ?? 15;
     setFormData({
       id: `sch-${Date.now()}`,
       name: '',
@@ -182,8 +205,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       endTime: '11:30',
       afternoonStartTime: '13:30',
       afternoonEndTime: '17:00',
-      gracePeriodMinutes: 10,
-      absenceDetectionMinutes: 60,
+      gracePeriodMinutes: defaultGrace,
+      absenceDetectionMinutes: s.absenceDetectionMinutes ?? 60,
       requiredCheckIn: true,
       requiredCheckOut: true,
       location: locations[0]?.name || 'Main Campus - Central Building',
@@ -195,6 +218,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
   const handleOpenEdit = (sch: Schedule) => {
     setEditingSchedule(sch);
+    const s = StorageService.getSettings();
+    const defaultGrace = s.defaultGracePeriodMinutes ?? s.defaultGracePeriod ?? 15;
     setFormData({
       ...sch,
       name: sch.name || '',
@@ -205,8 +230,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       endTime: sch.endTime || '11:30',
       afternoonStartTime: sch.afternoonStartTime || '',
       afternoonEndTime: sch.afternoonEndTime || '',
-      gracePeriodMinutes: sch.gracePeriodMinutes ?? 10,
-      absenceDetectionMinutes: sch.absenceDetectionMinutes ?? 60,
+      gracePeriodMinutes: sch.gracePeriodMinutes ?? defaultGrace,
+      absenceDetectionMinutes: sch.absenceDetectionMinutes ?? s.absenceDetectionMinutes ?? 60,
       requiredCheckIn: sch.requiredCheckIn ?? true,
       requiredCheckOut: sch.requiredCheckOut ?? true,
       location: sch.location || locations[0]?.name || 'Main Campus - Central Building',
@@ -327,6 +352,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       ? teachers.find(t => t.id === selectedTeacherFilter) || teachers[0]
       : teachers[0];
       
+    const s = StorageService.getSettings();
+    const defaultGrace = s.defaultGracePeriodMinutes ?? s.defaultGracePeriod ?? 15;
+
     setEditingSubjectSchedule(null);
     setSubjectFormData({
       id: `sub-sch-${Date.now()}`,
@@ -343,7 +371,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       periodName: 'Period 1 (07:30 - 09:00)',
       startTime: '07:30',
       endTime: '09:00',
-      gracePeriodMinutes: 10,
+      gracePeriodMinutes: defaultGrace,
+      hourlyRate: defaultTeacher?.hourlyRate,
       color: '#4F46E5',
       isActive: true,
       daysOfWeek: [1, 2, 3, 4, 5, 6]
@@ -364,6 +393,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   };
 
   const handleOpenEditSubject = (sub: TeacherSubjectSchedule) => {
+    const s = StorageService.getSettings();
+    const defaultGrace = s.defaultGracePeriodMinutes ?? s.defaultGracePeriod ?? 15;
+    const teacher = teachers.find(t => t.id === sub.teacherId);
     setEditingSubjectSchedule(sub);
     setSubjectFormData({
       id: sub.id || '',
@@ -381,8 +413,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       periodName: sub.periodName || 'Period 1',
       startTime: sub.startTime || '07:30',
       endTime: sub.endTime || '09:00',
-      gracePeriodMinutes: sub.gracePeriodMinutes ?? 10,
-      hourlyRate: sub.hourlyRate,
+      gracePeriodMinutes: sub.gracePeriodMinutes ?? defaultGrace,
+      hourlyRate: sub.hourlyRate !== undefined ? sub.hourlyRate : teacher?.hourlyRate,
       color: sub.color || '#4F46E5',
       isActive: sub.isActive ?? true
     });
@@ -740,6 +772,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   ];
 
   const handleTeacherClassCheckIn = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
+    // Strict requirement: Admin cannot check in teacher's schedule. Only teachers can check in.
+    if (!isTeacher) {
+      showToast(
+        isKhmer
+          ? 'អភិបាលមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនជំនួសគ្រូបង្រៀនឡើយ។ គ្រូត្រូវតែស្កេនដោយផ្ទាល់។'
+          : 'Admins are not allowed to check in for teacher schedules. Teachers must check in using their own authenticated account.',
+        'error'
+      );
+      return;
+    }
+
     const curTime = AttendanceEngine.getCurrentTimeString();
     const curMins = AttendanceEngine.timeToMinutes(curTime);
     const startMins = AttendanceEngine.timeToMinutes(sub.startTime);
@@ -800,6 +843,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   };
 
   const handleTeacherClassCheckOut = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
+    // Strict requirement: Admin cannot check out teacher's schedule.
+    if (!isTeacher) {
+      showToast(
+        isKhmer
+          ? 'អភិបាលមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនជំនួសគ្រូបង្រៀនឡើយ។'
+          : 'Admins are not allowed to check out for teacher schedules.',
+        'error'
+      );
+      return;
+    }
+
     const curTime = AttendanceEngine.getCurrentTimeString();
     const curMins = AttendanceEngine.timeToMinutes(curTime);
     const endMins = AttendanceEngine.timeToMinutes(sub.endTime);
@@ -849,13 +903,23 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const renderClassCard = (sub: TeacherSubjectSchedule, idx: number) => {
     // Find attendance record for this class today
     const isClassToday = selectedDay === todayDayIndex;
-    const todayRec = attendanceList.find(
-      a =>
-        a.date === todayStr &&
-        (a.subjectScheduleId === sub.id ||
-         (sub.teacherId && a.personId === sub.teacherId && (a.subject === sub.subject || a.periodName === sub.periodName)) ||
-         (sub.teacherName && a.personName?.toLowerCase() === sub.teacherName?.toLowerCase() && (a.subject === sub.subject || a.periodName === sub.periodName)))
-    );
+    const isOwnerAtt = (a: any) =>
+      a.personId === sub.teacherId ||
+      (sub.teacherId && a.personId?.toLowerCase() === sub.teacherId?.toLowerCase()) ||
+      (sub.teacherName && a.personName?.toLowerCase() === sub.teacherName?.toLowerCase());
+
+    const todayRec = attendanceList.find(a => {
+      if (a.date !== todayStr) return false;
+      // Direct subject schedule ID match: Attendance was specifically scanned for this class!
+      if (a.subjectScheduleId) {
+        return a.subjectScheduleId === sub.id;
+      }
+      // Fallback for general schedule check-in matching this specific schedule ID only
+      if (sub.id && a.scheduleId === sub.id && isOwnerAtt(a)) {
+        return true;
+      }
+      return false;
+    });
 
     const isCheckedIn = Boolean(todayRec?.checkInTime);
     const isCheckedOut = Boolean(todayRec?.checkOutTime);
@@ -962,8 +1026,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           )}
         </div>
 
-        {/* Quick Attendance Action Buttons for Today */}
-        {isClassToday && (
+        {/* Quick Attendance Action Buttons for Today (Teachers only for their own assigned classes - Admin cannot check in for teachers) */}
+        {isClassToday && isTeacher && (
           <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
             {!isCheckedIn ? (
               curMins < sStart - 30 && isTeacher ? (
@@ -1634,8 +1698,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       {viewMode === 'monthly_calendar' && (
         <TeacherMonthlyCalendar
           initialTeacher={activeTeacher}
-          onCheckIn={handleTeacherClassCheckIn}
-          onCheckOut={handleTeacherClassCheckOut}
+          onCheckIn={isTeacher ? handleTeacherClassCheckIn : undefined}
+          onCheckOut={isTeacher ? handleTeacherClassCheckOut : undefined}
           onAddScheduleForDay={hasPermission('schedules.create') && !isTeacher ? (dayOfWeek) => {
             handleOpenAddSubjectForSlot(dayOfWeek);
           } : undefined}
@@ -2177,18 +2241,32 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               {/* Grace & Absence Thresholds */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Grace Period (Minutes)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">
+                      Grace Period (Minutes)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, gracePeriodMinutes: systemGraceMinutes }))}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors"
+                      title="Sync from system setting"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      Setting: {systemGraceMinutes}m
+                    </button>
+                  </div>
                   <input
                     type="number"
                     min="0"
                     max="60"
                     value={formData.gracePeriodMinutes}
                     onChange={e => setFormData({ ...formData, gracePeriodMinutes: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-500">e.g. 10m allowed late</span>
+                  <span className="text-[10px] text-indigo-600 font-semibold mt-1 block flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>Auto-synced from system setting ({systemGraceMinutes}m default)</span>
+                  </span>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2312,20 +2390,22 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   required
                   value={subjectFormData.teacherId}
                   onChange={e => {
-                    const sel = teachers.find(t => t.id === e.target.value);
-                    setSubjectFormData({
-                      ...subjectFormData,
-                      teacherId: e.target.value,
+                    const selId = e.target.value;
+                    const sel = teachers.find(t => t.id === selId);
+                    setSubjectFormData(prev => ({
+                      ...prev,
+                      teacherId: selId,
                       teacherName: sel ? sel.fullName : '',
-                      khmerTeacherName: sel?.khmerName || ''
-                    });
+                      khmerTeacherName: sel?.khmerName || '',
+                      hourlyRate: sel?.hourlyRate !== undefined ? sel.hourlyRate : prev.hourlyRate
+                    }));
                   }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                 >
                   <option value="">{isKhmer ? '-- ជ្រើសរើសគ្រូបង្រៀន --' : '-- Select Teacher --'}</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                      {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department} {t.hourlyRate !== undefined ? `[Rate: $${t.hourlyRate}/h]` : ''}
                     </option>
                   ))}
                 </select>
@@ -2533,31 +2613,60 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               {/* Grace Period & Hourly Rate */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isKhmer ? 'រយៈពេលអនុគ្រោះយឺត (Grace Period Minutes)' : 'Grace Period (Minutes)'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">
+                      {isKhmer ? 'រយៈពេលអនុគ្រោះយឺត (Grace Period Minutes)' : 'Grace Period (Minutes)'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setSubjectFormData(prev => ({ ...prev, gracePeriodMinutes: systemGraceMinutes }))}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors"
+                      title={isKhmer ? 'ធ្វើសមកាលកម្មតាមការកំណត់' : 'Sync with system setting'}
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      {isKhmer ? `ការកំណត់៖ ${systemGraceMinutes}ន` : `Setting: ${systemGraceMinutes}m`}
+                    </button>
+                  </div>
                   <input
                     type="number"
                     min="0"
                     max="60"
-                    value={subjectFormData.gracePeriodMinutes || 10}
+                    value={subjectFormData.gracePeriodMinutes ?? systemGraceMinutes}
                     onChange={e => setSubjectFormData({ ...subjectFormData, gracePeriodMinutes: Number(e.target.value) })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    {isKhmer ? 'អនុញ្ញាតឱ្យចូលយឺតអតិបរមាដោយមិនកត់ត្រាជាយឺត' : 'Late threshold in minutes before flagged as late'}
+                  <span className="text-[10px] text-indigo-600 font-semibold mt-0.5 block flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>
+                      {isKhmer
+                        ? `បានធ្វើសមកាលកម្មដោយស្វ័យប្រវត្តិតាមការកំណត់ (${systemGraceMinutes} នាទី)`
+                        : `Auto-synced from system setting (${systemGraceMinutes} mins default)`}
+                    </span>
                   </span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-emerald-800 mb-1">
-                    {isKhmer ? 'អត្រាកម្រៃបង្រៀនម៉ោងនេះ ($/hr)' : 'Subject Teaching Rate ($/hr)'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-emerald-800">
+                      {isKhmer ? 'អត្រាកម្រៃបង្រៀនម៉ោងនេះ ($/hr)' : 'Subject Teaching Rate ($/hr)'}
+                    </label>
+                    {selectedSubjectTeacher?.hourlyRate !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => setSubjectFormData(prev => ({ ...prev, hourlyRate: selectedSubjectTeacher.hourlyRate }))}
+                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-100/80 hover:bg-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors"
+                        title={isKhmer ? 'ធ្វើសមកាលកម្មពីប្រវត្តិរូបគ្រូ' : 'Sync from teacher profile rate'}
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        {isKhmer ? `ស្មើគ្រូ ($${selectedSubjectTeacher.hourlyRate}/h)` : `Teacher: $${selectedSubjectTeacher.hourlyRate}/h`}
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="number"
                     min="0"
                     step="0.5"
-                    placeholder="Leave empty for teacher default"
+                    placeholder={selectedSubjectTeacher?.hourlyRate ? `Auto: $${selectedSubjectTeacher.hourlyRate}/h` : 'e.g. 25.00'}
                     value={subjectFormData.hourlyRate !== undefined ? subjectFormData.hourlyRate : ''}
                     onChange={e => setSubjectFormData({ 
                       ...subjectFormData, 
@@ -2565,8 +2674,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                     })}
                     className="w-full bg-emerald-50/50 border border-emerald-300 rounded-xl px-3 py-2 text-xs font-bold text-emerald-950 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-emerald-600 mt-0.5 block">
-                    {isKhmer ? 'ទុកនៅទទេបើចង់ប្រើអត្រាកម្រៃគោលរបស់គ្រូ' : 'Overrides teacher base rate for wage calculation'}
+                  <span className="text-[10px] text-emerald-700 font-semibold mt-0.5 block flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span>
+                      {selectedSubjectTeacher?.hourlyRate !== undefined
+                        ? (isKhmer ? `បានធ្វើសមកាលកម្មពីប្រវត្តិរូបគ្រូ (${selectedSubjectTeacher.fullName}: $${selectedSubjectTeacher.hourlyRate}/ម៉ោង)` : `Auto-synced from teacher info (${selectedSubjectTeacher.fullName}: $${selectedSubjectTeacher.hourlyRate}/hr)`)
+                        : (isKhmer ? 'មិនទាន់មានអត្រាក្នុងប្រវត្តិរូបគ្រូ (អាចបញ្ចូលដោយផ្ទាល់)' : 'No rate set on teacher profile (can enter custom rate)')}
+                    </span>
                   </span>
                 </div>
               </div>

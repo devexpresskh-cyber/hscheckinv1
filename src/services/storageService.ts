@@ -40,6 +40,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  getDocs,
   onSnapshot,
   writeBatch
 } from 'firebase/firestore';
@@ -102,12 +103,19 @@ function setStored<T>(key: string, value: T): void {
   }
 }
 
+// Convert any undefined fields to null or strip them so Firestore setDoc never throws Unsupported field value: undefined
+export function sanitizeForFirestore<T>(data: T): any {
+  if (data === undefined) return null;
+  return JSON.parse(JSON.stringify(data, (_, value) => (value === undefined ? null : value)));
+}
+
 // In-memory cache for synchronous, flicker-free rendering
 const initialRoles = getStored<RoleDefinition[]>(STORAGE_KEYS.ROLES, DEFAULT_ROLES).map(r => {
   if (r.code === 'admin_hr') {
     const perms = new Set(r.permissions);
     perms.add('teachers.delete');
     perms.add('employees.delete');
+    perms.add('attendance.delete');
     return { ...r, permissions: Array.from(perms) };
   }
   return r;
@@ -506,7 +514,7 @@ async function processOfflineSyncQueue(): Promise<{ succeeded: number; failed: n
       if (item.action === 'delete') {
         await deleteDoc(doc(db, item.collection, item.docId));
       } else {
-        await setDoc(doc(db, item.collection, item.docId), item.payload, { merge: item.action === 'update' });
+        await setDoc(doc(db, item.collection, item.docId), sanitizeForFirestore(item.payload), { merge: item.action === 'update' });
       }
       succeeded++;
       syncHistory.unshift({
@@ -855,12 +863,20 @@ export const StorageService = {
     });
   },
   addSchedule(sch: Schedule) {
-    const list = [...cache.schedules.filter(s => s.id !== sch.id), sch];
+    const settings = this.getSettings();
+    const defaultGrace = settings.defaultGracePeriodMinutes ?? settings.defaultGracePeriod ?? 15;
+    const finalSch: Schedule = {
+      ...sch,
+      gracePeriodMinutes: sch.gracePeriodMinutes !== undefined && !isNaN(Number(sch.gracePeriodMinutes))
+        ? Number(sch.gracePeriodMinutes)
+        : defaultGrace
+    };
+    const list = [...cache.schedules.filter(s => s.id !== finalSch.id), finalSch];
     cache.schedules = list;
     setStored(STORAGE_KEYS.SCHEDULES, list);
     notifyListeners();
-    setDoc(doc(db, 'schedules', sch.id), sch).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, `schedules/${sch.id}`)
+    setDoc(doc(db, 'schedules', finalSch.id), finalSch).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `schedules/${finalSch.id}`)
     );
   },
   updateSchedule(id: string, updates: Partial<Schedule>) {
@@ -1025,18 +1041,44 @@ export const StorageService = {
     return cache.subjectSchedules.find(s => s.id === id);
   },
   addSubjectSchedule(schedule: TeacherSubjectSchedule) {
-    const list = [...cache.subjectSchedules.filter(s => s.id !== schedule.id), schedule];
+    const settings = this.getSettings();
+    const defaultGrace = settings.defaultGracePeriodMinutes ?? settings.defaultGracePeriod ?? 15;
+    const teacher = cache.teachers.find(t => t.id === schedule.teacherId || (schedule.teacherName && t.fullName === schedule.teacherName));
+    const finalSchedule: TeacherSubjectSchedule = {
+      ...schedule,
+      gracePeriodMinutes: schedule.gracePeriodMinutes !== undefined && !isNaN(Number(schedule.gracePeriodMinutes))
+        ? Number(schedule.gracePeriodMinutes)
+        : defaultGrace,
+      hourlyRate: schedule.hourlyRate !== undefined && !isNaN(Number(schedule.hourlyRate))
+        ? Number(schedule.hourlyRate)
+        : (teacher?.hourlyRate !== undefined ? teacher.hourlyRate : undefined)
+    };
+    const list = [...cache.subjectSchedules.filter(s => s.id !== finalSchedule.id), finalSchedule];
     cache.subjectSchedules = list;
     setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, list);
     notifyListeners();
-    setDoc(doc(db, 'subject_schedules', schedule.id), schedule).catch(err =>
-      handleFirestoreError(err, OperationType.WRITE, `subject_schedules/${schedule.id}`)
+    setDoc(doc(db, 'subject_schedules', finalSchedule.id), finalSchedule).catch(err =>
+      handleFirestoreError(err, OperationType.WRITE, `subject_schedules/${finalSchedule.id}`)
     );
   },
   addSubjectSchedulesBatch(newSchedules: TeacherSubjectSchedule[]) {
+    const settings = this.getSettings();
+    const defaultGrace = settings.defaultGracePeriodMinutes ?? settings.defaultGracePeriod ?? 15;
+    const processed = newSchedules.map(schedule => {
+      const teacher = cache.teachers.find(t => t.id === schedule.teacherId || (schedule.teacherName && t.fullName === schedule.teacherName));
+      return {
+        ...schedule,
+        gracePeriodMinutes: schedule.gracePeriodMinutes !== undefined && !isNaN(Number(schedule.gracePeriodMinutes))
+          ? Number(schedule.gracePeriodMinutes)
+          : defaultGrace,
+        hourlyRate: schedule.hourlyRate !== undefined && !isNaN(Number(schedule.hourlyRate))
+          ? Number(schedule.hourlyRate)
+          : (teacher?.hourlyRate !== undefined ? teacher.hourlyRate : undefined)
+      };
+    });
     const map = new Map<string, TeacherSubjectSchedule>();
     cache.subjectSchedules.forEach(s => map.set(s.id, s));
-    newSchedules.forEach(s => map.set(s.id, s));
+    processed.forEach(s => map.set(s.id, s));
     const list = Array.from(map.values());
     cache.subjectSchedules = list;
     setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, list);
@@ -1044,7 +1086,7 @@ export const StorageService = {
 
     try {
       const batch = writeBatch(db);
-      newSchedules.forEach(s => {
+      processed.forEach(s => {
         batch.set(doc(db, 'subject_schedules', s.id), s);
       });
       batch.commit().catch(err => {
@@ -1085,7 +1127,7 @@ export const StorageService = {
     setStored(STORAGE_KEYS.ATTENDANCE, records);
     notifyListeners();
     records.forEach(r => {
-      setDoc(doc(db, 'attendance', r.id), r).catch(err =>
+      setDoc(doc(db, 'attendance', r.id), sanitizeForFirestore(r)).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `attendance/${r.id}`)
       );
     });
@@ -1095,7 +1137,7 @@ export const StorageService = {
     cache.attendance = list;
     setStored(STORAGE_KEYS.ATTENDANCE, list);
     notifyListeners();
-    setDoc(doc(db, 'attendance', record.id), record).catch(err =>
+    setDoc(doc(db, 'attendance', record.id), sanitizeForFirestore(record)).catch(err =>
       handleFirestoreError(err, OperationType.WRITE, `attendance/${record.id}`)
     );
   },
@@ -1106,10 +1148,52 @@ export const StorageService = {
     notifyListeners();
     const updated = list.find(r => r.id === id);
     if (updated) {
-      setDoc(doc(db, 'attendance', id), updated, { merge: true }).catch(err =>
+      setDoc(doc(db, 'attendance', id), sanitizeForFirestore(updated), { merge: true }).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `attendance/${id}`)
       );
     }
+  },
+  async clearAllAttendance(): Promise<number> {
+    const initialCount = cache.attendance.length;
+    const oldRecords = [...cache.attendance];
+
+    // 1. Immediately wipe in-memory cache and localStorage
+    cache.attendance = [];
+    setStored(STORAGE_KEYS.ATTENDANCE, []);
+
+    // 2. Remove pending offline mutations for attendance to prevent ghost re-creations
+    offlineSyncQueue = offlineSyncQueue.filter(item => item.collection !== 'attendance');
+    saveSyncQueue();
+
+    notifyListeners();
+
+    // 3. Delete from Firestore in batches
+    let deletedCount = initialCount;
+    try {
+      const snapshot = await getDocs(collection(db, 'attendance'));
+      if (!snapshot.empty) {
+        deletedCount = snapshot.size;
+        const docs = snapshot.docs;
+        const batchSize = 400; // max batch limit in Firestore is 500
+        for (let i = 0; i < docs.length; i += batchSize) {
+          const chunk = docs.slice(i, i + batchSize);
+          const batch = writeBatch(db);
+          chunk.forEach(d => {
+            batch.delete(d.ref);
+          });
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.warn('Batch deletion of attendance failed, trying individual deleteDocs:', err);
+      // Fallback: delete old known records individually
+      oldRecords.forEach(r => {
+        deleteDoc(doc(db, 'attendance', r.id)).catch(() => {});
+      });
+    }
+
+    notifyListeners();
+    return deletedCount;
   },
 
   // Attendance Corrections
@@ -1157,7 +1241,7 @@ export const StorageService = {
     setStored(STORAGE_KEYS.LEAVE_REQUESTS, requests);
     notifyListeners();
     requests.forEach(r => {
-      setDoc(doc(db, 'leave_requests', r.id), r).catch(err =>
+      setDoc(doc(db, 'leave_requests', r.id), sanitizeForFirestore(r)).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `leave_requests/${r.id}`)
       );
     });
@@ -1167,7 +1251,7 @@ export const StorageService = {
     cache.leaveRequests = list;
     setStored(STORAGE_KEYS.LEAVE_REQUESTS, list);
     notifyListeners();
-    setDoc(doc(db, 'leave_requests', req.id), req).catch(err =>
+    setDoc(doc(db, 'leave_requests', req.id), sanitizeForFirestore(req)).catch(err =>
       handleFirestoreError(err, OperationType.WRITE, `leave_requests/${req.id}`)
     );
   },
@@ -1178,7 +1262,7 @@ export const StorageService = {
     notifyListeners();
     const updated = list.find(l => l.id === id);
     if (updated) {
-      setDoc(doc(db, 'leave_requests', id), updated, { merge: true }).catch(err =>
+      setDoc(doc(db, 'leave_requests', id), sanitizeForFirestore(updated), { merge: true }).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `leave_requests/${id}`)
       );
     }
@@ -1307,6 +1391,9 @@ export const StorageService = {
   // System Settings
   getSystemSettings(): SystemSettings {
     return cache.systemSettings;
+  },
+  getSettings(): SystemSettings {
+    return this.getSystemSettings();
   },
   saveSystemSettings(settings: SystemSettings) {
     cache.systemSettings = settings;

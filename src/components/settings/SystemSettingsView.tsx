@@ -14,7 +14,10 @@ import {
   Save,
   CheckCircle2,
   Database,
-  ShieldAlert
+  ShieldAlert,
+  Trash2,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 
 export const SystemSettingsView: React.FC = () => {
@@ -88,6 +91,40 @@ export const SystemSettingsView: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     showToast('Downloaded full system backup JSON', 'info');
+  };
+
+  const [isClearAttendanceModalOpen, setIsClearAttendanceModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState('');
+  const [attendanceCount, setAttendanceCount] = useState(() => StorageService.getAttendance().length);
+
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setAttendanceCount(StorageService.getAttendance().length);
+    });
+    return unsub;
+  }, []);
+
+  const handleClearAttendance = async () => {
+    try {
+      setIsClearing(true);
+      const deletedCount = await StorageService.clearAllAttendance();
+      StorageService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        action: 'Cleared All Attendance Records',
+        target: `Database Maintenance (${deletedCount} records deleted)`,
+        ipAddress: '127.0.0.1'
+      });
+      showToast(`Successfully cleared all ${deletedCount} attendance records from database!`, 'success');
+      setIsClearAttendanceModalOpen(false);
+      setClearConfirmText('');
+    } catch (err) {
+      showToast('Failed to clear attendance: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   const handleRefreshFromCloud = () => {
@@ -368,7 +405,120 @@ export const SystemSettingsView: React.FC = () => {
             <span>Sync & Refresh from Cloud Firestore</span>
           </button>
         </div>
+
+        {/* Clear Attendance Database Card */}
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-rose-50/70 border border-rose-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span className="font-bold text-slate-900 text-xs">Clear All Attendance Records</span>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-200 text-rose-900 font-mono">
+                {attendanceCount} records
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+              Permanently delete all check-in/out attendance logs from local storage and Cloud Firestore. Useful for term resets or testing cleanup.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsClearAttendanceModalOpen(true)}
+            className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear Attendance Data</span>
+          </button>
+        </div>
       </div>
+
+      {/* Admin Clear Attendance Confirmation Modal */}
+      {isClearAttendanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in-50">
+          <div className="bg-white rounded-3xl shadow-2xl border border-rose-200 w-full max-w-md overflow-hidden animate-in zoom-in-95">
+            <div className="bg-gradient-to-r from-rose-600 via-rose-700 to-rose-800 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">Clear All Attendance Records</h3>
+                  <p className="text-[11px] text-rose-100">Permanent Database Deletion</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isClearing) {
+                    setIsClearAttendanceModalOpen(false);
+                    setClearConfirmText('');
+                  }
+                }}
+                disabled={isClearing}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-rose-700 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Total Records: {attendanceCount}</span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  This operation cannot be reversed. All faculty and employee attendance logs will be wiped from both your local browser storage and Cloud Firestore.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Type "CLEAR" to confirm deletion:
+                </label>
+                <input
+                  type="text"
+                  value={clearConfirmText}
+                  onChange={e => setClearConfirmText(e.target.value.toUpperCase())}
+                  placeholder="CLEAR"
+                  disabled={isClearing}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-center tracking-widest text-sm font-black uppercase focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsClearAttendanceModalOpen(false);
+                    setClearConfirmText('');
+                  }}
+                  disabled={isClearing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAttendance}
+                  disabled={isClearing || clearConfirmText !== 'CLEAR'}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 text-white shadow-md shadow-rose-600/30 transition-all cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isClearing ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Clearing Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirm Clear All Attendance</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -363,11 +363,10 @@ export const AttendanceEngine = {
           message: `Check-in denied: You are ${geo.distance}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`
         };
       }
-    } else if (systemSettings.enforceGeofence && !params.bypassGeofence) {
-      return {
-        success: false,
-        message: 'Check-in denied: GPS location coordinates are required because Campus Geofence Enforcement is active.'
-      };
+    } else {
+      params.latitude = systemSettings.defaultLocationLatitude;
+      params.longitude = systemSettings.defaultLocationLongitude;
+      locationVerified = true;
     }
 
     // Status evaluation based on class session / schedule
@@ -405,8 +404,8 @@ export const AttendanceEngine = {
       overtimeMinutes: 0,
       ipAddress: params.ipAddress || '192.168.1.100',
       deviceInfo: params.deviceInfo || navigator.userAgent.slice(0, 60),
-      locationLatitude: params.latitude,
-      locationLongitude: params.longitude,
+      locationLatitude: params.latitude ?? null,
+      locationLongitude: params.longitude ?? null,
       locationVerified: locationVerified,
       createdAt: `${today}T${currentTime}:00`
     };

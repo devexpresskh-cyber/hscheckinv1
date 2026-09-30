@@ -20,7 +20,8 @@ import {
   X,
   PlusCircle,
   FileSpreadsheet,
-  Building
+  Building,
+  Trash2
 } from 'lucide-react';
 
 export const AttendanceList: React.FC = () => {
@@ -37,9 +38,55 @@ export const AttendanceList: React.FC = () => {
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const [selectedRecordForCorrection, setSelectedRecordForCorrection] = useState<AttendanceRecord | null>(null);
 
-  const departments = StorageService.getDepartments();
-  const attendanceList = StorageService.getAttendance();
-  const corrections = StorageService.getCorrections();
+  // Clear All Attendance States
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState('');
+
+  const [departments, setDepartments] = useState(() => StorageService.getDepartments());
+  const [attendanceList, setAttendanceList] = useState(() => StorageService.getAttendance());
+  const [corrections, setCorrections] = useState(() => StorageService.getCorrections());
+
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setAttendanceList(StorageService.getAttendance());
+      setCorrections(StorageService.getCorrections());
+      setDepartments(StorageService.getDepartments());
+    });
+    return unsub;
+  }, []);
+
+  const isAdmin =
+    currentUser.role === 'super_admin' ||
+    currentUser.role === 'admin_hr' ||
+    hasPermission('attendance.delete');
+
+  const handleClearAllAttendance = async () => {
+    try {
+      setIsClearing(true);
+      const deletedCount = await StorageService.clearAllAttendance();
+      StorageService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        action: 'Cleared All Attendance Records',
+        target: `All Attendance (${deletedCount} records deleted)`,
+        ipAddress: '127.0.0.1'
+      });
+      showToast(
+        isKhmer
+          ? `បានសម្អាតកំណត់ត្រាវត្តមានទាំងអស់ (${deletedCount} កំណត់ត្រា) ដោយជោគជ័យ!`
+          : `Successfully cleared all ${deletedCount} attendance records!`,
+        'success'
+      );
+      setIsClearAllModalOpen(false);
+      setClearConfirmText('');
+    } catch (err) {
+      showToast('Failed to clear attendance: ' + (err instanceof Error ? err.message : String(err)), 'error');
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   // Filter daily attendance
   const filteredAttendance = useMemo(() => {
@@ -285,6 +332,18 @@ export const AttendanceList: React.FC = () => {
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Export</span>
           </button>
+
+          {/* Admin Clear All Attendance Button */}
+          {isAdmin && (
+            <button
+              onClick={() => setIsClearAllModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-xs font-bold border border-rose-200 transition-colors shadow-xs cursor-pointer active:scale-95"
+              title={isKhmer ? 'សម្អាតវត្តមានទាំងអស់ចេញពីប្រព័ន្ធ' : 'Clear all attendance records from database'}
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>{isKhmer ? 'សម្អាតវត្តមានទាំងអស់' : 'Clear All Attendance'}</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -646,6 +705,107 @@ export const AttendanceList: React.FC = () => {
         onSubmit={handleSubmitCorrection}
         targetRecord={selectedRecordForCorrection}
       />
+
+      {/* Admin Clear All Attendance Confirmation Modal */}
+      {isClearAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in-50">
+          <div className="bg-white rounded-3xl shadow-2xl border border-rose-200 w-full max-w-md overflow-hidden animate-in zoom-in-95">
+            <div className="bg-gradient-to-r from-rose-600 via-rose-700 to-rose-800 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">
+                    {isKhmer ? 'សម្អាតវត្តមានទាំងអស់' : 'Clear All Attendance'}
+                  </h3>
+                  <p className="text-[11px] text-rose-100">
+                    {isKhmer ? 'សកម្មភាពអភិបាលប្រព័ន្ធ • មិនអាចត្រឡប់វិញបានទេ' : 'Administrative Wipe • Irreversible'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isClearing) {
+                    setIsClearAllModalOpen(false);
+                    setClearConfirmText('');
+                  }
+                }}
+                disabled={isClearing}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-rose-700 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isKhmer
+                      ? `កំណត់ត្រាវត្តមានសរុបបច្ចុប្បន្ន៖ ${attendanceList.length} កំណត់ត្រា`
+                      : `Current Attendance Records in Database: ${attendanceList.length}`}
+                  </span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  {isKhmer
+                    ? 'ការបញ្ជាក់សកម្មភាពនេះ នឹងលុបកំណត់ត្រាវត្តមានទាំងអស់របស់គ្រូបង្រៀន និងបុគ្គលិកចេញពីប្រព័ន្ធ និង Cloud Firestore ជាអចិន្ត្រៃយ៍។'
+                    : 'This action will permanently delete all attendance records (check-ins, check-outs, GPS location logs, late records) from both local cache and Cloud Firestore.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  {isKhmer
+                    ? 'សូមវាយពាក្យ "CLEAR" ដើម្បីបញ្ជាក់ការសម្អាត៖'
+                    : 'Please type "CLEAR" to confirm deletion:'}
+                </label>
+                <input
+                  type="text"
+                  value={clearConfirmText}
+                  onChange={e => setClearConfirmText(e.target.value.toUpperCase())}
+                  placeholder="CLEAR"
+                  disabled={isClearing}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-center tracking-widest text-sm font-black uppercase focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsClearAllModalOpen(false);
+                    setClearConfirmText('');
+                  }}
+                  disabled={isClearing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  {isKhmer ? 'បោះបង់' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAllAttendance}
+                  disabled={isClearing || clearConfirmText !== 'CLEAR'}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 text-white shadow-md shadow-rose-600/30 transition-all cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isClearing ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{isKhmer ? 'កំពុងសម្អាត...' : 'Clearing...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isKhmer ? 'យល់ព្រមសម្អាតទាំងអស់' : 'Confirm Clear All Attendance'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

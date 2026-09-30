@@ -21,8 +21,15 @@ export const LeaveManagement: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
 
-  const leaves = StorageService.getLeaveRequests();
+  const [leaves, setLeaves] = useState<LeaveRequest[]>(() => StorageService.getLeaveRequests());
   const departments = StorageService.getDepartments();
+
+  React.useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setLeaves(StorageService.getLeaveRequests());
+    });
+    return unsub;
+  }, []);
 
   const [formData, setFormData] = useState<Omit<LeaveRequest, 'id' | 'status' | 'createdAt'>>({
     personId: currentUser.personId || currentUser.id,
@@ -34,12 +41,36 @@ export const LeaveManagement: React.FC = () => {
     reason: ''
   });
 
+  const handleOpenApplyModal = () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
+    setFormData({
+      personId: currentUser.personId || currentUser.id,
+      personName: currentUser.fullName,
+      department: currentUser.department,
+      leaveType: 'Annual Leave',
+      startDate: dateStr,
+      endDate: dateStr,
+      reason: ''
+    });
+    setIsModalOpen(true);
+  };
+
   const filteredLeaves = leaves.filter(l => {
     if (currentUser.role === 'teacher' || currentUser.role === 'employee') {
+      const myId = (currentUser.personId || currentUser.id || '').toLowerCase();
+      const myName = (currentUser.fullName || '').toLowerCase();
+      const myKhmer = (currentUser.khmerName || '').toLowerCase();
+      const reqId = (l.personId || '').toLowerCase();
+      const reqName = (l.personName || '').toLowerCase();
+
       const isOwned =
-        (currentUser.personId && l.personId === currentUser.personId) ||
-        l.personId === currentUser.id ||
-        l.personName.toLowerCase() === currentUser.fullName.toLowerCase();
+        reqId === myId ||
+        reqName === myName ||
+        (myKhmer && reqName === myKhmer);
       if (!isOwned) return false;
     } else {
       if (!canAccessDepartment(l.department)) return false;
@@ -134,8 +165,8 @@ export const LeaveManagement: React.FC = () => {
           </select>
 
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-600/30 transition-all active:scale-95"
+            onClick={handleOpenApplyModal}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-600/30 transition-all active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Apply For Leave</span>

@@ -296,12 +296,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ) {
         return false;
       }
-      // Guaranteed permissions for teacher and employee faculty & staff calendars
+      // Guaranteed permissions for teacher and employee faculty & staff calendars, wage reports, and attendance
       if (
         permission === 'schedules.view' ||
         permission === 'attendance.view' ||
         permission === 'attendance.checkin' ||
-        permission === 'attendance.checkout'
+        permission === 'attendance.checkout' ||
+        permission === 'reports.view'
       ) {
         return true;
       }

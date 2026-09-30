@@ -88,15 +88,23 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
 
   // Helper to extract attendance info for a class
   const getClassAttendanceInfo = (sub: TeacherSubjectSchedule) => {
-    const todayRec = attendanceList.find(
-      a =>
-        a.date === todayStr &&
-        (a.subjectScheduleId === sub.id ||
-          (sub.teacherId && a.personId === sub.teacherId && (a.subject === sub.subject || a.periodName === sub.periodName)) ||
-          (sub.teacherName &&
-            a.personName?.toLowerCase() === sub.teacherName?.toLowerCase() &&
-            (a.subject === sub.subject || a.periodName === sub.periodName)))
-    );
+    const isOwnerAtt = (a: any) =>
+      a.personId === sub.teacherId ||
+      (sub.teacherId && a.personId?.toLowerCase() === sub.teacherId?.toLowerCase()) ||
+      (sub.teacherName && a.personName?.toLowerCase() === sub.teacherName?.toLowerCase());
+
+    const todayRec = attendanceList.find(a => {
+      if (a.date !== todayStr) return false;
+      // Direct subject schedule ID match: Attendance was specifically scanned for this class!
+      if (a.subjectScheduleId) {
+        return a.subjectScheduleId === sub.id;
+      }
+      // Fallback for general schedule check-in matching this specific schedule ID only
+      if (sub.id && a.scheduleId === sub.id && isOwnerAtt(a)) {
+        return true;
+      }
+      return false;
+    });
 
     const isCheckedIn = Boolean(todayRec?.checkInTime);
     const isCheckedOut = Boolean(todayRec?.checkOutTime);
@@ -527,8 +535,8 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
         {/* Actions */}
         <td className="py-3 px-3.5 whitespace-nowrap text-right">
           <div className="flex items-center justify-end gap-1.5">
-            {/* Live Attendance Check-In / Check-Out */}
-            {isClassToday && (
+            {/* Live Attendance Check-In / Check-Out (Teacher role only, admin cannot check in) */}
+            {isClassToday && isTeacher && (
               <>
                 {!info.isCheckedIn ? (
                   <button

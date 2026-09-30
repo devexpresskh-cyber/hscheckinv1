@@ -264,8 +264,8 @@ export interface AttendanceRecord {
   overtimeMinutes: number;
   ipAddress?: string;
   deviceInfo?: string;
-  locationLatitude?: number;
-  locationLongitude?: number;
+  locationLatitude?: number | null;
+  locationLongitude?: number | null;
   locationVerified: boolean;
   isCorrected?: boolean;
   correctionNote?: string;

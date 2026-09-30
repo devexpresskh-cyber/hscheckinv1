@@ -814,13 +814,31 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                         {/* Attendance status badge / live indicator */}
                         {(() => {
                           const isToday = selectedDayDetails.dateStr === todayStr;
-                          const classAtt = attendance.find(
-                            a =>
-                              a.date === selectedDayDetails.dateStr &&
-                              (a.subjectScheduleId === cls.id ||
-                                (a.personId === (activeTeacher?.id || cls.teacherId) &&
-                                  (a.subject === cls.subject || a.periodName === cls.periodName)))
+                          const isCurrentTeacherOwner = isTeacherRole && (
+                            activeTeacher?.id === currentUser.personId ||
+                            activeTeacher?.id === currentUser.id ||
+                            (activeTeacher?.teacherId && currentUser.personId && activeTeacher.teacherId.toLowerCase() === currentUser.personId.toLowerCase()) ||
+                            (activeTeacher?.fullName && currentUser.fullName && activeTeacher.fullName.toLowerCase() === currentUser.fullName.toLowerCase())
                           );
+
+                          const isOwnerRecord = (a: AttendanceRecord) =>
+                            a.personId === activeTeacher?.id ||
+                            a.personId === cls.teacherId ||
+                            (activeTeacher?.teacherId && a.personId.toLowerCase() === activeTeacher.teacherId.toLowerCase()) ||
+                            (a.personName && activeTeacher?.fullName && a.personName.toLowerCase() === activeTeacher.fullName.toLowerCase());
+
+                          const classAtt = attendance.find(a => {
+                            if (a.date !== selectedDayDetails.dateStr) return false;
+                            // Direct subject schedule ID match: Attendance was specifically scanned for this class!
+                            if (a.subjectScheduleId) {
+                              return a.subjectScheduleId === cls.id;
+                            }
+                            // Fallback for general schedule check-in matching this specific schedule ID only
+                            if (cls.id && a.scheduleId === cls.id && isOwnerRecord(a)) {
+                              return true;
+                            }
+                            return false;
+                          });
 
                           if (classAtt) {
                             return (
@@ -837,7 +855,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                                   </span>
                                 </span>
 
-                                {isToday && !classAtt.checkOutTime && (
+                                {isToday && !classAtt.checkOutTime && isCurrentTeacherOwner && (
                                   <button
                                     type="button"
                                     onClick={() => handleTeacherCheckOutAction(cls)}
@@ -852,7 +870,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                             );
                           }
 
-                          if (isToday) {
+                          // Only allow teacher who owns this schedule to check in! Do not allow admin to check-in teacher's schedule
+                          if (isToday && isCurrentTeacherOwner) {
                             return (
                               <button
                                 type="button"
@@ -866,7 +885,12 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                             );
                           }
 
-                          return null;
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>{isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}</span>
+                            </span>
+                          );
                         })()}
                       </div>
                     </div>

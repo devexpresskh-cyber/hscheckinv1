@@ -129,7 +129,12 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       color: 'bg-cyan-50 text-cyan-700'
     }
   ].filter(item => {
-    if (isEmployee) return false; // Employee only has Calendar and History
+    if (isEmployee) {
+      return item.id === 'leave' || item.id === 'holidays' || item.id === 'manual';
+    }
+    if (isTeacher) {
+      return item.id === 'reports' || item.id === 'leave' || item.id === 'holidays' || item.id === 'manual';
+    }
     if (item.restricted) return false;
     if (!item.permission) return true;
     return hasPermission(item.permission as any);
