@@ -6,6 +6,8 @@ import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { AttendanceRecord, AttendanceCorrectionRequest, AttendanceStatus } from '../../types/index.ts';
 import { AttendanceCorrectionModal } from './AttendanceCorrectionModal.tsx';
+import { Attendance31DaysSheet } from './Attendance31DaysSheet.tsx';
+import { AttendancePeriodGrid } from './AttendancePeriodGrid.tsx';
 import {
   CheckCircle2,
   Search,
@@ -188,7 +190,7 @@ export const AttendanceList: React.FC = () => {
   const { showToast } = useNotification();
   const { isKhmer } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState<'daily' | 'corrections'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'period_grid' | 'monthly_sheet' | 'corrections'>('daily');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
@@ -567,18 +569,36 @@ export const AttendanceList: React.FC = () => {
             <button
               onClick={() => setActiveTab('daily')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                activeTab === 'daily' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+                activeTab === 'daily' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              {currentUser.role === 'employee' ? (isKhmer ? 'ប្រវត្តិវត្តមាន' : 'History Log') : 'Daily Roster'}
+              {currentUser.role === 'employee' ? (isKhmer ? 'ប្រវត្តិវត្តមាន' : 'History Log') : (isKhmer ? 'វត្តមានប្រចាំថ្ងៃ' : 'Daily Roster')}
+            </button>
+            <button
+              onClick={() => setActiveTab('period_grid')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                activeTab === 'period_grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{isKhmer ? 'វត្តមានតាមម៉ោង' : 'Period Header'}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('monthly_sheet')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                activeTab === 'monthly_sheet' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{isKhmer ? 'តារាង ៣១ ថ្ងៃ' : '31 Days Records'}</span>
             </button>
             <button
               onClick={() => setActiveTab('corrections')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
-                activeTab === 'corrections' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+                activeTab === 'corrections' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <span>Correction Requests</span>
+              <span>{isKhmer ? 'សំណើកែសម្រួល' : 'Correction Requests'}</span>
               {pendingCorrectionsCount > 0 && (
                 <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
                   {pendingCorrectionsCount}
@@ -894,6 +914,26 @@ export const AttendanceList: React.FC = () => {
           </div>
 
         </div>
+      )}
+
+      {/* Tab: Period Header Attendance Grid */}
+      {activeTab === 'period_grid' && (
+        <AttendancePeriodGrid
+          onRequestCorrection={(partialRecord) => {
+            setSelectedRecordForCorrection(partialRecord as any);
+            setIsCorrectionModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Tab: 31 Days Header Attendance Records Sheet */}
+      {activeTab === 'monthly_sheet' && (
+        <Attendance31DaysSheet
+          onRequestCorrection={(partialRecord) => {
+            setSelectedRecordForCorrection(partialRecord as any);
+            setIsCorrectionModalOpen(true);
+          }}
+        />
       )}
 
       {/* Tab 2: Attendance Corrections Queue */}

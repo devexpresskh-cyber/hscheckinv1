@@ -17,6 +17,8 @@ import {
   DollarSign
 } from 'lucide-react';
 import { TeachingWageReport } from './TeachingWageReport.tsx';
+import { Attendance31DaysSheet } from '../attendance/Attendance31DaysSheet.tsx';
+import { AttendancePeriodGrid } from '../attendance/AttendancePeriodGrid.tsx';
 
 export const AttendanceReports: React.FC = () => {
   const { canAccessDepartment } = useAuth();
@@ -30,7 +32,7 @@ export const AttendanceReports: React.FC = () => {
     return unsub;
   }, []);
 
-  const [reportType, setReportType] = useState<'teaching_wage' | 'monthly' | 'daily'>('teaching_wage');
+  const [reportType, setReportType] = useState<'teaching_wage' | 'period_attendance' | 'sheet_31days' | 'monthly' | 'daily'>('sheet_31days');
   const [selectedMonth, setSelectedMonth] = useState('2026-09');
   const [selectedDate, setSelectedDate] = useState('2026-09-24');
   const [selectedDept, setSelectedDept] = useState('All');
@@ -144,6 +146,30 @@ export const AttendanceReports: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setReportType('period_attendance')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 transition-all ${
+            reportType === 'period_attendance'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Period Attendance (វត្តមានតាមម៉ោង)</span>
+        </button>
+
+        <button
+          onClick={() => setReportType('sheet_31days')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 transition-all ${
+            reportType === 'sheet_31days'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>31-Day Attendance Records (តារាងវត្តមាន ៣១ ថ្ងៃ)</span>
+        </button>
+
+        <button
           onClick={() => setReportType('monthly')}
           className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 transition-all ${
             reportType === 'monthly'
@@ -170,6 +196,10 @@ export const AttendanceReports: React.FC = () => {
 
       {reportType === 'teaching_wage' ? (
         <TeachingWageReport />
+      ) : reportType === 'period_attendance' ? (
+        <AttendancePeriodGrid />
+      ) : reportType === 'sheet_31days' ? (
+        <Attendance31DaysSheet />
       ) : (
         <>
           {/* Header */}
