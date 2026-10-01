@@ -17,7 +17,8 @@ import {
   UserCheck,
   Building2,
   Calendar,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ScheduleQrService, DecodedScheduleResult } from '../../services/scheduleQrService.ts';
@@ -113,9 +114,6 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
   const [completedRecord, setCompletedRecord] = useState<AttendanceRecord | null>(null);
   const [countdown, setCountdown] = useState<number>(6);
 
-  // All active teachers for fallback assignment
-  const [activeTeachers, setActiveTeachers] = useState<Teacher[]>([]);
-
   // Reset modal state when opened/closed
   useEffect(() => {
     if (isOpen) {
@@ -128,7 +126,6 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
       setPinError(null);
       setCompletedRecord(null);
       setCountdown(6);
-      setActiveTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
     } else {
       stopCamera();
     }
@@ -727,21 +724,31 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
           {step === 'pin' && decodedData && (
             <div className="space-y-4">
               
-              {/* Teacher Identity Selection */}
+              {/* Teacher Identity - Strictly Locked to Scanned QR */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 block">
-                  {isKhmer ? 'គ្រូបង្រៀនចុះវត្តមាន (Faculty Member)' : 'Assigned Faculty Member'}
-                </label>
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'គ្រូបង្រៀនដែលត្រូវបានកំណត់ (ចាក់សោ)' : 'Assigned Faculty Member (Locked)'}</span>
+                  </label>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <Lock className="w-3 h-3 text-amber-600" />
+                    <span>{isKhmer ? 'មិនអនុញ្ញាតឱ្យប្តូរគ្រូទេ' : 'Cannot Switch Teacher'}</span>
+                  </span>
+                </div>
                 
                 {selectedTeacher ? (
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200 shadow-2xs">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center text-sm shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-black flex items-center justify-center text-sm shrink-0 shadow-xs">
                         {selectedTeacher.fullName.charAt(0)}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">
-                          {selectedTeacher.fullName} {selectedTeacher.khmerName ? `(${selectedTeacher.khmerName})` : ''}
+                        <div className="font-bold text-slate-900 text-xs sm:text-sm truncate flex items-center gap-1.5">
+                          <span>{selectedTeacher.fullName}</span>
+                          {selectedTeacher.khmerName && (
+                            <span className="text-slate-500 font-medium text-xs">({selectedTeacher.khmerName})</span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-500 truncate">
                           ID: {selectedTeacher.teacherId || selectedTeacher.id} • {selectedTeacher.department}
@@ -749,38 +756,32 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTeacher(null)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
-                    >
-                      {isKhmer ? 'ប្តូរ' : 'Change'}
-                    </button>
+                    <div className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[10px] flex items-center gap-1 shrink-0">
+                      <Lock className="w-3 h-3 text-slate-500" />
+                      <span>{isKhmer ? 'ចាក់សោតាម QR' : 'Locked to QR'}</span>
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
-                    <select
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-xs sm:text-sm font-semibold bg-white"
-                      value=""
-                      onChange={e => {
-                        const t = activeTeachers.find(item => item.id === e.target.value);
-                        setSelectedTeacher(t || null);
-                      }}
-                    >
-                      <option value="">
-                        {isKhmer ? '-- ជ្រើសរើសឈ្មោះគ្រូរបស់អ្នក --' : '-- Select Your Teacher Profile --'}
-                      </option>
-                      {activeTeachers.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-slate-400">
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{isKhmer ? 'រកមិនឃើញគ្រូបង្រៀនដែលកំណត់ជាមួយកូដ QR នេះទេ' : 'No Faculty Member Bound to this QR Code'}</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
                       {isKhmer
-                        ? 'ជ្រើសរើសប្រវត្តិរូបរបស់អ្នកដើម្បីបញ្ជាក់កូដ PIN ៤ ខ្ទង់'
-                        : 'Select your faculty profile to confirm with your personal 4-digit PIN'}
+                        ? 'ដើម្បីធានាសុវត្ថិភាពវត្តមាន ប្រព័ន្ធមិនអនុញ្ញាតឱ្យជ្រើសរើស ឬប្តូរគ្រូបង្រៀនដោយដៃឡើយ។ សូមស្កេនកូដ QR ផ្ទាល់ខ្លួនរបស់លោកគ្រូអ្នកគ្រូ។'
+                        : 'To prevent attendance fraud, switching or selecting other teachers is strictly prohibited. Please scan your personal Teacher Smart QR.'}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep('scan');
+                        if (scanMode === 'camera') startCamera();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      {isKhmer ? 'ស្កេនកូដ QR ផ្សេង' : 'Scan Valid QR'}
+                    </button>
                   </div>
                 )}
               </div>
@@ -918,102 +919,104 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
                 </div>
               </div>
 
-              {/* 4-Digit Security PIN Section */}
-              <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white space-y-3 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>{isKhmer ? 'បញ្ចូលលេខកូដ PIN ៤ ខ្ទង់' : 'Enter 4-Digit Security PIN'}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowPin(!showPin)}
-                    className="text-slate-400 hover:text-white p-1 rounded-md transition-colors"
-                  >
-                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                {/* PIN Display Indicators */}
-                <div className="flex items-center justify-center gap-3 py-2">
-                  {[0, 1, 2, 3].map(idx => {
-                    const digit = pinDigits[idx];
-                    const isFilled = digit !== undefined;
-                    return (
-                      <div
-                        key={idx}
-                        className={`w-12 h-14 rounded-2xl flex items-center justify-center text-xl font-mono font-black border-2 transition-all ${
-                          isFilled
-                            ? 'bg-indigo-600/30 border-indigo-400 text-white shadow-inner scale-105'
-                            : 'bg-slate-800 border-slate-700 text-slate-500'
-                        }`}
-                      >
-                        {isFilled ? (showPin ? digit : '•') : ''}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Error Banner */}
-                {pinError && (
-                  <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold text-center flex items-center justify-center gap-1.5 animate-shake">
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{pinError}</span>
-                  </div>
-                )}
-
-                {/* Keypad Grid (0-9, Backspace, Clear) */}
-                <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto pt-1">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(val => (
+              {/* 4-Digit Security PIN Section - Only available when assigned teacher is locked */}
+              {selectedTeacher && (
+                <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span>{isKhmer ? 'បញ្ចូលលេខកូដ PIN ៤ ខ្ទង់' : 'Enter 4-Digit Security PIN'}</span>
+                    </div>
                     <button
-                      key={val}
                       type="button"
-                      onClick={() => handleKeypadPress(val)}
+                      onClick={() => setShowPin(!showPin)}
+                      className="text-slate-400 hover:text-white p-1 rounded-md transition-colors"
+                    >
+                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {/* PIN Display Indicators */}
+                  <div className="flex items-center justify-center gap-3 py-2">
+                    {[0, 1, 2, 3].map(idx => {
+                      const digit = pinDigits[idx];
+                      const isFilled = digit !== undefined;
+                      return (
+                        <div
+                          key={idx}
+                          className={`w-12 h-14 rounded-2xl flex items-center justify-center text-xl font-mono font-black border-2 transition-all ${
+                            isFilled
+                              ? 'bg-indigo-600/30 border-indigo-400 text-white shadow-inner scale-105'
+                              : 'bg-slate-800 border-slate-700 text-slate-500'
+                          }`}
+                        >
+                          {isFilled ? (showPin ? digit : '•') : ''}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Error Banner */}
+                  {pinError && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold text-center flex items-center justify-center gap-1.5 animate-shake">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>{pinError}</span>
+                    </div>
+                  )}
+
+                  {/* Keypad Grid (0-9, Backspace, Clear) */}
+                  <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto pt-1">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => handleKeypadPress(val)}
+                        className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-indigo-600 text-white font-bold text-lg font-mono transition-all active:scale-95 shadow-xs cursor-pointer"
+                      >
+                        {val}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('clear')}
+                      className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('0')}
                       className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-indigo-600 text-white font-bold text-lg font-mono transition-all active:scale-95 shadow-xs cursor-pointer"
                     >
-                      {val}
+                      0
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('back')}
+                      className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                    >
+                      ⌫ Back
+                    </button>
+                  </div>
+
+                  {/* Confirm Action Button */}
                   <button
                     type="button"
-                    onClick={() => handleKeypadPress('clear')}
-                    className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                    disabled={!selectedTeacher || pinDigits.length < 4 || isVerifying}
+                    onClick={() => selectedTeacher && triggerPinVerification(pinDigits, selectedTeacher)}
+                    className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 text-white font-black text-sm tracking-tight shadow-lg shadow-emerald-700/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleKeypadPress('0')}
-                    className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 active:bg-indigo-600 text-white font-bold text-lg font-mono transition-all active:scale-95 shadow-xs cursor-pointer"
-                  >
-                    0
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleKeypadPress('back')}
-                    className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
-                  >
-                    ⌫ Back
+                    {isVerifying ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                        <span>{isKhmer ? 'បញ្ជាក់វត្តមានបង្រៀន' : 'Confirm Attendance'}</span>
+                      </>
+                    )}
                   </button>
                 </div>
-
-                {/* Confirm Action Button */}
-                <button
-                  type="button"
-                  disabled={!selectedTeacher || pinDigits.length < 4 || isVerifying}
-                  onClick={() => selectedTeacher && triggerPinVerification(pinDigits, selectedTeacher)}
-                  className="w-full mt-2 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 text-white font-black text-sm tracking-tight shadow-lg shadow-emerald-700/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isVerifying ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                      <span>{isKhmer ? 'បញ្ជាក់វត្តមានបង្រៀន' : 'Confirm Attendance'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
+              )}
 
               {/* Back to Rescan Button */}
               <div className="text-center">
