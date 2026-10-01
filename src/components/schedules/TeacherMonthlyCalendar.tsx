@@ -552,9 +552,11 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
       </div>
 
       {/* Main 7-Column Calendar Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Days of Week Header */}
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-xs text-slate-700 py-2.5">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden max-w-full min-w-0">
+        <div className="overflow-x-auto max-w-full">
+          <div className="min-w-[620px] sm:min-w-0">
+            {/* Days of Week Header */}
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-xs text-slate-700 py-2.5">
           {DAYS_HEADER_EN.map((dayName, idx) => (
             <div key={dayName} className="flex flex-col items-center">
               <span className="text-slate-900">{isKhmer ? DAYS_HEADER_KM[idx] : dayName}</span>
@@ -684,6 +686,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
               </div>
             );
           })}
+        </div>
+          </div>
         </div>
       </div>
 

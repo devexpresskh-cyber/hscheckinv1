@@ -166,48 +166,48 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
   const subjectName = isKhmer && schedule.khmerSubject ? schedule.khmerSubject : schedule.subject;
 
   return (
-    <div className="relative mb-4 max-w-full overflow-hidden">
+    <div className="relative mb-4 w-full max-w-full min-w-0 overflow-hidden">
       {/* Active Class Alert Banner */}
       <div
-        className={`rounded-2xl p-3 sm:p-4 border transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-full min-w-0 ${
+        className={`rounded-2xl p-3 sm:p-4 border transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full max-w-full min-w-0 ${
           isOngoing
             ? 'bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border-amber-300 text-amber-950'
             : 'bg-gradient-to-r from-indigo-500/10 via-indigo-50 to-blue-50 border-indigo-200 text-indigo-950'
         }`}
       >
         {/* Left Info */}
-        <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1 max-w-full">
+        <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1 w-full max-w-full">
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5 sm:mt-0 ${
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5 sm:mt-0 ${
               isOngoing
                 ? 'bg-gradient-to-tr from-amber-600 to-orange-500 animate-pulse'
                 : 'bg-gradient-to-tr from-indigo-600 to-blue-600'
             }`}
           >
-            {isOngoing ? <Clock className="w-5 h-5" /> : <Bell className="w-5 h-5 animate-bounce" />}
+            {isOngoing ? <Clock className="w-4 h-4 sm:w-5 sm:h-5" /> : <Bell className="w-4 h-4 sm:w-5 sm:h-5 animate-bounce" />}
           </div>
 
           <div className="min-w-0 flex-1 max-w-full">
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
                   isOngoing
                     ? 'bg-amber-100 text-amber-900 border border-amber-300'
                     : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
                 }`}
               >
                 {isOngoing
-                  ? (isKhmer ? '⏳ កំពុងបង្រៀន' : '⏳ Class in Progress')
-                  : (isKhmer ? '🔔 ម៉ោងបង្រៀនបន្ទាប់' : '🔔 Upcoming Class')}
+                  ? (isKhmer ? '⏳ កំពុងបង្រៀន' : '⏳ In Progress')
+                  : (isKhmer ? '🔔 ម៉ោងបន្ទាប់' : '🔔 Upcoming')}
               </span>
 
-              <span className="text-xs font-black text-slate-800">
+              <span className="text-xs font-black text-slate-800 shrink-0">
                 {isOngoing
-                  ? (isKhmer ? `នៅសល់ ${minutes} នាទីទៀត` : `${minutes} min left until end`)
-                  : (isKhmer ? `ចាប់ផ្តើមក្នុង ${minutes} នាទីទៀត` : `Starts in ${minutes} min`)}
+                  ? (isKhmer ? `នៅសល់ ${minutes} នាទី` : `${minutes}m left`)
+                  : (isKhmer ? `ក្នុង ${minutes} នាទីទៀត` : `Starts in ${minutes}m`)}
               </span>
 
-              <span className="text-[11px] text-slate-500 font-mono">
+              <span className="text-[11px] text-slate-500 font-mono shrink-0">
                 ({schedule.startTime} — {schedule.endTime})
               </span>
             </div>
@@ -216,8 +216,8 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
               {subjectName} • <span className="font-semibold text-slate-700">{schedule.gradeClass}</span>
               {schedule.room && (
                 <span className="ml-2 text-xs font-normal text-slate-600 inline-flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-indigo-600" />
-                  {schedule.room}
+                  <MapPin className="w-3 h-3 text-indigo-600 shrink-0" />
+                  <span className="truncate">{schedule.room}</span>
                 </span>
               )}
             </p>

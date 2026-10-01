@@ -245,8 +245,16 @@ const MainLayout: React.FC = () => {
         />
 
         {/* Main Content Viewport: min-w-0 ensures no horizontal overflow, w-full for full-width layout */}
-        <main className="flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block">
-          <div className="w-full max-w-full min-w-0">
+        <main
+          onScroll={(e) => {
+            // Guard against horizontal scroll displacement on mobile viewports
+            if (e.currentTarget.scrollLeft !== 0) {
+              e.currentTarget.scrollLeft = 0;
+            }
+          }}
+          className="flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden [overscroll-behavior-x:none] p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block"
+        >
+          <div className="w-full max-w-full min-w-0 overflow-hidden">
             {/* Real-time Schedule Alert & Countdown Widget */}
             <TeacherScheduleAlertBanner onOpenCheckIn={() => setIsCheckInModalOpen(true)} />
             {renderContent()}

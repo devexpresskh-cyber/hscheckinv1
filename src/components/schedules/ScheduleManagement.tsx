@@ -952,48 +952,48 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         style={{ borderLeftWidth: '6px', borderLeftColor: sub.color || '#4F46E5' }}
       >
         <div>
-          <div className="flex items-start justify-between gap-3 mb-2.5">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-2.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
               <span
-                className="px-2.5 py-1 rounded-xl text-xs font-black text-white"
+                className="px-2 py-0.5 rounded-lg text-xs font-black text-white shrink-0"
                 style={{ backgroundColor: sub.color || '#4F46E5' }}
               >
-                {isKhmer ? `ម៉ោងទី ${sub.periodNumber || 1}` : sub.periodName || `Period ${sub.periodNumber || 1}`}
+                {isKhmer ? `ម៉ោងទី ${sub.periodNumber || 1}` : sub.periodName || `P${sub.periodNumber || 1}`}
               </span>
-              <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0">
+                <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                 {sub.startTime} - {sub.endTime}
               </span>
               {isClassToday && isCurrentActive && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-xs">
-                  <Sparkles className="w-3 h-3 text-amber-200" />
-                  <span>{isKhmer ? 'ម៉ោងបច្ចុប្បន្ន' : 'Current Class'}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-xs shrink-0">
+                  <Sparkles className="w-3 h-3 text-amber-200 shrink-0" />
+                  <span>{isKhmer ? 'ម៉ោងបច្ចុប្បន្ន' : 'In Session'}</span>
                 </span>
               )}
             </div>
 
             {/* Status Badge if checking today */}
             {isClassToday && (
-              <div>
+              <div className="shrink-0">
                 {isCheckedOut ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{isKhmer ? `ចប់ម៉ោង (${todayRec?.checkOutTime})` : `Out: ${todayRec?.checkOutTime}`}</span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200 whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>{isKhmer ? `ចេញ (${todayRec?.checkOutTime})` : `Out: ${todayRec?.checkOutTime}`}</span>
                   </span>
                 ) : isCheckedIn ? (
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold ${
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap ${
                     isLate ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   }`}>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{isKhmer ? `ស្កេនចូលម៉ោង ${todayRec?.checkInTime}` : `In: ${todayRec?.checkInTime}`}</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{isKhmer ? `ចូល (${todayRec?.checkInTime})` : `In: ${todayRec?.checkInTime}`}</span>
                   </span>
                 ) : isCurrentActive ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{isKhmer ? 'កំពុងបង្រៀន (មិនទាន់ស្កេន)' : 'In Session (Unscanned)'}</span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse whitespace-nowrap">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>{isKhmer ? 'មិនទាន់ស្កេន' : 'Unscanned'}</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600 whitespace-nowrap">
                     {isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}
                   </span>
                 )}
@@ -1088,18 +1088,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               )
             ) : !isCheckedOut ? (
               curMins < sEnd && isTeacher ? (
-                <div className="w-full flex items-center justify-between gap-2">
-                  <div className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-                    <span>{isKhmer ? `កំពុងបង្រៀន (ចប់ម៉ោង ${sub.endTime})` : `In Class (${sub.startTime}-${sub.endTime})`}</span>
+                <div className="w-full flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 min-w-0">
+                  <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold truncate">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block shrink-0" />
+                    <span className="truncate">{isKhmer ? `កំពុងបង្រៀន (ចប់ ${sub.endTime})` : `In Class (${sub.startTime}-${sub.endTime})`}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleTeacherClassCheckOut(sub, true)}
-                    className="flex items-center gap-1 py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition-all cursor-pointer"
+                    className="flex items-center justify-center gap-1 py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition-all cursor-pointer shrink-0"
                     title="Check out early or complete class session"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
+                    <LogOut className="w-3.5 h-3.5 shrink-0" />
                     <span>{isKhmer ? 'ចេញ' : 'End'}</span>
                   </button>
                 </div>
@@ -1162,37 +1162,37 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 max-w-full">
           {/* View Toggle: Daily > Weekly > Monthly */}
-          <div className="bg-slate-100 p-1 sm:p-1.5 rounded-2xl flex flex-wrap items-center gap-1 sm:gap-1.5 border border-slate-200 max-w-full">
+          <div className="bg-slate-100 p-1 sm:p-1.5 rounded-2xl flex flex-wrap items-center gap-1 sm:gap-1.5 border border-slate-200 w-full sm:w-auto max-w-full">
             <button
               onClick={() => setViewMode('daily_schedule')}
-              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'daily_schedule' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <Clock className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ (Daily)' : 'Daily Schedule'}</span>
+              <span>{isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ' : 'Daily Schedule'}</span>
             </button>
             <button
               onClick={() => setViewMode('weekly_timetable')}
-              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'weekly_timetable' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <Calendar className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាលវិភាគពេញមួយសប្តាហ៍ (Weekly)' : 'Weekly Timetable'}</span>
+              <span>{isKhmer ? 'កាលវិភាគសប្តាហ៍' : 'Weekly Timetable'}</span>
             </button>
             <button
               onClick={() => setViewMode('monthly_calendar')}
-              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'monthly_calendar' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <CalendarDays className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាលវិភាគប្រចាំខែ (Monthly)' : 'Monthly Calendar'}</span>
+              <span>{isKhmer ? 'កាលវិភាគខែ' : 'Monthly Calendar'}</span>
             </button>
             <button
               onClick={() => setViewMode('subject_schedules')}
-              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'subject_schedules' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
@@ -1202,7 +1202,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             {!isTeacher && (
               <button
                 onClick={() => setViewMode('cards')}
-                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'cards' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
                 }`}
               >
@@ -1516,19 +1516,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             </div>
 
             {/* Day Selector Navigation Pills & Stats */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  {isKhmer ? 'ជ្រើសរើសថ្ងៃបង្រៀន (Select Day):' : 'Select Day of Week:'}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wider truncate">
+                  {isKhmer ? 'ជ្រើសរើសថ្ងៃបង្រៀន:' : 'Select Day:'}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl">
-                  {dailyClassesFiltered.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes'}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl whitespace-nowrap">
+                  {dailyClassesFiltered.length} {isKhmer ? 'ម៉ោង' : 'Classes'}
                 </span>
-                <span className="text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl">
-                  {dailyClassesGroupedByPeriod.length} {isKhmer ? 'វេនម៉ោង' : 'Periods'}
+                <span className="text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl whitespace-nowrap">
+                  {dailyClassesGroupedByPeriod.length} {isKhmer ? 'វេន' : 'Periods'}
                 </span>
               </div>
             </div>
