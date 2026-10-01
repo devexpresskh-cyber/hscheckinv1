@@ -1165,6 +1165,58 @@ export const StorageService = {
     }
   },
 
+  async deleteAttendanceRecord(id: string): Promise<boolean> {
+    const list = cache.attendance.filter(r => r.id !== id);
+    cache.attendance = list;
+    setStored(STORAGE_KEYS.ATTENDANCE, list);
+
+    offlineSyncQueue = offlineSyncQueue.filter(item => !(item.collection === 'attendance' && item.docId === id));
+    saveSyncQueue();
+    notifySyncListeners();
+    notifyListeners();
+
+    try {
+      await deleteDoc(doc(db, 'attendance', id));
+      return true;
+    } catch (err) {
+      console.warn('Firestore attendance delete notice:', err);
+      return true;
+    }
+  },
+
+  async deleteAttendanceRecords(ids: string[]): Promise<number> {
+    if (!ids || ids.length === 0) return 0;
+    const idSet = new Set(ids);
+    const list = cache.attendance.filter(r => !idSet.has(r.id));
+    cache.attendance = list;
+    setStored(STORAGE_KEYS.ATTENDANCE, list);
+
+    offlineSyncQueue = offlineSyncQueue.filter(item => !(item.collection === 'attendance' && idSet.has(item.docId)));
+    saveSyncQueue();
+    notifySyncListeners();
+    notifyListeners();
+
+    try {
+      const batchSize = 400;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const chunk = ids.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        chunk.forEach(id => {
+          batch.delete(doc(db, 'attendance', id));
+        });
+        await batch.commit();
+      }
+    } catch (err) {
+      console.warn('Batch deletion of attendance records failed, fallback:', err);
+      ids.forEach(id => {
+        deleteDoc(doc(db, 'attendance', id)).catch(() => {});
+      });
+    }
+
+    notifyListeners();
+    return ids.length;
+  },
+
   /**
    * Auto Check-Out Engine for Missing Check-Outs
    * Identifies attendance records with check-in but missing check-out whose scheduled

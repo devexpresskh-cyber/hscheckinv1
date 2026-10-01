@@ -33,7 +33,8 @@ function buildPayslipHtml(
   summary: TeacherWageSummary,
   systemSettings: any,
   periodStr: string,
-  lateDeductionMode: 'deduct' | 'non_deduct'
+  lateDeductionMode: 'deduct' | 'non_deduct',
+  wageDurationMode: 'full_schedule' | 'actual_scan' = 'full_schedule'
 ): string {
   const orgName = systemSettings?.organizationName || 'EDUCATION MANAGEMENT SYSTEM';
   const khmerOrgName = systemSettings?.khmerOrgName || '';
@@ -252,6 +253,7 @@ function buildPayslipHtml(
         <div class="meta-strip">
           <div class="meta-item"><strong>Voucher No:</strong> <span style="font-family: monospace;">${voucherNo}</span></div>
           <div class="meta-item"><strong>Period:</strong> ${periodStr}</div>
+          <div class="meta-item"><strong>Wage Basis:</strong> ${wageDurationMode === 'full_schedule' ? 'Full Schedule (100% Charged)' : 'Actual Scan Punch'}</div>
           <div class="meta-item"><strong>Academic Year:</strong> ${systemSettings?.academicYear || '2026-2027'}${systemSettings?.academicStartDate && systemSettings?.academicEndDate ? ` (${systemSettings.academicStartDate} to ${systemSettings.academicEndDate})` : ''}</div>
           <div class="meta-item"><strong>Date Issued:</strong> ${currentDate}</div>
         </div>
@@ -393,6 +395,9 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const [selectedDept, setSelectedDept] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [lateDeductionMode, setLateDeductionMode] = useState<'deduct' | 'non_deduct'>('non_deduct');
+  const [wageDurationMode, setWageDurationMode] = useState<'full_schedule' | 'actual_scan'>(() => {
+    return systemSettings?.teachingWageDurationMode || 'full_schedule';
+  });
   const [selectedTeacherForDetail, setSelectedTeacherForDetail] = useState<TeacherWageSummary | null>(null);
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
@@ -478,27 +483,44 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         const rateApplied = scheduleRef?.hourlyRate || baseHourlyRate;
 
         // Calculate scheduled duration
-        const schedStartMins = timeToMinutes(rec.scheduledStart);
-        const schedEndMins = timeToMinutes(rec.scheduledEnd);
-        const schedDurationMinutes = Math.max(0, schedEndMins - schedStartMins);
+        const schedStart = rec.scheduledStart || scheduleRef?.startTime || '08:00';
+        const schedEnd = rec.scheduledEnd || scheduleRef?.endTime || '09:00';
+        const schedStartMins = timeToMinutes(schedStart);
+        const schedEndMins = timeToMinutes(schedEnd);
+        const schedDurationMinutes = Math.max(0, schedEndMins - schedStartMins) || 60;
         const schedDurationHours = schedDurationMinutes / 60;
         scheduledHours += schedDurationHours;
 
-        // Calculate actual taught duration
+        // Calculate actual / credited taught duration
         let actualTaughtHours = 0;
-        if (rec.checkInTime && rec.checkOutTime) {
-          const inMins = timeToMinutes(rec.checkInTime);
-          const outMins = timeToMinutes(rec.checkOutTime);
-          const actualDurationMinutes = Math.max(0, outMins - inMins);
-          // Credit up to scheduled duration plus minor overtime
-          actualTaughtHours = Math.min(schedDurationHours + 0.5, actualDurationMinutes / 60);
-          totalCompletedClasses++;
-        } else if (rec.checkInTime && (rec.status === 'Present' || rec.status === 'Late')) {
-          // In session or single punch, credit scheduled duration
-          actualTaughtHours = schedDurationHours;
-          totalCompletedClasses++;
-        } else if (rec.status === 'Absent') {
-          totalMissedClasses++;
+        const isAttended = Boolean(rec.checkInTime) || rec.status === 'Present' || rec.status === 'Late' || rec.status === 'Missing Check-out';
+
+        if (wageDurationMode === 'full_schedule') {
+          // Full schedule duration charge wage policy:
+          // e.g. teacher's schedule 8:00 to 9:00 = 1h and Rate is 5.5
+          // even if teacher scans late or overtime checkout, charge Gross Wage = 1h * 5.5$
+          if (isAttended && rec.status !== 'Absent') {
+            actualTaughtHours = schedDurationHours;
+            totalCompletedClasses++;
+          } else if (rec.status === 'Absent') {
+            totalMissedClasses++;
+          }
+        } else {
+          // Actual scan punch calculation mode
+          if (rec.checkInTime && rec.checkOutTime) {
+            const inMins = timeToMinutes(rec.checkInTime);
+            const outMins = timeToMinutes(rec.checkOutTime);
+            const actualDurationMinutes = Math.max(0, outMins - inMins);
+            // Credit up to scheduled duration plus minor overtime
+            actualTaughtHours = Math.min(schedDurationHours + 0.5, actualDurationMinutes / 60);
+            totalCompletedClasses++;
+          } else if (rec.checkInTime && (rec.status === 'Present' || rec.status === 'Late')) {
+            // In session or single punch, credit scheduled duration
+            actualTaughtHours = schedDurationHours;
+            totalCompletedClasses++;
+          } else if (rec.status === 'Absent') {
+            totalMissedClasses++;
+          }
         }
 
         completedHours += actualTaughtHours;
@@ -522,8 +544,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           gradeClass: rec.gradeClass || scheduleRef?.gradeClass || 'General',
           room: rec.room || scheduleRef?.room || 'Main Classroom',
           periodName: rec.periodName || scheduleRef?.periodName || 'Class Session',
-          scheduledStart: rec.scheduledStart,
-          scheduledEnd: rec.scheduledEnd,
+          scheduledStart: schedStart,
+          scheduledEnd: schedEnd,
           scheduledDurationHours: Number(schedDurationHours.toFixed(2)),
           checkInTime: rec.checkInTime,
           checkOutTime: rec.checkOutTime,
@@ -531,7 +553,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           status: rec.status,
           lateMinutes: rec.lateMinutes || 0,
           rateApplied,
-          wageEarned: Number(sessionWage.toFixed(2))
+          wageEarned: Number(sessionWage.toFixed(2)),
+          wageCalculationBasis: wageDurationMode
         });
       });
 
@@ -592,10 +615,11 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         grossWage: Number(grossWage.toFixed(2)),
         lateDeductions: Number(lateDeduction.toFixed(2)),
         netWage: Number(netWage.toFixed(2)),
+        wageDurationMode,
         classSessions
       };
     });
-  }, [filteredTeachers, allAttendance, subjectSchedules, selectedMonth, dateFilterMode, startDate, endDate, lateDeductionMode]);
+  }, [filteredTeachers, allAttendance, subjectSchedules, selectedMonth, dateFilterMode, startDate, endDate, lateDeductionMode, wageDurationMode]);
 
   // Overall Aggregate KPIs
   const overallKPIs = useMemo(() => {
@@ -671,6 +695,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
       `# Organization: "${systemSettings.organizationName || 'EduTrack MIS'}"`,
       `# Academic Year: "${systemSettings.academicYear || '2026-2027'} (${systemSettings.academicStartDate || ''} to ${systemSettings.academicEndDate || ''})"`,
       `# Payroll Period: "${periodLabel}"`,
+      `# Wage Charging Basis: "${wageDurationMode === 'full_schedule' ? 'Full Schedule Duration (100% Scheduled Hours Charged)' : 'Actual Scan Punch Duration'}"`,
       `# Generated Date: "${new Date().toISOString()}"`,
       ''
     ];
@@ -716,7 +741,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         selectedTeacherForDetail,
         systemSettings,
         periodStr,
-        lateDeductionMode
+        lateDeductionMode,
+        wageDurationMode
       );
 
       const iframeDoc = iframe.contentWindow?.document;
@@ -977,6 +1003,39 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
               <span>{isKhmer ? 'កាត់ម៉ោងយឺត (Deduct)' : 'Deduct Late'}</span>
             </button>
           </div>
+
+          {/* Wage Duration Basis Policy Toggle (Full Schedule vs Actual Scan) */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <span className="text-[11px] font-bold text-slate-500 pl-2 pr-1.5 hidden md:inline">
+              {isKhmer ? 'គិតកម្រៃបង្រៀន៖' : 'Wage Basis:'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setWageDurationMode('full_schedule')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                wageDurationMode === 'full_schedule'
+                  ? 'bg-emerald-600 text-white shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={isKhmer ? 'គិតពេញតាមកាលវិភាគ (ស្កេនយឺត ឬលើសម៉ោង ក៏គិត Gross Wage ពេញតាមម៉ោងកាលវិភាគ)' : 'Full schedule duration: 100% scheduled duration charged for delivered sessions'}
+            >
+              <CheckCircle2 className={`w-3.5 h-3.5 ${wageDurationMode === 'full_schedule' ? 'text-white' : 'hidden'}`} />
+              <span>{isKhmer ? 'ពេញកាលវិភាគ (Full Schedule)' : 'Full Schedule'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWageDurationMode('actual_scan')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                wageDurationMode === 'actual_scan'
+                  ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-200 font-extrabold'
+                  : 'text-slate-600 hover:text-indigo-700'
+              }`}
+              title={isKhmer ? 'គិតតាមម៉ោងស្កេនជាក់ស្តែងតាមម៉ោង Punch In/Out' : 'Actual scan punch duration: Prorated to punch timestamps'}
+            >
+              <Clock className={`w-3.5 h-3.5 ${wageDurationMode === 'actual_scan' ? 'text-indigo-600' : 'hidden'}`} />
+              <span>{isKhmer ? 'ស្កេនជាក់ស្តែង (Actual Scan)' : 'Actual Scan'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -991,6 +1050,30 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           />
         </div>
       </div>
+
+      {/* Full Schedule Active Explanatory Banner */}
+      {wageDurationMode === 'full_schedule' && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-950 px-4 py-3 rounded-2xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-extrabold text-emerald-950">
+                {isKhmer ? 'គោលការណ៍គិតប្រាក់កម្រៃពេញកាលវិភាគកំពុងដំណើរការ (Full Schedule Duration Wage Active)៖ ' : 'Full Schedule Duration Wage Active: '}
+              </span>
+              <span className="text-emerald-800 text-[11px]">
+                {isKhmer
+                  ? 'គ្រប់ម៉ោងបង្រៀនដែលបានចូលរួម ត្រូវបានគិតប្រាក់កម្រៃពេញតាមកាលវិភាគ (ឧ. ០៨:០០-០៩:០០ = ១.០ ម៉ោង × អត្រាកម្រៃ) ទោះបីជាគ្រូស្កេនយឺត ឬស្កេនចេញលើសម៉ោងក៏ដោយ។'
+                  : 'Delivered class sessions are charged for their full scheduled duration (e.g. 08:00–09:00 = 1.0 hr × Rate = Gross Wage) even if late scan or overtime checkout occurred.'}
+              </span>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-xl bg-emerald-200 text-emerald-900 font-black text-[10px] uppercase tracking-wide shrink-0 self-start sm:self-auto">
+            100% Scheduled Hours Charge
+          </span>
+        </div>
+      )}
 
       {/* Main Table Container: Standard Form on Admin */}
       <div className="standard-report-wrapper bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1029,7 +1112,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           </div>
 
           {/* Administrative Reference Matrix */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 text-xs">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Reference No. (លេខយោង)</span>
               <span className="font-mono font-bold text-slate-800">
@@ -1063,6 +1146,12 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Late Policy (គោលការណ៍យឺត)</span>
               <span className={`font-bold ${lateDeductionMode === 'deduct' ? 'text-rose-700' : 'text-indigo-700'}`}>
                 {lateDeductionMode === 'deduct' ? 'Deduct Late Mins' : 'Non-Deduct (Full Rate)'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Wage Basis (គិតកម្រៃបង្រៀន)</span>
+              <span className={`font-bold ${wageDurationMode === 'full_schedule' ? 'text-emerald-700' : 'text-indigo-700'}`}>
+                {wageDurationMode === 'full_schedule' ? 'Full Schedule (100%)' : 'Actual Scan Punch'}
               </span>
             </div>
           </div>
@@ -1510,6 +1599,16 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                     {selectedTeacherForDetail.totalLateMinutes}m late
                   </span>
                 </div>
+              </div>
+
+              {/* Wage Charging Policy Strip */}
+              <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+                <span className="font-bold text-slate-600">Wage Charging Policy:</span>
+                <span className={`font-black ${wageDurationMode === 'full_schedule' ? 'text-emerald-700' : 'text-indigo-700'}`}>
+                  {wageDurationMode === 'full_schedule'
+                    ? 'Full Scheduled Duration Policy (100% scheduled duration charged for delivered sessions)'
+                    : 'Actual Scan Punch Duration Policy'}
+                </span>
               </div>
 
               {/* Net Payable Highlight Card */}

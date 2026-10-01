@@ -174,6 +174,7 @@ export interface TeacherWageSummary {
   grossWage: number; // completedHours * hourlyRate
   lateDeductions: number; // e.g. prorated or policy penalty
   netWage: number;
+  wageDurationMode?: 'full_schedule' | 'actual_scan';
   classSessions: TeacherClassSessionDetail[];
 }
 
@@ -196,6 +197,7 @@ export interface TeacherClassSessionDetail {
   lateMinutes: number;
   rateApplied: number;
   wageEarned: number;
+  wageCalculationBasis?: 'full_schedule' | 'actual_scan';
 }
 
 export interface Schedule {
@@ -423,6 +425,7 @@ export interface SystemSettings {
   autoCheckOutBufferMinutes?: number; // Grace buffer after scheduled end
   autoCheckOutDailyTime?: string; // Daily time if policy is end_of_day (e.g. '17:30')
   preventDuplicateScanMinutes?: number; // Cooldown to prevent duplicate scan
+  teachingWageDurationMode?: 'full_schedule' | 'actual_scan'; // Wage charge policy: full scheduled duration vs actual scan punch
 }
 
 export interface OfflineSyncItem {

@@ -288,6 +288,18 @@ export const AttendanceList: React.FC = () => {
     currentUser.role === 'supervisor' ||
     (!['teacher', 'employee'].includes(currentUser.role) && (hasPermission('attendance.delete') || hasPermission('attendance.view')));
 
+  const canDeleteAttendance =
+    currentUser.role === 'super_admin' ||
+    currentUser.role === 'admin_hr' ||
+    currentUser.role === 'supervisor' ||
+    hasPermission('attendance.delete');
+
+  // Selected Attendance Records for deletion
+  const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
+  const [isDeleteSelectedModalOpen, setIsDeleteSelectedModalOpen] = useState(false);
+  const [recordToDeleteSingle, setRecordToDeleteSingle] = useState<AttendanceRecord | null>(null);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+
   const handleClearAllAttendance = async () => {
     try {
       setIsClearing(true);
@@ -308,6 +320,7 @@ export const AttendanceList: React.FC = () => {
       );
       setIsClearAllModalOpen(false);
       setClearConfirmText('');
+      setSelectedRecordIds(new Set());
     } catch (err) {
       showToast('Failed to clear attendance: ' + (err instanceof Error ? err.message : String(err)), 'error');
     } finally {
@@ -353,6 +366,93 @@ export const AttendanceList: React.FC = () => {
       return true;
     });
   }, [attendanceList, selectedDate, selectedDept, selectedStatus, searchQuery, canAccessDepartment, currentUser, subjectSchedules, isAdmin]);
+
+  // Selection state helpers
+  const isAllVisibleSelected = useMemo(() => {
+    if (filteredAttendance.length === 0) return false;
+    return filteredAttendance.every(r => selectedRecordIds.has(r.id));
+  }, [filteredAttendance, selectedRecordIds]);
+
+  const handleToggleSelectRecord = (id: string) => {
+    setSelectedRecordIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllVisibleSelected) {
+      setSelectedRecordIds(prev => {
+        const next = new Set(prev);
+        filteredAttendance.forEach(r => next.delete(r.id));
+        return next;
+      });
+    } else {
+      setSelectedRecordIds(prev => {
+        const next = new Set(prev);
+        filteredAttendance.forEach(r => next.add(r.id));
+        return next;
+      });
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedRecordIds(new Set());
+  };
+
+  const selectedRecordsList = useMemo(() => {
+    if (recordToDeleteSingle) return [recordToDeleteSingle];
+    return attendanceList.filter(r => selectedRecordIds.has(r.id));
+  }, [attendanceList, selectedRecordIds, recordToDeleteSingle]);
+
+  const handleConfirmDelete = async () => {
+    const idsToDelete = recordToDeleteSingle ? [recordToDeleteSingle.id] : Array.from(selectedRecordIds);
+    if (idsToDelete.length === 0) return;
+
+    try {
+      setIsDeletingSelected(true);
+      const deletedCount = await StorageService.deleteAttendanceRecords(idsToDelete);
+
+      StorageService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        action: 'Deleted Attendance Records',
+        target: `${deletedCount} attendance record(s)`,
+        details: recordToDeleteSingle
+          ? `Deleted attendance record of ${recordToDeleteSingle.personName} for ${recordToDeleteSingle.date} (${recordToDeleteSingle.subject || recordToDeleteSingle.department})`
+          : `Batch deleted ${deletedCount} selected attendance record(s)`,
+        ipAddress: '127.0.0.1'
+      });
+
+      showToast(
+        isKhmer
+          ? `បានលុបកំណត់ត្រាវត្តមានចំនួន ${deletedCount} ដោយជោគជ័យ!`
+          : `Successfully deleted ${deletedCount} selected attendance record(s)!`,
+        'success'
+      );
+
+      setSelectedRecordIds(prev => {
+        const next = new Set(prev);
+        idsToDelete.forEach(id => next.delete(id));
+        return next;
+      });
+      setIsDeleteSelectedModalOpen(false);
+      setRecordToDeleteSingle(null);
+    } catch (err) {
+      showToast(
+        'Failed to delete attendance: ' + (err instanceof Error ? err.message : String(err)),
+        'error'
+      );
+    } finally {
+      setIsDeletingSelected(false);
+    }
+  };
 
   // Filter corrections
   const filteredCorrections = useMemo(() => {
@@ -788,21 +888,72 @@ export const AttendanceList: React.FC = () => {
 
           </div>
 
+          {/* Bulk Action Bar for Selected Records */}
+          {canDeleteAttendance && selectedRecordIds.size > 0 && (
+            <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md shadow-rose-500/10 animate-in fade-in duration-200">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                  {selectedRecordIds.size}
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-black text-rose-950">
+                    {isKhmer ? `បានជ្រើសរើស ${selectedRecordIds.size} កំណត់ត្រាវត្តមាន` : `${selectedRecordIds.size} Attendance Record(s) Selected`}
+                  </div>
+                  <p className="text-[11px] text-rose-700 font-medium">
+                    {isKhmer ? 'អ្នកគ្រប់គ្រងអាចលុបកំណត់ត្រាដែលបានជ្រើសរើសទាំងអស់នេះចេញពីប្រព័ន្ធ' : 'Admin can permanently remove all selected attendance records from the system.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+                >
+                  {isKhmer ? 'បោះបង់ (Deselect)' : 'Deselect All'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecordToDeleteSingle(null);
+                    setIsDeleteSelectedModalOpen(true);
+                  }}
+                  className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? `លុបកំណត់ត្រា (${selectedRecordIds.size})` : `Delete Selected (${selectedRecordIds.size})`}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Attendance Records Table matching screenshot style */}
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-200/90 text-sm font-bold text-slate-700 bg-white">
-                    <th className="py-4 px-4 sm:px-6 w-[36%] sm:w-[32%]">{isKhmer ? 'កាលបរិច្ឆេទ (Date)' : 'Date'}</th>
-                    <th className="py-4 px-3 sm:px-5 w-[42%] sm:w-[48%]">{isKhmer ? 'ម៉ោងស្កេន (Timing)' : 'Timing'}</th>
-                    <th className="py-4 px-4 sm:px-6 w-[22%] sm:w-[20%] text-right">{isKhmer ? 'រយៈពេល (Duration)' : 'Duration'}</th>
+                    {canDeleteAttendance && (
+                      <th className="py-4 px-3 sm:px-4 w-[46px] text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllVisibleSelected}
+                          onChange={handleToggleSelectAll}
+                          title={isAllVisibleSelected ? "Deselect all visible" : "Select all visible"}
+                          className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer align-middle"
+                        />
+                      </th>
+                    )}
+                    <th className="py-4 px-4 sm:px-6 w-[34%] sm:w-[32%]">{isKhmer ? 'កាលបរិច្ឆេទ (Date)' : 'Date'}</th>
+                    <th className="py-4 px-3 sm:px-5 w-[38%] sm:w-[44%]">{isKhmer ? 'ម៉ោងស្កេន (Timing)' : 'Timing'}</th>
+                    <th className="py-4 px-4 sm:px-6 w-[24%] sm:w-[20%] text-right">{isKhmer ? 'រយៈពេល (Duration)' : 'Duration'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100/80 text-xs sm:text-sm">
                   {filteredAttendance.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="py-16 text-center text-slate-400 text-xs sm:text-sm">
+                      <td colSpan={canDeleteAttendance ? 4 : 3} className="py-16 text-center text-slate-400 text-xs sm:text-sm">
                         {isKhmer ? `ពុំមានកំណត់ត្រាវត្តមានសម្រាប់កាលបរិច្ឆេទ ${selectedDate || 'ដែលបានជ្រើសរើស'}` : `No attendance records found for ${selectedDate || 'selected criteria'}.`}
                       </td>
                     </tr>
@@ -812,9 +963,22 @@ export const AttendanceList: React.FC = () => {
                       const config = getAttendanceRowConfig(record);
                       const isTeacher = isTeacherRecord(record);
                       const subjectCode = isTeacher ? (getSubjectCode(record) || 'SUB-01') : '';
+                      const isSelected = selectedRecordIds.has(record.id);
 
                       return (
-                        <tr key={record.id} className={`${config.rowBg} transition-colors border-b border-slate-100/60`}>
+                        <tr key={record.id} className={`${isSelected ? 'bg-rose-50/70 border-l-4 border-l-rose-500' : config.rowBg} transition-colors border-b border-slate-100/60`}>
+                          {/* Selection Checkbox */}
+                          {canDeleteAttendance && (
+                            <td className="py-3.5 px-3 sm:px-4 align-middle text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelectRecord(record.id)}
+                                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer align-middle"
+                              />
+                            </td>
+                          )}
+
                           {/* Date Column */}
                           <td className="py-3.5 px-4 sm:px-6 align-middle">
                             <div className="flex items-center gap-3">
@@ -929,11 +1093,25 @@ export const AttendanceList: React.FC = () => {
                                   setSelectedRecordForCorrection(record);
                                   setIsCorrectionModalOpen(true);
                                 }}
-                                className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 text-[11px] font-bold border border-slate-200/80 transition-all opacity-80 hover:opacity-100 shrink-0"
+                                className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 text-[11px] font-bold border border-slate-200/80 transition-all opacity-80 hover:opacity-100 shrink-0 cursor-pointer"
                                 title={isKhmer ? 'កែសម្រួល' : 'Request Correction'}
                               >
                                 {isKhmer ? 'កែ' : 'Edit'}
                               </button>
+                              {canDeleteAttendance && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRecordToDeleteSingle(record);
+                                    setIsDeleteSelectedModalOpen(true);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-[11px] font-bold border border-rose-200 transition-all opacity-85 hover:opacity-100 shrink-0 flex items-center gap-1 cursor-pointer"
+                                  title={isKhmer ? 'លុបកំណត់ត្រានេះ' : 'Delete Record'}
+                                >
+                                  <Trash2 className="w-3 h-3 text-rose-600" />
+                                  <span className="hidden sm:inline">{isKhmer ? 'លុប' : 'Delete'}</span>
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -945,7 +1123,14 @@ export const AttendanceList: React.FC = () => {
             </div>
 
             <div className="p-4 bg-slate-50/90 border-t border-slate-200/90 text-xs text-slate-500 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span>Total records for {selectedDate || 'all dates'}: <b>{filteredAttendance.length}</b></span>
+              <div className="flex items-center gap-3">
+                <span>Total records for {selectedDate || 'all dates'}: <b>{filteredAttendance.length}</b></span>
+                {canDeleteAttendance && selectedRecordIds.size > 0 && (
+                  <span className="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-900 text-[11px] font-extrabold border border-rose-200">
+                    {selectedRecordIds.size} selected
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-3 text-[11px] flex-wrap">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#00a86b]" /> Present</span>
                 <span className="flex items-center gap-1"><EarlyLateBadge className="w-3.5 h-3.5" /> Early/Late</span>
@@ -1272,6 +1457,128 @@ export const AttendanceList: React.FC = () => {
                     <>
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>{isKhmer ? 'យល់ព្រមសម្អាតទាំងអស់' : 'Confirm Clear All Attendance'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Selected Attendance Modal */}
+      {isDeleteSelectedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-rose-200 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="bg-rose-600 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black">
+                    {isKhmer
+                      ? (recordToDeleteSingle ? 'បញ្ជាក់ការលុបកំណត់ត្រាវត្តមាន' : `បញ្ជាក់ការលុប ${selectedRecordIds.size} កំណត់ត្រាវត្តមាន`)
+                      : (recordToDeleteSingle ? 'Confirm Attendance Record Deletion' : `Confirm Delete of ${selectedRecordIds.size} Attendance Record(s)`)}
+                  </h3>
+                  <p className="text-xs text-rose-100">
+                    {isKhmer ? 'សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ' : 'This action is permanent and cannot be undone'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isDeletingSelected) {
+                    setIsDeleteSelectedModalOpen(false);
+                    setRecordToDeleteSingle(null);
+                  }
+                }}
+                disabled={isDeletingSelected}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-950 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-rose-700 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isKhmer
+                      ? `ចំនួនកំណត់ត្រាដែលត្រូវលុប៖ ${selectedRecordsList.length} កំណត់ត្រា`
+                      : `Selected Record(s) to Delete: ${selectedRecordsList.length}`}
+                  </span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  {isKhmer
+                    ? 'កំណត់ត្រាវត្តមានដែលបានជ្រើសរើស (ម៉ោងស្កេនចូល-ចេញ ស្ថានភាព និងទិន្នន័យពាក់ព័ន្ធ) នឹងត្រូវលុបចេញពីប្រព័ន្ធ និង Cloud Firestore។'
+                    : 'The selected record(s) including clock-in/out timestamps and attendance status will be removed from local storage and Cloud Firestore.'}
+                </p>
+              </div>
+
+              {/* Records preview list */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  {isKhmer ? 'កំណត់ត្រាដែលនឹងត្រូវលុប៖' : 'Records to be deleted:'}
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1.5 border border-slate-200 rounded-2xl p-2 bg-slate-50/50">
+                  {selectedRecordsList.slice(0, 15).map(r => (
+                    <div key={r.id} className="p-2 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between text-xs gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-800 truncate">
+                          {r.personName} {r.khmerName ? `(${r.khmerName})` : ''}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          {r.date} • {r.checkInTime || r.scheduledStart} - {r.checkOutTime || r.scheduledEnd || '--:--'}
+                          {r.subject ? ` • ${r.subject}` : (r.department ? ` • ${r.department}` : '')}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 shrink-0">
+                        {r.status}
+                      </span>
+                    </div>
+                  ))}
+                  {selectedRecordsList.length > 15 && (
+                    <div className="text-center text-[10px] text-slate-500 py-1 font-bold">
+                      + and {selectedRecordsList.length - 15} more records...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteSelectedModalOpen(false);
+                    setRecordToDeleteSingle(null);
+                  }}
+                  disabled={isDeletingSelected}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  {isKhmer ? 'បោះបង់' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeletingSelected || selectedRecordsList.length === 0}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/30 transition-all cursor-pointer disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isDeletingSelected ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{isKhmer ? 'កំពុងលុប...' : 'Deleting...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>
+                        {isKhmer
+                          ? `លុបជាអចិន្ត្រៃយ៍ (${selectedRecordsList.length})`
+                          : `Permanently Delete (${selectedRecordsList.length})`}
+                      </span>
                     </>
                   )}
                 </button>

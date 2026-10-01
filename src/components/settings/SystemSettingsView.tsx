@@ -82,7 +82,8 @@ export const SystemSettingsView: React.FC = () => {
       autoCheckOutPolicy: settings.autoCheckOutPolicy || 'scheduled_end',
       autoCheckOutBufferMinutes: Number(settings.autoCheckOutBufferMinutes ?? 15),
       autoCheckOutDailyTime: settings.autoCheckOutDailyTime || '17:30',
-      preventDuplicateScanMinutes: Number(settings.preventDuplicateScanMinutes ?? 10)
+      preventDuplicateScanMinutes: Number(settings.preventDuplicateScanMinutes ?? 10),
+      teachingWageDurationMode: settings.teachingWageDurationMode || 'full_schedule'
     };
     StorageService.saveSystemSettings(updated);
     StorageService.addAuditLog({
@@ -90,7 +91,7 @@ export const SystemSettingsView: React.FC = () => {
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Updated System Settings',
-      target: `Academic Year: ${updated.academicYear} (AutoCheckOut: ${updated.enableAutoCheckOut ? 'Enabled' : 'Disabled'}, Policy: ${updated.autoCheckOutPolicy}, DuplicateCooldown: ${updated.preventDuplicateScanMinutes}m)`,
+      target: `Academic Year: ${updated.academicYear} (AutoCheckOut: ${updated.enableAutoCheckOut ? 'Enabled' : 'Disabled'}, Policy: ${updated.autoCheckOutPolicy}, WageBasis: ${updated.teachingWageDurationMode})`,
       ipAddress: '127.0.0.1'
     });
     showToast('System configuration & attendance policies saved successfully', 'success');
@@ -883,6 +884,97 @@ export const SystemSettingsView: React.FC = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Teaching Payroll & Wage Charging Policy */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">$</span>
+                <span>Teaching Payroll Wage Charging Basis (គោលការណ៍គិតប្រាក់កម្រៃបង្រៀនគ្រូ)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                កំណត់ជម្រើសគិតថ្លៃបង្រៀនពេញតាមកាលវិភាគ ឬគិតតាមម៉ោងស្កេនជាក់ស្តែងសម្រាប់របាយការណ៍ Payroll
+              </p>
+            </div>
+
+            <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              {settings.teachingWageDurationMode === 'actual_scan' ? 'Actual Scan Mode' : 'Full Schedule Mode'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, teachingWageDurationMode: 'full_schedule' })}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                settings.teachingWageDurationMode !== 'actual_scan'
+                  ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/20 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className={`w-4 h-4 ${settings.teachingWageDurationMode !== 'actual_scan' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                      Full Schedule Duration Charge (គិតពេញតាមកាលវិភាគ)
+                    </span>
+                  </div>
+                  {settings.teachingWageDurationMode !== 'actual_scan' && (
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white font-black text-[9px] uppercase tracking-wider">
+                      Recommended
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Charges the full schedule duration for delivered classes regardless of punch timing.
+                </p>
+                <div className="mt-2.5 p-2.5 rounded-xl bg-white/90 border border-emerald-200/80 text-[11px] text-emerald-950 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <span>Example:</span>
+                    <span className="font-mono text-emerald-700">08:00 – 09:00 (1.0 hr), Rate $5.50/hr</span>
+                  </div>
+                  <p className="text-slate-600 text-[10px]">
+                    If teacher scans late or overtime checkout, Gross Wage is charged for the exact full scheduled duration: <b>1.0 hr × $5.50 = $5.50</b>.
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, teachingWageDurationMode: 'actual_scan' })}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                settings.teachingWageDurationMode === 'actual_scan'
+                  ? 'bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-500/20 shadow-xs'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className={`w-4 h-4 ${settings.teachingWageDurationMode === 'actual_scan' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                      Actual Scan Punch Duration (គិតតាមម៉ោងស្កេនជាក់ស្តែង)
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Calculates wage strictly according to actual clock-in and clock-out timestamps recorded at the terminal.
+                </p>
+                <div className="mt-2.5 p-2.5 rounded-xl bg-white/90 border border-slate-200 text-[11px] text-slate-700 space-y-1">
+                  <div className="font-bold text-slate-800">
+                    Exact Punch Duration:
+                  </div>
+                  <p className="text-slate-500 text-[10px]">
+                    Prorates pay down to exact minutes between scan-in and scan-out (e.g. 50 mins = 0.83 hr × Rate).
+                  </p>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
 
