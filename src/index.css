@@ -147,6 +147,38 @@
     break-after: page !important;
   }
 
+  /* Schedule QR Code & Door Sign Print Optimizations */
+  .schedule-qr-modal-backdrop {
+    background: transparent !important;
+    position: static !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .schedule-qr-modal-box {
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .schedule-qr-poster-print {
+    border: 2px solid #0f172a !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
   /* Timetable Table Print Optimization */
   .timetable-print-wrapper {
     overflow: visible !important;

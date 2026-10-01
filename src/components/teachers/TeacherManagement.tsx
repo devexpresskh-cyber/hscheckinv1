@@ -10,6 +10,7 @@ import { MonSatWeeklyTimetable } from '../schedules/MonSatWeeklyTimetable.tsx';
 import { TeacherOnTeachingList } from './TeacherOnTeachingList.tsx';
 import { DeleteTeacherModal } from './DeleteTeacherModal.tsx';
 import { TeacherMonthlyCalendar } from '../schedules/TeacherMonthlyCalendar.tsx';
+import { ScheduleQRCodeModal } from '../schedules/ScheduleQRCodeModal.tsx';
 import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
 import { OfflineSyncModal } from '../sync/OfflineSyncModal.tsx';
 import {
@@ -35,7 +36,8 @@ import {
   Activity,
   Layers,
   Wifi,
-  Database
+  Database,
+  QrCode
 } from 'lucide-react';
 
 export const TeacherManagement: React.FC = () => {
@@ -54,6 +56,7 @@ export const TeacherManagement: React.FC = () => {
   const [selectedTeacherForHistory, setSelectedTeacherForHistory] = useState<Teacher | null>(null);
   const [selectedTeacherForSchedule, setSelectedTeacherForSchedule] = useState<Teacher | null>(null);
   const [selectedTeacherForMonthlyCalendar, setSelectedTeacherForMonthlyCalendar] = useState<Teacher | null>(null);
+  const [selectedTeacherForQR, setSelectedTeacherForQR] = useState<Teacher | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() => StorageService.getSubjectSchedules());
   const [teachers, setTeachers] = useState<Teacher[]>(() => StorageService.getTeachers());
@@ -497,7 +500,7 @@ export const TeacherManagement: React.FC = () => {
                           {/* View Monthly Calendar Schedule */}
                           <button
                             onClick={() => setSelectedTeacherForMonthlyCalendar(teacher)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
                             title="View Monthly Calendar Schedule"
                           >
                             <Calendar className="w-4 h-4 text-emerald-600" />
@@ -509,10 +512,19 @@ export const TeacherManagement: React.FC = () => {
                               setSubjectSchedules(StorageService.getSubjectSchedules());
                               setSelectedTeacherForSchedule(teacher);
                             }}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                             title="View Mon-Sat Weekly Schedule"
                           >
                             <Layers className="w-4 h-4 text-indigo-600" />
+                          </button>
+
+                          {/* Teacher Schedule QR Code & Printable Door Sign */}
+                          <button
+                            onClick={() => setSelectedTeacherForQR(teacher)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            title="View & Print Teacher Schedule QR Door Sign / Badge"
+                          >
+                            <QrCode className="w-4 h-4 text-indigo-600" />
                           </button>
 
                           {/* View Attendance History */}
@@ -767,6 +779,15 @@ export const TeacherManagement: React.FC = () => {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
       />
+
+      {/* Teacher Schedule QR Code Creator & Printable Door Sign Modal */}
+      {selectedTeacherForQR && (
+        <ScheduleQRCodeModal
+          isOpen={Boolean(selectedTeacherForQR)}
+          onClose={() => setSelectedTeacherForQR(null)}
+          initialTeacher={selectedTeacherForQR}
+        />
+      )}
 
     </div>
   );

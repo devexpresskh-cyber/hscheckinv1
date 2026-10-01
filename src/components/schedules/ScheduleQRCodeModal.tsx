@@ -28,6 +28,516 @@ import { ScheduleQrService } from '../../services/scheduleQrService.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 
+const escapeHtml = (str?: string | null): string => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+const DAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAMES_KH = ['អាទិត្យ', 'ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+
+interface PrintPosterOptions {
+  mode: 'teacher' | 'room' | 'subject' | 'general';
+  layout: 'poster' | 'badge' | 'minimal';
+  teacher: Teacher | null;
+  subject: TeacherSubjectSchedule | null;
+  room: string;
+  general: Schedule | null;
+  teacherSchedules: TeacherSubjectSchedule[];
+  roomSchedules: TeacherSubjectSchedule[];
+  qrDataUrl: string;
+  qrPayloadString: string;
+  settings: any;
+  showLogo: boolean;
+  qrColor: string;
+  isKhmer: boolean;
+}
+
+const buildSchedulePosterPrintHtml = (opts: PrintPosterOptions): string => {
+  const {
+    mode,
+    layout,
+    teacher,
+    subject,
+    room,
+    general,
+    teacherSchedules,
+    roomSchedules,
+    qrDataUrl,
+    qrPayloadString,
+    settings,
+    showLogo,
+    isKhmer
+  } = opts;
+
+  const schoolName = settings.schoolName || settings.organizationName || 'EduTrack International Academy';
+  const academicYear = settings.academicYear || '2026-2027';
+
+  // Target title & badges
+  let targetTitle = '';
+  let targetSubtitle = '';
+  let targetKhmer = '';
+  let targetBadge = '';
+
+  if (mode === 'teacher') {
+    targetTitle = teacher?.fullName || 'Faculty Member';
+    targetKhmer = teacher?.khmerName || '';
+    targetSubtitle = `${teacher?.department || 'Academic Department'} • ${teacher?.subject || 'All Subjects'}`;
+    targetBadge = teacher?.teacherId ? `ID: ${teacher.teacherId}` : 'FACULTY SMART QR';
+  } else if (mode === 'subject') {
+    targetTitle = subject?.subject || 'Class Subject';
+    targetKhmer = subject?.khmerSubject || '';
+    targetSubtitle = `${subject?.gradeClass || 'Class'} • ${subject?.room || room} • ${subject?.teacherName || 'Faculty'}`;
+    targetBadge = `${subject?.startTime || '07:30'} - ${subject?.endTime || '09:00'}`;
+  } else if (mode === 'room') {
+    targetTitle = `Classroom ${room}`;
+    targetKhmer = `បន្ទប់បង្រៀន ${room}`;
+    targetSubtitle = `${settings.organizationName || 'Campus'} • General Door QR Station`;
+    targetBadge = 'CLASSROOM CHECK-IN STATION';
+  } else {
+    targetTitle = general?.name || 'Academic Shift';
+    targetKhmer = general?.khmerName || '';
+    targetSubtitle = `${general?.department || 'Faculty'} (${general?.startTime} - ${general?.endTime})`;
+    targetBadge = 'SHIFT SCHEDULE';
+  }
+
+  // Teacher Schedule Rows for Poster
+  let scheduleTableHtml = '';
+  if (mode === 'teacher' && teacherSchedules.length > 0) {
+    const rows = teacherSchedules.map(sch => {
+      const dIndex = sch.dayOfWeek ?? 1;
+      const dayName = isKhmer ? DAY_NAMES_KH[dIndex] : DAY_NAMES_EN[dIndex];
+      const timeStr = `${sch.startTime || '07:30'} - ${sch.endTime || '09:00'}`;
+      const subTitle = isKhmer && sch.khmerSubject ? `${sch.khmerSubject} (${sch.subject})` : sch.subject;
+
+      return `
+        <tr>
+          <td style="font-weight: 700; color: #1e1b4b;">${escapeHtml(dayName)}</td>
+          <td style="font-family: monospace; font-weight: 700; text-align: center;">${escapeHtml(timeStr)}</td>
+          <td style="text-align: center; color: #4338ca; font-weight: 600;">${escapeHtml(sch.periodName || 'Period')}</td>
+          <td style="font-weight: 700; color: #0f172a;">${escapeHtml(subTitle)}</td>
+          <td style="text-align: center; font-weight: 600;">${escapeHtml(sch.gradeClass || 'All')}</td>
+          <td style="text-align: center; font-weight: 700; color: #047857;">${escapeHtml(sch.room || 'TBD')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    scheduleTableHtml = `
+      <div style="margin-top: 14px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h4 style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">
+            📅 ${isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍' : 'Weekly Teaching Timetable'} (${teacherSchedules.length} ${isKhmer ? 'ម៉ោងបង្រៀន' : 'Assigned Classes'})
+          </h4>
+          <span style="font-size: 10px; color: #64748b; font-weight: 600;">
+            ${isKhmer ? 'ស្កេន QR តែ១ នេះសម្រាប់គ្រប់ម៉ោងទាំងអស់' : '1 Master QR works for all these periods'}
+          </span>
+        </div>
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th style="width: 14%;">${isKhmer ? 'ថ្ងៃ' : 'Day'}</th>
+              <th style="width: 18%; text-align: center;">${isKhmer ? 'ម៉ោងបង្រៀន' : 'Time'}</th>
+              <th style="width: 14%; text-align: center;">${isKhmer ? 'វេន' : 'Period'}</th>
+              <th>${isKhmer ? 'មុខវិជ្ជា' : 'Subject'}</th>
+              <th style="width: 14%; text-align: center;">${isKhmer ? 'ថ្នាក់' : 'Class'}</th>
+              <th style="width: 13%; text-align: center;">${isKhmer ? 'បន្ទប់' : 'Room'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else if (mode === 'room' && roomSchedules.length > 0) {
+    const rows = roomSchedules.map(sch => {
+      const dIndex = sch.dayOfWeek ?? 1;
+      const dayName = isKhmer ? DAY_NAMES_KH[dIndex] : DAY_NAMES_EN[dIndex];
+      const timeStr = `${sch.startTime} - ${sch.endTime}`;
+      return `
+        <tr>
+          <td style="font-weight: 700;">${escapeHtml(dayName)}</td>
+          <td style="font-family: monospace; font-weight: 700; text-align: center;">${escapeHtml(timeStr)}</td>
+          <td style="font-weight: 700;">${escapeHtml(sch.subject)}</td>
+          <td style="text-align: center;">${escapeHtml(sch.gradeClass)}</td>
+          <td style="color: #4338ca; font-weight: 700;">${escapeHtml(sch.teacherName)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    scheduleTableHtml = `
+      <div style="margin-top: 14px; text-align: left;">
+        <h4 style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin-bottom: 6px;">
+          🏫 ${isKhmer ? 'កាលវិភាគប្រើប្រាស់បន្ទប់នេះ' : 'Classroom Assigned Timetable'} (${roomSchedules.length} ${isKhmer ? 'ថ្នាក់' : 'Classes'})
+        </h4>
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th style="width: 16%;">${isKhmer ? 'ថ្ងៃ' : 'Day'}</th>
+              <th style="width: 20%; text-align: center;">${isKhmer ? 'ម៉ោង' : 'Time'}</th>
+              <th>${isKhmer ? 'មុខវិជ្ជា' : 'Subject'}</th>
+              <th style="width: 18%; text-align: center;">${isKhmer ? 'ថ្នាក់' : 'Class'}</th>
+              <th style="width: 22%;">${isKhmer ? 'គ្រូបង្រៀន' : 'Faculty'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Teacher PIN block for verification
+  let pinBadgeHtml = '';
+  if (teacher?.pinCode) {
+    pinBadgeHtml = `
+      <div class="pin-box">
+        <span class="pin-label">🔐 ${isKhmer ? 'កូដសម្ងាត់ PIN ផ្ទៀងផ្ទាត់ ៖' : 'Faculty PIN Code:'}</span>
+        <span class="pin-code">${escapeHtml(teacher.pinCode)}</span>
+        <span class="pin-note">(${isKhmer ? 'វាយកូដនេះពេលស្កេនដើម្បីចុះវត្តមាន' : 'Enter 4-digit PIN after scan to confirm'})</span>
+      </div>
+    `;
+  }
+
+  // Teacher Avatar if badge layout
+  let teacherAvatarHtml = '';
+  if (layout === 'badge' && teacher) {
+    if (teacher.photoUrl && teacher.photoUrl.trim()) {
+      teacherAvatarHtml = `
+        <div style="margin: 0 auto 12px; width: 68px; height: 68px; border-radius: 50%; overflow: hidden; border: 3px solid #4338ca; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+          <img src="${escapeHtml(teacher.photoUrl.trim())}" style="width: 100%; height: 100%; object-fit: cover;" alt="${escapeHtml(teacher.fullName)}" />
+        </div>
+      `;
+    } else {
+      teacherAvatarHtml = `
+        <div style="margin: 0 auto 12px; width: 64px; height: 64px; border-radius: 50%; background: #e0e7ff; color: #3730a3; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; border: 2px solid #6366f1;">
+          ${escapeHtml(teacher.fullName.charAt(0))}
+        </div>
+      `;
+    }
+  }
+
+  // Output CSS rules
+  const css = `
+    @page {
+      size: portrait;
+      margin: 8mm 8mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', 'Kantumruy Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #ffffff;
+      color: #0f172a;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      padding: ${layout === 'badge' ? '12px' : '6px'};
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .poster-container {
+      width: 100%;
+      max-width: ${layout === 'badge' ? '420px' : layout === 'minimal' ? '460px' : '700px'};
+      border: 2.5px solid #0f172a;
+      border-radius: ${layout === 'badge' ? '20px' : '24px'};
+      padding: ${layout === 'badge' ? '20px 18px' : '22px 26px'};
+      text-align: center;
+      background: #ffffff;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      position: relative;
+    }
+    .inst-header {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .school-title {
+      font-size: ${layout === 'badge' ? '13px' : '15px'};
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+    .school-sub {
+      font-size: 10px;
+      font-weight: 700;
+      color: #4f46e5;
+      letter-spacing: 0.3px;
+    }
+    .badge-pill {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .target-title {
+      font-size: ${layout === 'badge' ? '18px' : '22px'};
+      font-weight: 900;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+    .target-khmer {
+      font-size: ${layout === 'badge' ? '13px' : '15px'};
+      font-weight: 700;
+      color: #4338ca;
+      margin-top: 2px;
+    }
+    .target-sub {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .qr-card {
+      display: inline-block;
+      padding: 12px;
+      background: #ffffff;
+      border: 2px solid #cbd5e1;
+      border-radius: 18px;
+      margin: 12px auto;
+      position: relative;
+    }
+    .qr-img {
+      width: ${layout === 'badge' ? '200px' : layout === 'minimal' ? '220px' : '230px'};
+      height: ${layout === 'badge' ? '200px' : layout === 'minimal' ? '220px' : '230px'};
+      display: block;
+      margin: 0 auto;
+      object-fit: contain;
+    }
+    .center-crest {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 44px;
+      height: 44px;
+      background: #ffffff;
+      border: 2px solid #4338ca;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      font-size: 22px;
+    }
+    .pin-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fef3c7;
+      border: 1.5px solid #f59e0b;
+      border-radius: 10px;
+      padding: 4px 12px;
+      margin: 8px auto;
+      font-size: 11px;
+    }
+    .pin-label {
+      font-weight: 800;
+      color: #92400e;
+    }
+    .pin-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 900;
+      font-size: 13px;
+      color: #78350f;
+      letter-spacing: 1px;
+    }
+    .pin-note {
+      font-size: 10px;
+      color: #b45309;
+      font-weight: 600;
+    }
+    .instructions-card {
+      background: #f8fafc;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 14px;
+      padding: 10px 14px;
+      margin-top: 10px;
+      text-align: center;
+    }
+    .inst-step {
+      font-size: 12px;
+      font-weight: 800;
+      color: #1e1b4b;
+      line-height: 1.4;
+    }
+    .inst-sub {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .schedule-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+      margin-top: 4px;
+    }
+    .schedule-table th {
+      background: #0f172a;
+      color: #ffffff;
+      font-weight: 800;
+      padding: 5px 8px;
+      border: 1px solid #0f172a;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .schedule-table td {
+      padding: 5px 7px;
+      border: 1px solid #cbd5e1;
+      font-size: 10px;
+    }
+    .schedule-table tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+    .url-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5px;
+      color: #64748b;
+      word-break: break-all;
+      margin-top: 8px;
+    }
+    .auth-footer {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px dashed #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #94a3b8;
+    }
+    .signatures-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 14px;
+      padding-top: 8px;
+      border-top: 1px solid #cbd5e1;
+      text-align: center;
+      font-size: 10px;
+    }
+    .sign-line {
+      height: 36px;
+      border-bottom: 1px solid #94a3b8;
+      margin-bottom: 4px;
+    }
+  `;
+
+  return `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(targetTitle)} - Schedule QR Station Sign</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&family=Plus+Jakarta+Sans:wght@500;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+        <style>${css}</style>
+      </head>
+      <body>
+        <div class="poster-container">
+          
+          <!-- Institution Header -->
+          <div class="inst-header">
+            <div style="font-size: 26px;">🏛️</div>
+            <div>
+              <div class="school-title">${escapeHtml(schoolName)}</div>
+              <div class="school-sub">
+                ${isKhmer ? 'ប្រព័ន្ធកាលវិភាគ និងវត្តមានគ្រូបង្រៀនផ្លូវការ' : 'Official Teacher Schedule & Attendance Station'} • AY ${escapeHtml(academicYear)}
+              </div>
+            </div>
+          </div>
+
+          <!-- Teacher Avatar (if badge layout) -->
+          ${teacherAvatarHtml}
+
+          <!-- Target Identification -->
+          <div>
+            <div class="badge-pill">${escapeHtml(targetBadge)}</div>
+            <h1 class="target-title">${escapeHtml(targetTitle)}</h1>
+            ${targetKhmer ? `<div class="target-khmer">${escapeHtml(targetKhmer)}</div>` : ''}
+            <div class="target-sub">${escapeHtml(targetSubtitle)}</div>
+          </div>
+
+          <!-- PIN Code for verification -->
+          ${pinBadgeHtml}
+
+          <!-- QR Code Image -->
+          <div class="qr-card">
+            ${qrDataUrl ? `<img src="${qrDataUrl}" class="qr-img" alt="Schedule QR" />` : '<div style="width: 220px; height: 220px; background: #eee;"></div>'}
+            ${showLogo ? '<div class="center-crest">🏫</div>' : ''}
+          </div>
+
+          <!-- Step by Step Instructions -->
+          <div class="instructions-card">
+            <div class="inst-step">
+              ${isKhmer
+                ? '១. ស្កេន QR តាមទូរស័ព្ទ  •  ២. បញ្ជាក់កូដ PIN ៤ ខ្ទង់  •  ៣. វត្តមានកត់ត្រាភ្លាមៗ!'
+                : '1. Scan QR with Camera  •  2. Enter 4-Digit PIN  •  3. Instant Attendance Confirmation!'}
+            </div>
+            <div class="inst-sub">
+              ${isKhmer
+                ? 'មិនបាច់ Login ចូលប្រព័ន្ធទេ! ម៉ោងបង្រៀន និងប្រាក់ឈ្នួលត្រូវបានគណនាស្វ័យប្រវត្តិ។'
+                : 'No system login required. Teaching hours & payroll wage calculated automatically.'}
+            </div>
+          </div>
+
+          <!-- Schedule Timetable (for poster layout) -->
+          ${layout === 'poster' ? scheduleTableHtml : ''}
+
+          <!-- Direct Link -->
+          ${qrPayloadString ? `<div class="url-text">Web Check-in Link: ${escapeHtml(qrPayloadString)}</div>` : ''}
+
+          <!-- Signatures (for official poster layout) -->
+          ${layout === 'poster' ? `
+            <div class="signatures-grid">
+              <div>
+                <div class="sign-line"></div>
+                <strong style="color: #334155;">Academic Coordinator / HR</strong>
+              </div>
+              <div>
+                <div class="sign-line"></div>
+                <strong style="color: #334155;">Faculty Member Acknowledgment</strong>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Footer Stamp -->
+          <div class="auth-footer">
+            <span>EduTrack Academic MIS • Official Station</span>
+            <span>Printed: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+
+        </div>
+      </body>
+    </html>
+  `;
+};
+
 interface ScheduleQRCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -315,7 +825,79 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
     showToast(isKhmer ? 'បានទាញយក SVG ដោយជោគជ័យ!' : 'QR Code downloaded as vector SVG!', 'success');
   };
 
-  const handlePrint = () => {
+  // Dedicated Print Engine: Generates pure, isolated, high-resolution printable HTML
+  const handlePrint = (layoutOverride?: 'poster' | 'badge' | 'minimal') => {
+    const layout = layoutOverride || posterLayout;
+
+    let directUrl = '';
+    if (mode === 'teacher') {
+      directUrl = ScheduleQrService.buildTeacherMasterUrl(selectedTeacherId);
+    } else if (mode === 'room') {
+      directUrl = ScheduleQrService.buildRoomUrl(selectedRoom);
+    } else if (mode === 'subject') {
+      directUrl = ScheduleQrService.buildScheduleUrl(
+        selectedSubjectId,
+        'subject',
+        currentSubject?.teacherId || selectedTeacherId
+      );
+    } else {
+      directUrl = ScheduleQrService.buildScheduleUrl(
+        selectedGeneralId,
+        'general',
+        selectedTeacherId
+      );
+    }
+
+    try {
+      let iframe = document.getElementById('schedule-qr-print-iframe') as HTMLIFrameElement;
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'schedule-qr-print-iframe';
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.style.opacity = '0';
+        iframe.style.pointerEvents = 'none';
+        document.body.appendChild(iframe);
+      }
+
+      const html = buildSchedulePosterPrintHtml({
+        mode,
+        layout,
+        teacher: currentTeacher || null,
+        subject: currentSubject || null,
+        room: selectedRoom,
+        general: currentGeneral || null,
+        teacherSchedules: teacherAllSchedules,
+        roomSchedules: subjectSchedules.filter(s => s.room === selectedRoom),
+        qrDataUrl,
+        qrPayloadString: directUrl,
+        settings,
+        showLogo,
+        qrColor,
+        isKhmer
+      });
+
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 300);
+        return;
+      }
+    } catch (err) {
+      console.error('Dedicated iframe print error, falling back to window.print():', err);
+    }
+
+    // Fallback: window.print()
     window.print();
   };
 
@@ -329,11 +911,11 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200 schedule-qr-modal-backdrop print:static print:bg-transparent print:p-0 print:m-0 print:overflow-visible">
+      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col schedule-qr-modal-box print:max-w-none print:w-full print:border-none print:shadow-none print:max-h-none print:overflow-visible">
         
-        {/* Header */}
-        <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
+        {/* Header (Hidden in Print) */}
+        <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800 print:hidden">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
               <QrCode className="w-5 h-5" />
@@ -341,7 +923,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black tracking-tight">
-                  {isKhmer ? 'បង្កើតកូដ QR កាលវិភាគ' : 'Create Schedule QR Code'}
+                  {isKhmer ? 'បង្កើត និងបោះពុម្ពកូដ QR កាលវិភាគ' : 'Teacher Schedule QR & Print Station'}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {isKhmer ? 'ស្កេនដោយមិនបាច់ Login' : 'No-Login Scan'}
@@ -350,23 +932,23 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
               <p className="text-xs text-slate-400">
                 {isKhmer
                   ? 'គ្រូគ្រាន់តែស្កេន QR និងផ្ទៀងផ្ទាត់លេខសម្ងាត់ PIN ៤ ខ្ទង់ដើម្បីចុះវត្តមានភ្លាមៗ'
-                  : 'Faculty can scan without logging in — attendance confirmed with 4-digit PIN'}
+                  : 'Faculty scan with mobile camera & confirm 4-digit PIN for instant wage logging'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body Grid: Left Controls (1 col) + Right Live Preview & Poster (1 col) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Body Grid: Left Controls (5 cols, hidden in print) + Right Live Preview & Poster (7 cols) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 print:block print:p-0 print:overflow-visible">
           
-          {/* Left Column: Form & Configuration (5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
+          {/* Left Column: Form & Configuration (5 cols, hidden in print) */}
+          <div className="lg:col-span-5 space-y-4 print:hidden">
             
             {/* Target Type Selector */}
             <div className="space-y-1.5">
@@ -702,12 +1284,51 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
           </div>
 
           {/* Right Column: High-Fidelity Printable Poster / Card Preview (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col items-center justify-between space-y-4">
+          <div className="lg:col-span-7 flex flex-col items-center justify-between space-y-4 print:w-full print:col-span-12 print:p-0">
             
+            {/* Poster Layout Format Switcher (Hidden in Print) */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-bold w-full max-w-md print:hidden">
+              <button
+                type="button"
+                onClick={() => setPosterLayout('poster')}
+                className={`flex-1 py-1.5 px-2 rounded-xl transition-all cursor-pointer text-center ${
+                  posterLayout === 'poster'
+                    ? 'bg-white text-indigo-900 shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isKhmer ? '📄 ផ្ទាំងបិទទ្វារ (A4)' : '📄 Door Sign (A4)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPosterLayout('badge')}
+                className={`flex-1 py-1.5 px-2 rounded-xl transition-all cursor-pointer text-center ${
+                  posterLayout === 'badge'
+                    ? 'bg-white text-indigo-900 shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isKhmer ? '🪪 កាតគ្រូ (Badge)' : '🪪 Teacher Badge'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPosterLayout('minimal')}
+                className={`flex-1 py-1.5 px-2 rounded-xl transition-all cursor-pointer text-center ${
+                  posterLayout === 'minimal'
+                    ? 'bg-white text-indigo-900 shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isKhmer ? '🪧 ទម្រង់សាមញ្ញ' : '🪧 Minimal Sign'}
+              </button>
+            </div>
+
             {/* The Printable Door Poster Container */}
             <div
               id={`printable-schedule-poster-${printSectionId}`}
-              className="w-full max-w-sm sm:max-w-md bg-white rounded-3xl border-2 border-slate-300 p-5 sm:p-6 shadow-xl text-center space-y-4 relative print:border-none print:shadow-none print:p-0 print:m-0 print:w-full print:max-w-none"
+              className={`w-full bg-white rounded-3xl border-2 border-slate-300 p-5 sm:p-6 shadow-xl text-center space-y-4 relative schedule-qr-poster-print print:border-none print:shadow-none print:p-0 print:m-0 print:w-full print:max-w-none ${
+                posterLayout === 'badge' ? 'max-w-xs sm:max-w-sm' : 'max-w-sm sm:max-w-md'
+              }`}
             >
               {/* Top Institutional Header */}
               <div className="border-b-2 border-slate-900 pb-3 space-y-1">
@@ -717,10 +1338,10 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                   </div>
                   <div className="text-left">
                     <h4 className="text-xs font-black text-slate-900 tracking-tight leading-none uppercase">
-                      {settings.schoolName || settings.organizationName}
+                      {settings.schoolName || settings.organizationName || 'EduTrack Academy'}
                     </h4>
                     <span className="text-[10px] text-slate-500 font-semibold leading-none">
-                      {isKhmer ? 'ប្រព័ន្ធកាលវិភាគ និងវត្តមានគ្រូ' : 'Teacher Schedule & Attendance Station'}
+                      {isKhmer ? 'ប្រព័ន្ធកាលវិភាគ និងវត្តមានគ្រូផ្លូវការ' : 'Teacher Schedule & Attendance Station'}
                     </span>
                   </div>
                 </div>
@@ -760,16 +1381,29 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                 ) : null}
               </div>
 
+              {/* Faculty PIN Pill for quick verification */}
+              {mode === 'teacher' && currentTeacher?.pinCode && (
+                <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1 text-xs text-amber-900">
+                  <span className="font-bold">🔐 PIN:</span>
+                  <span className="font-mono font-black text-amber-950 text-sm tracking-wider">
+                    {currentTeacher.pinCode}
+                  </span>
+                  <span className="text-[10px] text-amber-700 font-medium">
+                    ({isKhmer ? 'បញ្ជាក់កូដនេះពេលស្កេន' : 'Enter after scanning'})
+                  </span>
+                </div>
+              )}
+
               {/* QR Code Canvas / Visual with Center Crest */}
               <div className="relative inline-block mx-auto p-3 rounded-2xl bg-white border border-slate-200 shadow-md">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
                     alt="Schedule QR Code"
-                    className="w-48 h-48 sm:w-56 sm:h-56 mx-auto object-contain select-none"
+                    className="w-44 h-44 sm:w-52 sm:h-52 mx-auto object-contain select-none"
                   />
                 ) : (
-                  <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center bg-slate-50">
+                  <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center bg-slate-50">
                     <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
@@ -824,6 +1458,46 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                 </div>
               </div>
 
+              {/* Teacher Weekly Class Schedule Timetable Preview (When poster layout & teacher mode) */}
+              {posterLayout === 'poster' && mode === 'teacher' && teacherAllSchedules.length > 0 && (
+                <div className="text-left border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                  <div className="bg-slate-900 text-white px-3 py-1.5 text-[11px] font-bold flex items-center justify-between">
+                    <span>📅 {isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍' : 'Weekly Teaching Timetable'}</span>
+                    <span className="text-[10px] text-indigo-300 font-mono">
+                      {teacherAllSchedules.length} Classes
+                    </span>
+                  </div>
+                  <div className="max-h-36 overflow-y-auto">
+                    <table className="w-full text-left text-[10px]">
+                      <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
+                        <tr>
+                          <th className="p-1.5">{isKhmer ? 'ថ្ងៃ' : 'Day'}</th>
+                          <th className="p-1.5 text-center">{isKhmer ? 'ម៉ោង' : 'Time'}</th>
+                          <th className="p-1.5">{isKhmer ? 'មុខវិជ្ជា' : 'Subject'}</th>
+                          <th className="p-1.5 text-center">{isKhmer ? 'បន្ទប់' : 'Room'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {teacherAllSchedules.map((s, idx) => {
+                          const dIdx = s.dayOfWeek ?? 1;
+                          const dayLabel = isKhmer ? DAY_NAMES_KH[dIdx] : DAY_NAMES_EN[dIdx];
+                          return (
+                            <tr key={s.id || idx} className="hover:bg-slate-50">
+                              <td className="p-1.5 font-bold text-slate-800">{dayLabel}</td>
+                              <td className="p-1.5 text-center font-mono text-slate-600">{s.startTime}-{s.endTime}</td>
+                              <td className="p-1.5 font-medium text-slate-900 truncate max-w-[120px]">
+                                {s.subject} <span className="text-[9px] text-slate-400">({s.gradeClass})</span>
+                              </td>
+                              <td className="p-1.5 text-center font-bold text-emerald-700">{s.room}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* Instructions Footer (in Khmer & English) */}
               <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600 leading-snug space-y-1">
                 <div className="flex items-center justify-center gap-1.5 font-bold text-indigo-900">
@@ -843,21 +1517,32 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
 
             </div>
 
-            {/* Quick Actions Row */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1 w-full">
+            {/* Quick Actions Row (Hidden in Print) */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1 w-full print:hidden">
               <button
                 type="button"
-                onClick={handlePrint}
-                className="flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all shadow-xs"
+                onClick={() => handlePrint('poster')}
+                className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 active:scale-95 cursor-pointer"
+                title="Print Full A4 Door Poster with Timetable"
+              >
+                <Printer className="w-4 h-4 text-indigo-200" />
+                <span>{isKhmer ? 'បោះពុម្ពផ្ទាំងបិទទ្វារ (A4)' : 'Print Door Sign (A4)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePrint('badge')}
+                className="flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-all shadow-xs active:scale-95 cursor-pointer"
+                title="Print Teacher Pocket ID Badge"
               >
                 <Printer className="w-4 h-4 text-slate-300" />
-                <span>{isKhmer ? 'បោះពុម្ពបិទលើទ្វារ' : 'Print Door Sign'}</span>
+                <span>{isKhmer ? 'បោះពុម្ពកាតគ្រូ (Badge)' : 'Print ID Badge'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleDownloadPng}
-                className="flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold text-xs transition-all"
+                className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold text-xs transition-all cursor-pointer"
               >
                 <Download className="w-4 h-4 text-indigo-600" />
                 <span>PNG</span>
@@ -866,7 +1551,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
               <button
                 type="button"
                 onClick={handleDownloadSvg}
-                className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs transition-all"
+                className="flex items-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs transition-all cursor-pointer"
               >
                 <Download className="w-4 h-4 text-slate-600" />
                 <span>SVG</span>
@@ -875,7 +1560,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-xs transition-all"
+                className="flex items-center gap-1.5 py-2.5 px-3.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-xs transition-all cursor-pointer"
               >
                 {isCopied ? (
                   <>
@@ -885,7 +1570,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                 ) : (
                   <>
                     <Copy className="w-4 h-4 text-slate-500" />
-                    <span>{isKhmer ? 'ចម្លង Link' : 'Copy Link'}</span>
+                    <span>{isKhmer ? 'Link' : 'Copy Link'}</span>
                   </>
                 )}
               </button>

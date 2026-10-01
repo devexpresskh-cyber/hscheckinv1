@@ -1931,6 +1931,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                       </span>
                       {!isTeacher && (
                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedScheduleForQR(sub);
+                              setSelectedTeacherForQR(null);
+                              setIsQRCodeModalOpen(true);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            title={isKhmer ? 'កូដ QR សម្រាប់បោះពុម្ព' : 'Print Subject Schedule QR'}
+                          >
+                            <QrCode className="w-3.5 h-3.5 text-indigo-600" />
+                          </button>
                           {hasPermission('schedules.edit') && (
                             <button
                               onClick={() => handleOpenEditSubject(sub)}
