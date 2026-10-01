@@ -695,14 +695,14 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 max-w-full min-w-0">
       {/* 1. Group By Period Table View */}
       {groupMode === 'period' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-full min-w-0">
           {periodGroups.map(group => (
             <div
               key={group.periodNumber}
-              className={`bg-white rounded-2xl sm:rounded-3xl border shadow-xs overflow-hidden transition-all ${
+              className={`bg-white rounded-2xl sm:rounded-3xl border shadow-xs overflow-hidden transition-all max-w-full min-w-0 ${
                 group.isCurrentActive
                   ? 'border-emerald-300 ring-2 ring-emerald-500/20 shadow-md'
                   : 'border-slate-200'
@@ -776,8 +776,8 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
               </div>
 
               {/* Data Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto max-w-full">
+                <table className="w-full text-left border-collapse min-w-[650px]">
                   {renderTableHeader(true, false)}
                   <tbody>
                     {group.classes.map((sub, idx) => renderRow(sub, idx, true, false))}
@@ -791,11 +791,11 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
 
       {/* 2. Group By Teacher Table View */}
       {groupMode === 'teacher' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-full min-w-0">
           {teacherGroups.map(group => (
             <div
               key={group.teacherId}
-              className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs overflow-hidden"
+              className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs overflow-hidden max-w-full min-w-0"
             >
               {/* Teacher Header Row */}
               <div className="p-3.5 sm:p-4 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
@@ -831,8 +831,8 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
               </div>
 
               {/* Data Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto max-w-full">
+                <table className="w-full text-left border-collapse min-w-[650px]">
                   {renderTableHeader(false, true)}
                   <tbody>
                     {group.classes.map((sub, idx) => renderRow(sub, idx, false, true))}
@@ -846,7 +846,7 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
 
       {/* 3. Flat Unified Table View */}
       {groupMode === 'flat' && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs overflow-hidden max-w-full min-w-0">
           <div className="p-3.5 sm:p-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
@@ -859,8 +859,8 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto max-w-full">
+            <table className="w-full text-left border-collapse min-w-[650px]">
               {renderTableHeader(true, true)}
               <tbody>
                 {flatSortedClasses.map((sub, idx) => renderRow(sub, idx, true, true))}

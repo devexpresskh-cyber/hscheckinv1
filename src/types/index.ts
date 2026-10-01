@@ -258,6 +258,8 @@ export interface AttendanceRecord {
   scheduledEnd: string;
   checkInTime?: string; // '07:42'
   checkOutTime?: string; // '17:05'
+  isAutoCheckedOut?: boolean;
+  checkOutMethod?: 'QR_SCAN' | 'AUTO_SYSTEM' | 'MANUAL' | string;
   status: AttendanceStatus;
   lateMinutes: number;
   earlyLeaveMinutes: number;
@@ -416,6 +418,11 @@ export interface SystemSettings {
   requirePinForKiosk?: boolean; // Restrict terminal check-in with teacher personal PIN
   allowSwitchStaffInKiosk?: boolean; // Whether staff dropdown is open or locked
   requireBarcodeScanOnly?: boolean; // Strictly require physical ID barcode scan
+  enableAutoCheckOut?: boolean; // Auto checkout for missing checkout schedule
+  autoCheckOutPolicy?: 'scheduled_end' | 'scheduled_end_buffer' | 'end_of_day'; // Auto checkout time policy
+  autoCheckOutBufferMinutes?: number; // Grace buffer after scheduled end
+  autoCheckOutDailyTime?: string; // Daily time if policy is end_of_day (e.g. '17:30')
+  preventDuplicateScanMinutes?: number; // Cooldown to prevent duplicate scan
 }
 
 export interface OfflineSyncItem {

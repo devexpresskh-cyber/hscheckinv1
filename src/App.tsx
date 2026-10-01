@@ -245,8 +245,8 @@ const MainLayout: React.FC = () => {
         />
 
         {/* Main Content Viewport: min-w-0 ensures no horizontal overflow, w-full for full-width layout */}
-        <main className="flex-1 min-w-0 h-full overflow-y-auto p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block">
-          <div className="w-full">
+        <main className="flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block">
+          <div className="w-full max-w-full min-w-0">
             {/* Real-time Schedule Alert & Countdown Widget */}
             <TeacherScheduleAlertBanner onOpenCheckIn={() => setIsCheckInModalOpen(true)} />
             {renderContent()}

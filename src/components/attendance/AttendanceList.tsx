@@ -29,7 +29,8 @@ import {
   BookOpen,
   GraduationCap,
   Users2,
-  Sparkles
+  Sparkles,
+  Zap
 } from 'lucide-react';
 
 // Split E/L badge icon matching the uploaded screenshot
@@ -542,15 +543,38 @@ export const AttendanceList: React.FC = () => {
     showToast('Exported daily attendance report', 'info');
   };
 
+  const missingCheckoutsCount = useMemo(() => {
+    return attendanceList.filter(r => Boolean(r.checkInTime) && !r.checkOutTime).length;
+  }, [attendanceList]);
+
+  const handleRunAutoCheckOut = () => {
+    const res = StorageService.processAutoCheckOut();
+    if (res.processedCount > 0) {
+      showToast(
+        isKhmer
+          ? `បានកត់ត្រាម៉ោងចេញស្វ័យប្រវត្តិជោគជ័យ ${res.processedCount} កំណត់ត្រា!`
+          : `Auto check-out engine resolved ${res.processedCount} missing check-out schedule(s)!`,
+        'success'
+      );
+    } else {
+      showToast(
+        isKhmer
+          ? 'ពុំមានកាលវិភាគដែលហួសពេលខកខានស្កេនចេញនៅពេលនេះទេ'
+          : 'No overdue missing check-out schedules found at this moment.',
+        'info'
+      );
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full min-w-0">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-w-full">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
               {currentUser.role === 'employee'
                 ? (isKhmer ? 'ប្រវត្តិវត្តមានបុគ្គលិក (Staff Check-in History)' : 'Staff Check-in History')
                 : 'Attendance Records & Corrections'}
@@ -564,11 +588,11 @@ export const AttendanceList: React.FC = () => {
         </div>
 
         {/* Tab & Action Buttons */}
-        <div className="flex items-center gap-2.5">
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 max-w-full">
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 max-w-full overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab('daily')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0 ${
                 activeTab === 'daily' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -576,25 +600,25 @@ export const AttendanceList: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('period_grid')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'period_grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
               <span>{isKhmer ? 'វត្តមានតាមម៉ោង' : 'Period Header'}</span>
             </button>
             <button
               onClick={() => setActiveTab('monthly_sheet')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'monthly_sheet' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+              <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>{isKhmer ? 'តារាង ៣១ ថ្ងៃ' : '31 Days Records'}</span>
             </button>
             <button
               onClick={() => setActiveTab('corrections')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 ${
                 activeTab === 'corrections' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -607,45 +631,64 @@ export const AttendanceList: React.FC = () => {
             </button>
           </div>
 
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-
-          {/* Admin Clear All Attendance Button */}
-          {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setIsClearAllModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-xs font-bold border border-rose-200 transition-colors shadow-xs cursor-pointer active:scale-95"
-              title={isKhmer ? 'សម្អាតវត្តមានទាំងអស់ចេញពីប្រព័ន្ធ' : 'Clear all attendance records from database'}
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shrink-0 cursor-pointer"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-              <span>{isKhmer ? 'សម្អាតវត្តមានទាំងអស់' : 'Clear All Attendance'}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export</span>
             </button>
-          )}
 
-          <button
-            onClick={() => {
-              setSelectedRecordForCorrection(null);
-              setIsCorrectionModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Request Correction</span>
-          </button>
+            {/* Admin Auto Check-Out Button */}
+            {isAdmin && (
+              <button
+                onClick={handleRunAutoCheckOut}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200 transition-colors shadow-xs cursor-pointer active:scale-95 shrink-0"
+                title={isKhmer ? 'ដំណើរការកត់ត្រាម៉ោងចេញស្វ័យប្រវត្តសម្រាប់អ្នកដែលខកខាន' : 'Run Auto Check-Out for Missing Schedules'}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-600" />
+                <span>{isKhmer ? 'កត់ត្រាចេញស្វ័យប្រវត្តិ' : 'Auto Check-Out Engine'}</span>
+                {missingCheckoutsCount > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">
+                    {missingCheckoutsCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Admin Clear All Attendance Button */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsClearAllModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-xs font-bold border border-rose-200 transition-colors shadow-xs cursor-pointer active:scale-95 shrink-0"
+                title={isKhmer ? 'សម្អាតវត្តមានទាំងអស់ចេញពីប្រព័ន្ធ' : 'Clear all attendance records from database'}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>{isKhmer ? 'សម្អាតវត្តមានទាំងអស់' : 'Clear All Attendance'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setSelectedRecordForCorrection(null);
+                setIsCorrectionModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 shrink-0 cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Request Correction</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Teacher Owned Attendance Security Banner */}
       {(currentUser.role === 'teacher' || currentUser.role === 'employee') && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 sm:p-4 bg-indigo-50/90 rounded-2xl border border-indigo-200 text-indigo-950 text-xs">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
-            <div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3.5 sm:p-4 bg-indigo-50/90 rounded-2xl border border-indigo-200 text-indigo-950 text-xs max-w-full min-w-0">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+            <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="min-w-0 flex-1">
               <span className="font-bold">
                 {isKhmer ? 'កំណត់ត្រាវត្តមានផ្ទាល់ខ្លួន៖ ' : 'Owned Attendance History: '}
               </span>
@@ -664,10 +707,10 @@ export const AttendanceList: React.FC = () => {
 
       {/* Tab 1: Daily Attendance Roster */}
       {activeTab === 'daily' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-full min-w-0">
           
           {/* Toolbar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 max-w-full min-w-0">
             
             {/* Search */}
             <div className="relative flex-1 max-w-xs">

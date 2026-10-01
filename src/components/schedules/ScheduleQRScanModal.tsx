@@ -18,7 +18,10 @@ import {
   Building2,
   Calendar,
   Check,
-  Lock
+  Lock,
+  LogOut,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ScheduleQrService, DecodedScheduleResult } from '../../services/scheduleQrService.ts';
@@ -104,6 +107,83 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
     }
   }, [availablePeriodsToday]);
 
+  // Manual override to allow immediate checkout during duplicate detection
+  const [forceCheckOutMode, setForceCheckOutMode] = useState<boolean>(false);
+
+  // Duplicate Scan & Smart Check-Out detection
+  const duplicateScanInfo = useMemo(() => {
+    if (!selectedTeacher || !decodedData) return null;
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')}`;
+    const curMinutes = now.getHours() * 60 + now.getMinutes();
+    const activeTarget = selectedPeriod || decodedData.subjectSchedule;
+    const targetPeriodId = activeTarget?.id;
+
+    const allAttendance = StorageService.getAttendance();
+
+    // Look for attendance record today for this teacher matching this session
+    const existing = allAttendance.find(r => {
+      if (r.personId !== selectedTeacher.id || r.date !== todayStr) return false;
+      if (targetPeriodId) {
+        return r.subjectScheduleId === targetPeriodId || r.scheduleId === targetPeriodId;
+      }
+      return r.scheduleId === decodedData.scheduleId;
+    });
+
+    if (!existing) return null;
+
+    // 1. Both Check-In and Check-Out completed!
+    if (existing.checkInTime && existing.checkOutTime) {
+      return {
+        type: 'ALREADY_COMPLETED' as const,
+        record: existing,
+        title: isKhmer ? 'វត្តមានបានកត់ត្រាពេញលេញរួចរាល់' : 'Attendance Already Completed',
+        message: isKhmer
+          ? `វត្តមានសម្រាប់ម៉ោងបង្រៀននេះត្រូវបានកត់ត្រារួចរាល់ហើយ (ចូល: ${existing.checkInTime} • ចេញ: ${existing.checkOutTime})។ ការស្កេនត្រួតគ្នាត្រូវបានទប់ស្កាត់។`
+          : `Attendance for this class period has already been marked and completed today (In: ${existing.checkInTime} • Out: ${existing.checkOutTime}). Duplicate scans are prevented.`
+      };
+    }
+
+    // 2. Already checked in, no check-out yet
+    if (existing.checkInTime && !existing.checkOutTime) {
+      const [inH, inM] = existing.checkInTime.split(':').map(Number);
+      const inMinutes = (isNaN(inH) ? 0 : inH) * 60 + (isNaN(inM) ? 0 : inM);
+      const diffMinutes = Math.max(0, curMinutes - inMinutes);
+
+      const sysSettings = StorageService.getSystemSettings();
+      const duplicateCooldown = sysSettings.preventDuplicateScanMinutes ?? 10;
+
+      // Accidental duplicate scan within cooldown window
+      if (diffMinutes < duplicateCooldown && !forceCheckOutMode) {
+        return {
+          type: 'RECENT_DUPLICATE' as const,
+          record: existing,
+          diffMinutes,
+          cooldown: duplicateCooldown,
+          title: isKhmer ? 'បានស្កេនចូលរួចរាល់ហើយ' : 'Already Checked In Recently',
+          message: isKhmer
+            ? `លោកគ្រូ/អ្នកគ្រូបានស្កេនចូលរួចហើយនៅម៉ោង ${existing.checkInTime} (${diffMinutes} នាទីមុន)។ ប្រព័ន្ធទប់ស្កាត់ការស្កេនត្រួតគ្នា។`
+            : `You have already checked in at ${existing.checkInTime} (${diffMinutes}m ago). Duplicate scan is blocked.`
+        };
+      }
+
+      // Ready for Check-Out!
+      return {
+        type: 'READY_TO_CHECKOUT' as const,
+        record: existing,
+        title: isKhmer ? 'កត់ត្រាម៉ោងចេញ (Class Check-Out)' : 'Class Session Check-Out',
+        message: isKhmer
+          ? `លោកគ្រូ/អ្នកគ្រូបានចុះវត្តមានចូលនៅម៉ោង ${existing.checkInTime}។ សូមវាយលេខកូដ PIN ៤ ខ្ទង់ដើម្បីកត់ត្រាម៉ោងចេញពីថ្នាក់ (Check-Out)។`
+          : `You checked in at ${existing.checkInTime}. Enter your 4-digit PIN to Check-Out now.`
+      };
+    }
+
+    return null;
+  }, [selectedTeacher, selectedPeriod, decodedData, isKhmer, forceCheckOutMode]);
+
   // PIN verification state
   const [pinDigits, setPinDigits] = useState<string>('');
   const [showPin, setShowPin] = useState(false);
@@ -122,6 +202,7 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
       setDecodedData(null);
       setSelectedTeacher(null);
       setSelectedPeriod(null);
+      setForceCheckOutMode(false);
       setPinDigits('');
       setPinError(null);
       setCompletedRecord(null);
@@ -416,6 +497,118 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
       const lateDiff = nowMinutes - schedMinutes;
       const isLate = lateDiff > graceMinutes;
       const lateMinutes = isLate ? Math.max(0, lateDiff) : 0;
+
+      // 1. Check if this is a Check-Out action for an already checked-in session
+      if (
+        duplicateScanInfo?.type === 'READY_TO_CHECKOUT' ||
+        (duplicateScanInfo?.type === 'RECENT_DUPLICATE' && forceCheckOutMode)
+      ) {
+        const existingRecord = duplicateScanInfo.record;
+
+        const [schedEndH, schedEndM] = (existingRecord.scheduledEnd || '09:00').split(':').map(Number);
+        const schedEndMinutes = (isNaN(schedEndH) ? 9 : schedEndH) * 60 + (isNaN(schedEndM) ? 0 : schedEndM);
+        const [outH, outM] = timeStr.split(':').map(Number);
+        const outMinutes = (isNaN(outH) ? 0 : outH) * 60 + (isNaN(outM) ? 0 : outM);
+
+        const earlyLeaveDiff = schedEndMinutes - outMinutes;
+        const earlyLeaveMinutes = earlyLeaveDiff > 10 ? earlyLeaveDiff : 0;
+        const overtimeDiff = outMinutes - schedEndMinutes;
+        const overtimeMinutes = overtimeDiff > 15 ? overtimeDiff : 0;
+
+        const updatedRecord: AttendanceRecord = {
+          ...existingRecord,
+          checkOutTime: timeStr,
+          checkOutMethod: 'QR_SCAN',
+          earlyLeaveMinutes,
+          overtimeMinutes,
+          updatedAt: new Date().toISOString()
+        };
+
+        StorageService.updateAttendanceRecord(existingRecord.id, updatedRecord);
+
+        // Audit Log
+        StorageService.addAuditLog({
+          userId: result.user?.id || teacher.id,
+          userName: teacher.fullName,
+          userRole: 'teacher',
+          action: 'ATTENDANCE_CHECKOUT_QR',
+          target: existingRecord.id,
+          details: `Faculty checked out via Schedule QR (${existingRecord.subject || 'Class'}, PIN verified)`,
+          ipAddress: '127.0.0.1'
+        });
+
+        // Telegram notification
+        TelegramService.sendCheckInAlert({
+          name: teacher.fullName,
+          khmerName: teacher.khmerName,
+          personType: 'teacher',
+          department: teacher.department || 'Academic',
+          time: `Out: ${timeStr} (In: ${existingRecord.checkInTime})`,
+          scheduled: `${existingRecord.scheduledStart} - ${existingRecord.scheduledEnd}`,
+          status: updatedRecord.status,
+          lateMinutes: existingRecord.lateMinutes,
+          subjectInfo: `${existingRecord.subject || 'Class'} (Checked Out)`
+        });
+
+        try {
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: { y: 0.6 }
+          });
+        } catch {}
+
+        setCompletedRecord(updatedRecord);
+        setStep('success');
+        showToast(
+          isKhmer
+            ? `បានកត់ត្រាម៉ោងចេញដោយជោគជ័យសម្រាប់ ${teacher.fullName} (${timeStr})`
+            : `Check-out recorded successfully for ${teacher.fullName} (${timeStr})`,
+          'success'
+        );
+        onSuccess?.(updatedRecord);
+        return;
+      }
+
+      // 2. Prevent duplicate scan if already completed today
+      if (duplicateScanInfo?.type === 'ALREADY_COMPLETED') {
+        showToast(duplicateScanInfo.message, 'warning');
+        setPinError(duplicateScanInfo.message);
+        setIsVerifying(false);
+        setPinDigits('');
+        return;
+      }
+
+      // 3. Prevent duplicate scan if scanned too recently
+      if (duplicateScanInfo?.type === 'RECENT_DUPLICATE' && !forceCheckOutMode) {
+        showToast(duplicateScanInfo.message, 'warning');
+        setPinError(duplicateScanInfo.message);
+        setIsVerifying(false);
+        setPinDigits('');
+        return;
+      }
+
+      // 4. Double check fresh records in storage to eliminate rapid double-tap race conditions
+      const freshAttendance = StorageService.getAttendance();
+      const duplicateFresh = freshAttendance.find(
+        r =>
+          r.personId === teacher.id &&
+          r.date === todayStr &&
+          ((activeTarget?.id && r.subjectScheduleId === activeTarget.id) ||
+            r.scheduleId === (activeTarget?.id || decodedData?.scheduleId))
+      );
+      if (duplicateFresh) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនត្រួតគ្នាត្រូវបានទប់ស្កាត់៖ វត្តមានត្រូវបានកត់ត្រារួចហើយនៅម៉ោង ${duplicateFresh.checkInTime}`
+            : `Duplicate scan prevented: Attendance was already recorded at ${duplicateFresh.checkInTime}`,
+          'warning'
+        );
+        setPinError(isKhmer ? 'ការស្កេនត្រួតគ្នាត្រូវបានទប់ស្កាត់' : 'Duplicate scan prevented');
+        setIsVerifying(false);
+        setPinDigits('');
+        return;
+      }
 
       const newRecord: AttendanceRecord = {
         id: `att-qr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -919,8 +1112,96 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
                 </div>
               </div>
 
-              {/* 4-Digit Security PIN Section - Only available when assigned teacher is locked */}
-              {selectedTeacher && (
+              {/* Duplicate Scan Prevention & Smart Check-Out Status Banner */}
+              {duplicateScanInfo && (
+                <div
+                  className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                    duplicateScanInfo.type === 'ALREADY_COMPLETED'
+                      ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+                      : duplicateScanInfo.type === 'RECENT_DUPLICATE'
+                      ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+                      : 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold">
+                    <div className="flex items-center gap-1.5">
+                      {duplicateScanInfo.type === 'ALREADY_COMPLETED' ? (
+                        <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                      ) : duplicateScanInfo.type === 'RECENT_DUPLICATE' ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                      <span className="text-sm font-black">{duplicateScanInfo.title}</span>
+                    </div>
+
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        duplicateScanInfo.type === 'ALREADY_COMPLETED'
+                          ? 'bg-rose-200/80 text-rose-900'
+                          : duplicateScanInfo.type === 'RECENT_DUPLICATE'
+                          ? 'bg-amber-200/80 text-amber-900'
+                          : 'bg-emerald-200/80 text-emerald-900'
+                      }`}
+                    >
+                      {duplicateScanInfo.type === 'ALREADY_COMPLETED'
+                        ? (isKhmer ? 'ទប់ស្កាត់ការស្កេនជាន់' : 'Duplicate Blocked')
+                        : duplicateScanInfo.type === 'RECENT_DUPLICATE'
+                        ? (isKhmer ? 'កំពុងស្ថិតក្នុង Cooldown' : 'Cooldown Active')
+                        : (isKhmer ? 'ត្រៀមស្កេនចេញ' : 'Check-Out Ready')}
+                    </span>
+                  </div>
+
+                  <p className="text-[11.5px] leading-relaxed text-slate-700">
+                    {duplicateScanInfo.message}
+                  </p>
+
+                  {/* If recent duplicate, allow intentional check-out override */}
+                  {duplicateScanInfo.type === 'RECENT_DUPLICATE' && !forceCheckOutMode && (
+                    <div className="pt-1 flex items-center justify-between">
+                      <span className="text-[10.5px] text-amber-800">
+                        {isKhmer ? 'ចង់កត់ត្រាម៉ោងចេញមុនម៉ោង?' : 'Want to record Check-Out instead?'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForceCheckOutMode(true);
+                          setPinError(null);
+                        }}
+                        className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        {isKhmer ? 'ប្តូរទៅស្កេនចេញ (Check-Out)' : 'Switch to Check-Out'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* If already completed, show option to scan another class or close */}
+                  {duplicateScanInfo.type === 'ALREADY_COMPLETED' && (
+                    <div className="pt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep('scan');
+                          if (scanMode === 'camera') startCamera();
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        {isKhmer ? 'ស្កេនម៉ោងបង្រៀនផ្សេងទៀត' : 'Scan Different Class Period'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleModalClose}
+                        className="px-3.5 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-800 hover:bg-rose-50 font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        {isKhmer ? 'បិទផ្ទាំងនេះ' : 'Close Modal'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 4-Digit Security PIN Section - Only available when assigned teacher is locked and not blocked by completed duplicate */}
+              {selectedTeacher && duplicateScanInfo?.type !== 'ALREADY_COMPLETED' && (
                 <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white space-y-3 shadow-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">

@@ -295,6 +295,9 @@ function initFirestoreSync() {
     cache.attendance = records;
     setStored(STORAGE_KEYS.ATTENDANCE, cache.attendance);
     notifyListeners();
+    setTimeout(() => {
+      StorageService.processAutoCheckOut();
+    }, 1200);
   }, err => handleFirestoreError(err, OperationType.GET, 'attendance'));
 
   // 9. Attendance Corrections
@@ -1160,6 +1163,101 @@ export const StorageService = {
         handleFirestoreError(err, OperationType.WRITE, `attendance/${id}`)
       );
     }
+  },
+
+  /**
+   * Auto Check-Out Engine for Missing Check-Outs
+   * Identifies attendance records with check-in but missing check-out whose scheduled
+   * end time (or grace buffer) has elapsed, and automatically closes them according to system policy.
+   */
+  processAutoCheckOut(targetDate?: string): { processedCount: number; updatedRecords: AttendanceRecord[] } {
+    const settings = this.getSystemSettings();
+    if (settings.enableAutoCheckOut === false) {
+      return { processedCount: 0, updatedRecords: [] };
+    }
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const curMinutes = now.getHours() * 60 + now.getMinutes();
+    const policy = settings.autoCheckOutPolicy || 'scheduled_end';
+    const bufferMinutes = Number(settings.autoCheckOutBufferMinutes ?? 15);
+
+    const records = cache.attendance;
+    const updatedRecords: AttendanceRecord[] = [];
+
+    records.forEach(record => {
+      // Must have check-in and no check-out
+      if (!record.checkInTime || record.checkOutTime) return;
+
+      // Only check records on or before today
+      if (record.date > todayStr) return;
+
+      // If a specific targetDate was requested and doesn't match
+      if (targetDate && record.date !== targetDate) return;
+
+      // Determine scheduled end time in minutes
+      const [endH, endM] = (record.scheduledEnd || '17:00').split(':').map(Number);
+      const scheduledEndMinutes = (isNaN(endH) ? 17 : endH) * 60 + (isNaN(endM) ? 0 : endM);
+
+      // If record is from a past date, it's overdue
+      // If record is today, check if current clock time is past scheduled end (+ buffer if policy)
+      const isPastDate = record.date < todayStr;
+      const isPastTimeToday = curMinutes >= (scheduledEndMinutes + (policy === 'scheduled_end_buffer' ? bufferMinutes : 0));
+
+      if (isPastDate || isPastTimeToday) {
+        // Calculate auto check-out time
+        let autoOutTime = record.scheduledEnd || '17:00';
+        if (policy === 'scheduled_end_buffer') {
+          const totalBufferEnd = scheduledEndMinutes + bufferMinutes;
+          const bh = Math.floor(totalBufferEnd / 60) % 24;
+          const bm = totalBufferEnd % 60;
+          autoOutTime = `${String(bh).padStart(2, '0')}:${String(bm).padStart(2, '0')}`;
+        } else if (policy === 'end_of_day') {
+          autoOutTime = settings.autoCheckOutDailyTime || '17:30';
+        }
+
+        const updated: AttendanceRecord = {
+          ...record,
+          checkOutTime: autoOutTime,
+          isAutoCheckedOut: true,
+          checkOutMethod: 'AUTO_SYSTEM',
+          status: record.status === 'Missing Check-out'
+            ? (record.lateMinutes > 0 ? 'Late' : 'Present')
+            : record.status,
+          updatedAt: new Date().toISOString()
+        };
+
+        updatedRecords.push(updated);
+      }
+    });
+
+    if (updatedRecords.length > 0) {
+      const updatedMap = new Map(updatedRecords.map(r => [r.id, r]));
+      const newList = cache.attendance.map(r => updatedMap.get(r.id) || r);
+      cache.attendance = newList;
+      setStored(STORAGE_KEYS.ATTENDANCE, newList);
+      notifyListeners();
+
+      // Persist updates to Firestore
+      updatedRecords.forEach(r => {
+        setDoc(doc(db, 'attendance', r.id), sanitizeForFirestore(r), { merge: true }).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `attendance/${r.id}`)
+        );
+      });
+
+      // Audit Log
+      this.addAuditLog({
+        userId: 'system',
+        userName: 'Auto Check-Out Engine',
+        userRole: 'super_admin',
+        action: 'ATTENDANCE_AUTO_CHECKOUT',
+        target: `${updatedRecords.length} records`,
+        details: `System automatically completed missing check-out for ${updatedRecords.length} record(s) using policy: ${policy}`,
+        ipAddress: '127.0.0.1'
+      });
+    }
+
+    return { processedCount: updatedRecords.length, updatedRecords };
   },
   async clearAllAttendance(): Promise<number> {
     const initialCount = cache.attendance.length;

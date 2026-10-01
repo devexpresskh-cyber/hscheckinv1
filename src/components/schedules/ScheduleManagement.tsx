@@ -1142,14 +1142,14 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full min-w-0">
       
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden max-w-full">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <CalendarDays className="w-6 h-6 text-indigo-600 shrink-0" />
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
               {isKhmer ? 'កាលវិភាគការងារ និងវេនបង្រៀន' : 'Work Schedules & Shift Calendar'}
             </h2>
           </div>
@@ -1160,60 +1160,60 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 max-w-full">
           {/* View Toggle: Daily > Weekly > Monthly */}
-          <div className="bg-slate-100 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-200">
+          <div className="bg-slate-100 p-1 sm:p-1.5 rounded-2xl flex flex-wrap items-center gap-1 sm:gap-1.5 border border-slate-200 max-w-full">
             <button
               onClick={() => setViewMode('daily_schedule')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'daily_schedule' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <Clock className="w-4 h-4" />
+              <Clock className="w-4 h-4 shrink-0" />
               <span>{isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ (Daily)' : 'Daily Schedule'}</span>
             </button>
             <button
               onClick={() => setViewMode('weekly_timetable')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'weekly_timetable' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <Calendar className="w-4 h-4" />
+              <Calendar className="w-4 h-4 shrink-0" />
               <span>{isKhmer ? 'កាលវិភាគពេញមួយសប្តាហ៍ (Weekly)' : 'Weekly Timetable'}</span>
             </button>
             <button
               onClick={() => setViewMode('monthly_calendar')}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'monthly_calendar' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <CalendarDays className="w-4 h-4" />
+              <CalendarDays className="w-4 h-4 shrink-0" />
               <span>{isKhmer ? 'កាលវិភាគប្រចាំខែ (Monthly)' : 'Monthly Calendar'}</span>
             </button>
             <button
               onClick={() => setViewMode('subject_schedules')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'subject_schedules' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <BookOpen className="w-4 h-4" />
+              <BookOpen className="w-4 h-4 shrink-0" />
               <span>{isKhmer ? 'កាតមុខវិជ្ជា' : 'Subject Cards'}</span>
             </button>
             {!isTeacher && (
               <button
                 onClick={() => setViewMode('cards')}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'cards' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
                 }`}
               >
-                <Building className="w-4 h-4" />
+                <Building className="w-4 h-4 shrink-0" />
                 <span>{isKhmer ? 'វេនទូទៅ' : 'General Shifts'}</span>
               </button>
             )}
           </div>
 
           {hasPermission('schedules.create') && !isTeacher && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 max-w-full">
               <button
                 onClick={() => setIsAcademicDatesModalOpen(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
@@ -1280,10 +1280,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           )}
 
           {isTeacher && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 max-w-full">
               <button
                 onClick={() => setIsQRScanModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer shrink-0"
                 title="Scan Classroom QR Code with PIN confirmation"
               >
                 <Camera className="w-3.5 h-3.5 shrink-0" />
@@ -1296,20 +1296,20 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   setSelectedTeacherForQR(activeTeacher || null);
                   setIsQRCodeModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
                 title="View & Download My Smart QR Card for all classes"
               >
                 <QrCode className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
                 <span>{isKhmer ? 'កូដ QR របស់ខ្ញុំ' : 'My QR Card'}</span>
               </button>
 
-              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl text-indigo-900 shadow-2xs">
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl text-indigo-900 shadow-2xs max-w-full min-w-0">
                 <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
-                <div className="text-left">
-                  <span className="text-xs font-black block leading-tight">
+                <div className="text-left min-w-0">
+                  <span className="text-xs font-black block leading-tight truncate max-w-[130px] sm:max-w-xs">
                     {activeTeacher?.fullName || currentUser.fullName}
                   </span>
-                  <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block">
+                  <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block truncate">
                     {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned Schedule Only'}
                   </span>
                 </div>
@@ -1321,28 +1321,28 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
       {/* Teacher Owned Schedule Notification Banner */}
       {isTeacher && (
-        <div className="bg-gradient-to-r from-indigo-50 via-sky-50 to-indigo-50 border border-indigo-200 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-950 shadow-xs print:hidden">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-600/30 shrink-0">
+        <div className="bg-gradient-to-r from-indigo-50 via-sky-50 to-indigo-50 border border-indigo-200 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-950 shadow-xs print:hidden max-w-full min-w-0">
+          <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-600/30 shrink-0 mt-0.5 sm:mt-0">
               <GraduationCap className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-black text-sm text-indigo-900">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-black text-sm text-indigo-900 truncate">
                   {isKhmer ? 'កាលវិភាគបង្រៀនផ្ទាល់ខ្លួន' : 'Personal Teacher Timetable & Shift'}
                 </h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white shrink-0">
                   {activeTeacher?.teacherId || 'TCH'}
                 </span>
               </div>
-              <p className="text-xs text-indigo-700 mt-0.5">
+              <p className="text-xs text-indigo-700 mt-0.5 line-clamp-2 sm:line-clamp-none">
                 {isKhmer
                   ? 'ប្រព័ន្ធត្រូវបានចាក់សោរបង្ហាញតែកាលវិភាគបង្រៀន និងវេនការងារផ្ទាល់ខ្លួនរបស់អ្នកប៉ុណ្ណោះ។'
                   : 'Locked to your owned teaching roster and assigned duty schedule. Proxy viewing of other faculty schedules is disabled.'}
               </p>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-3.5 py-1.5 rounded-xl shrink-0 self-start sm:self-auto">
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-3 py-1.5 rounded-xl shrink-0 self-start sm:self-auto">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             <span>{isKhmer ? 'សុវត្ថិភាពទិន្នន័យផ្ទាល់ខ្លួន' : 'Owned Schedule Enforced'}</span>
           </span>
@@ -1351,10 +1351,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
       {/* Daily Schedule View (Default for Teacher Account) */}
       {viewMode === 'daily_schedule' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-full min-w-0">
           
           {/* Day Selector Navigation Pills & Toolbar */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5">
+          <div className="bg-white rounded-3xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-3.5 max-w-full overflow-hidden">
             {/* Top Toolbar: Teacher Filter, Search, Layout & Group Switchers, Sort */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               {/* Left Controls: Teacher Filter & Search */}

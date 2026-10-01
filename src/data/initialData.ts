@@ -659,5 +659,10 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   allowSelfCorrection: true,
   requirePinForKiosk: true,
   allowSwitchStaffInKiosk: false,
-  requireBarcodeScanOnly: false
+  requireBarcodeScanOnly: false,
+  enableAutoCheckOut: true,
+  autoCheckOutPolicy: 'scheduled_end',
+  autoCheckOutBufferMinutes: 15,
+  autoCheckOutDailyTime: '17:30',
+  preventDuplicateScanMinutes: 10
 };

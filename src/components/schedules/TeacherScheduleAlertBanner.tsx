@@ -166,19 +166,19 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
   const subjectName = isKhmer && schedule.khmerSubject ? schedule.khmerSubject : schedule.subject;
 
   return (
-    <div className="relative mb-4">
+    <div className="relative mb-4 max-w-full overflow-hidden">
       {/* Active Class Alert Banner */}
       <div
-        className={`rounded-2xl p-3 sm:p-4 border transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 ${
+        className={`rounded-2xl p-3 sm:p-4 border transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-full min-w-0 ${
           isOngoing
             ? 'bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border-amber-300 text-amber-950'
             : 'bg-gradient-to-r from-indigo-500/10 via-indigo-50 to-blue-50 border-indigo-200 text-indigo-950'
         }`}
       >
         {/* Left Info */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1 max-w-full">
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs ${
+            className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs mt-0.5 sm:mt-0 ${
               isOngoing
                 ? 'bg-gradient-to-tr from-amber-600 to-orange-500 animate-pulse'
                 : 'bg-gradient-to-tr from-indigo-600 to-blue-600'
@@ -187,8 +187,8 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
             {isOngoing ? <Clock className="w-5 h-5" /> : <Bell className="w-5 h-5 animate-bounce" />}
           </div>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="min-w-0 flex-1 max-w-full">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                   isOngoing
@@ -212,7 +212,7 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
               </span>
             </div>
 
-            <p className="text-sm font-bold text-slate-900 truncate mt-0.5">
+            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate mt-0.5">
               {subjectName} • <span className="font-semibold text-slate-700">{schedule.gradeClass}</span>
               {schedule.room && (
                 <span className="ml-2 text-xs font-normal text-slate-600 inline-flex items-center gap-1">
@@ -225,7 +225,7 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
         </div>
 
         {/* Right Action Buttons */}
-        <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 self-start md:self-center shrink-0 flex-wrap max-w-full">
           {/* Audio Chime quick toggle */}
           <button
             onClick={handleToggleSound}

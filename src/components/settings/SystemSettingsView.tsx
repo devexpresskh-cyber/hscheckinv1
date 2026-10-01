@@ -25,7 +25,11 @@ import {
   Send,
   Radio,
   ExternalLink,
-  HelpCircle
+  HelpCircle,
+  Zap,
+  Check,
+  RotateCw,
+  ShieldCheck
 } from 'lucide-react';
 
 export const SystemSettingsView: React.FC = () => {
@@ -73,7 +77,12 @@ export const SystemSettingsView: React.FC = () => {
       khmerSchoolName: settings.khmerOrgName || settings.khmerSchoolName || 'សាលាអន្តរជាតិ',
       academicYear: settings.academicYear || '2026-2027',
       academicStartDate: settings.academicStartDate || '2026-09-01',
-      academicEndDate: settings.academicEndDate || '2027-06-30'
+      academicEndDate: settings.academicEndDate || '2027-06-30',
+      enableAutoCheckOut: settings.enableAutoCheckOut !== false,
+      autoCheckOutPolicy: settings.autoCheckOutPolicy || 'scheduled_end',
+      autoCheckOutBufferMinutes: Number(settings.autoCheckOutBufferMinutes ?? 15),
+      autoCheckOutDailyTime: settings.autoCheckOutDailyTime || '17:30',
+      preventDuplicateScanMinutes: Number(settings.preventDuplicateScanMinutes ?? 10)
     };
     StorageService.saveSystemSettings(updated);
     StorageService.addAuditLog({
@@ -81,10 +90,10 @@ export const SystemSettingsView: React.FC = () => {
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Updated System Settings',
-      target: `Academic Year: ${updated.academicYear} (${updated.academicStartDate} to ${updated.academicEndDate})`,
+      target: `Academic Year: ${updated.academicYear} (AutoCheckOut: ${updated.enableAutoCheckOut ? 'Enabled' : 'Disabled'}, Policy: ${updated.autoCheckOutPolicy}, DuplicateCooldown: ${updated.preventDuplicateScanMinutes}m)`,
       ipAddress: '127.0.0.1'
     });
-    showToast('System configuration & academic session profile saved', 'success');
+    showToast('System configuration & attendance policies saved successfully', 'success');
   };
 
   const handleExportBackup = () => {
@@ -120,12 +129,45 @@ export const SystemSettingsView: React.FC = () => {
   const [isTestingPush, setIsTestingPush] = useState(false);
   const [pushTestResult, setPushTestResult] = useState<string | null>(null);
 
+  const [missingCheckoutsCount, setMissingCheckoutsCount] = useState(() => {
+    return StorageService.getAttendance().filter(r => Boolean(r.checkInTime) && !r.checkOutTime).length;
+  });
+  const [isProcessingAutoCheckOut, setIsProcessingAutoCheckOut] = useState(false);
+  const [autoCheckOutMessage, setAutoCheckOutMessage] = useState<string | null>(null);
+
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setAttendanceCount(StorageService.getAttendance().length);
+      setMissingCheckoutsCount(
+        StorageService.getAttendance().filter(r => Boolean(r.checkInTime) && !r.checkOutTime).length
+      );
     });
     return unsub;
   }, []);
+
+  const handleRunAutoCheckOut = () => {
+    setIsProcessingAutoCheckOut(true);
+    setAutoCheckOutMessage(null);
+    try {
+      const res = StorageService.processAutoCheckOut();
+      const updatedMissing = StorageService.getAttendance().filter(r => Boolean(r.checkInTime) && !r.checkOutTime).length;
+      setMissingCheckoutsCount(updatedMissing);
+      if (res.processedCount > 0) {
+        const msg = `Auto Check-Out Engine resolved ${res.processedCount} missing check-out schedule(s) successfully!`;
+        showToast(msg, 'success');
+        setAutoCheckOutMessage(msg);
+      } else {
+        const msg = 'No overdue missing check-outs detected on system at this time.';
+        showToast(msg, 'info');
+        setAutoCheckOutMessage(msg);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to process auto check-out engine', 'error');
+    } finally {
+      setIsProcessingAutoCheckOut(false);
+    }
+  };
 
   const handleRequestPushPermission = async () => {
     const res = await ScheduleAlertService.requestNotificationPermission();
@@ -558,6 +600,289 @@ export const SystemSettingsView: React.FC = () => {
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Automated Attendance Governance: Duplicate Scan Prevention & Missing Check-Out Automation */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-600" />
+                <span>Attendance Governance: Duplicate Scan Prevention & Auto Check-Out</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ការគ្រប់គ្រងស្វ័យប្រវត្ត៖ ទប់ស្កាត់ការស្កេនជាន់គ្នា និងជម្រើសកត់ត្រាម៉ោងចេញស្វ័យប្រវត្តិពេលខកខាន
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 ${
+                settings.enableAutoCheckOut !== false
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${settings.enableAutoCheckOut !== false ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <span>Auto Check-Out: {settings.enableAutoCheckOut !== false ? 'Active' : 'Disabled'}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* 1. Prevent Duplicate Scan Configuration */}
+          <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-700" />
+                  <span className="font-extrabold text-amber-950 text-xs sm:text-sm">
+                    Prevent Duplicate Scan (ទប់ស្កាត់ការស្កេនត្រួតគ្នា)
+                  </span>
+                </div>
+                <p className="text-xs text-amber-900 leading-relaxed">
+                  Blocks accidental multiple scans or rapid re-scans for the same schedule period. If a teacher attempts to scan again within the cooldown window, the system warns them that attendance was already captured, preventing inflated records.
+                </p>
+              </div>
+
+              <span className="px-2.5 py-1 rounded-xl bg-amber-200/70 text-amber-950 font-black text-[10px] shrink-0 uppercase tracking-wide">
+                Security Enforced
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
+              <div className="p-3 bg-white rounded-xl border border-amber-200">
+                <label className="block font-bold text-slate-900 mb-1">
+                  Duplicate Scan Cooldown Window (Minutes)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={settings.preventDuplicateScanMinutes ?? 10}
+                    onChange={e => setSettings({ ...settings, preventDuplicateScanMinutes: Math.max(1, Number(e.target.value)) })}
+                    className="w-24 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-900"
+                  />
+                  <span className="text-xs text-slate-600 font-medium">
+                    minutes cooldown between scans
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  Recommended: 10 minutes (prevents double-tap mistakes while allowing check-out later).
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-amber-200 flex flex-col justify-center">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
+                  Cooldown Presets
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[5, 10, 15, 30].map(mins => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, preventDuplicateScanMinutes: mins })}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        (settings.preventDuplicateScanMinutes ?? 10) === mins
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {mins} mins
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Automated Missing Check-Out Engine */}
+          <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-200 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-700" />
+                  <span className="font-extrabold text-indigo-950 text-xs sm:text-sm">
+                    Option Auto Check-Out for Missing Check-Out Schedule (ជម្រើសកត់ត្រាម៉ោងចេញស្វ័យប្រវត្ត)
+                  </span>
+                </div>
+                <p className="text-xs text-indigo-900 leading-relaxed">
+                  Automatically resolves missing check-outs when teachers checked in to teach their class but forgot or missed scanning out at the end of their period.
+                </p>
+              </div>
+
+              {/* Master Toggle */}
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={settings.enableAutoCheckOut !== false}
+                  onChange={e => setSettings({ ...settings, enableAutoCheckOut: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {settings.enableAutoCheckOut !== false && (
+              <div className="space-y-3 pt-1 text-xs">
+                
+                {/* Policy Selector */}
+                <div className="p-3.5 bg-white rounded-xl border border-indigo-200 space-y-2">
+                  <label className="block font-bold text-slate-900">
+                    Auto Check-Out Time Policy (គោលការណ៍ម៉ោងចេញស្វ័យប្រវត្ត)
+                  </label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, autoCheckOutPolicy: 'scheduled_end' })}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        (settings.autoCheckOutPolicy || 'scheduled_end') === 'scheduled_end'
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center justify-between text-xs">
+                        <span>Scheduled Class End</span>
+                        {(settings.autoCheckOutPolicy || 'scheduled_end') === 'scheduled_end' && (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                      <span className={`text-[10px] mt-1 ${
+                        (settings.autoCheckOutPolicy || 'scheduled_end') === 'scheduled_end'
+                          ? 'text-indigo-100'
+                          : 'text-slate-500'
+                      }`}>
+                        Auto-sets to exact schedule period end (e.g. 09:00).
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, autoCheckOutPolicy: 'scheduled_end_buffer' })}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        settings.autoCheckOutPolicy === 'scheduled_end_buffer'
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center justify-between text-xs">
+                        <span>End + Grace Buffer</span>
+                        {settings.autoCheckOutPolicy === 'scheduled_end_buffer' && (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                      <span className={`text-[10px] mt-1 ${
+                        settings.autoCheckOutPolicy === 'scheduled_end_buffer'
+                          ? 'text-indigo-100'
+                          : 'text-slate-500'
+                      }`}>
+                        Scheduled end + buffer window (e.g. 09:00 + 15m = 09:15).
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, autoCheckOutPolicy: 'end_of_day' })}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        settings.autoCheckOutPolicy === 'end_of_day'
+                          ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center justify-between text-xs">
+                        <span>Fixed Daily Cutoff</span>
+                        {settings.autoCheckOutPolicy === 'end_of_day' && (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                      <span className={`text-[10px] mt-1 ${
+                        settings.autoCheckOutPolicy === 'end_of_day'
+                          ? 'text-indigo-100'
+                          : 'text-slate-500'
+                      }`}>
+                        Institutional daily closing cutoff (e.g. 17:30).
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Additional parameters for policy */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {settings.autoCheckOutPolicy === 'scheduled_end_buffer' && (
+                    <div className="p-3 bg-white rounded-xl border border-indigo-200">
+                      <label className="block font-bold text-slate-900 mb-1">
+                        Grace Buffer After Class End (Minutes)
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="120"
+                        value={settings.autoCheckOutBufferMinutes ?? 15}
+                        onChange={e => setSettings({ ...settings, autoCheckOutBufferMinutes: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-900"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Adds this buffer to the scheduled end time.
+                      </span>
+                    </div>
+                  )}
+
+                  {settings.autoCheckOutPolicy === 'end_of_day' && (
+                    <div className="p-3 bg-white rounded-xl border border-indigo-200">
+                      <label className="block font-bold text-slate-900 mb-1">
+                        Daily Institutional Cutoff Time (HH:MM)
+                      </label>
+                      <input
+                        type="time"
+                        value={settings.autoCheckOutDailyTime || '17:30'}
+                        onChange={e => setSettings({ ...settings, autoCheckOutDailyTime: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-900"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Missing check-outs are set to this time when unresolved at end of day.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Engine Trigger & Overdue Missing Counter */}
+                <div className="p-3.5 bg-white rounded-xl border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-900">
+                        Live Missing Check-Outs on System:
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                        missingCheckoutsCount > 0
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {missingCheckoutsCount} session(s) pending check-out
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">
+                      The engine runs automatically in the background on periodic data sync. You can also trigger it manually right now.
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isProcessingAutoCheckOut}
+                    onClick={handleRunAutoCheckOut}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${isProcessingAutoCheckOut ? 'animate-spin' : ''}`} />
+                    <span>{isProcessingAutoCheckOut ? 'Processing...' : 'Run Auto Check-Out Now'}</span>
+                  </button>
+                </div>
+
+                {autoCheckOutMessage && (
+                  <div className="p-3 rounded-xl bg-indigo-100/70 border border-indigo-200 text-xs text-indigo-900 font-medium">
+                    {autoCheckOutMessage}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
