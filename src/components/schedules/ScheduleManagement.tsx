@@ -37,9 +37,11 @@ import {
   List,
   RefreshCw,
   QrCode,
-  Camera
+  Camera,
+  Download
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
 import { MonSatWeeklyTimetable } from './MonSatWeeklyTimetable.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
@@ -390,6 +392,21 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       daysOfWeek: [1, 2, 3, 4, 5, 6]
     });
     setIsSubjectModalOpen(true);
+  };
+
+  const handleExportSchedules = (customList?: TeacherSubjectSchedule[]) => {
+    const listToExport = customList || subjectSchedules;
+    if (listToExport.length === 0) {
+      showToast(isKhmer ? 'ពុំមានកាលវិភាគដើម្បីនាំចេញទេ' : 'No schedules available to export.', 'info');
+      return;
+    }
+    const { count, filename } = exportSchedulesToCsv(listToExport, teachers, 'teacher_schedules');
+    showToast(
+      isKhmer
+        ? `បាននាំចេញកាលវិភាគចំនួន ${count} ទៅឯកសារ ${filename} (ទម្រង់អាចនាំចូលវិញបាន)`
+        : `Exported ${count} schedules to ${filename} (ready for re-import)!`,
+      'success'
+    );
   };
 
   const handleOpenAddSubjectForSlot = (dayIndex: number, periodNumber?: number, startTime?: string, endTime?: string) => {
@@ -1259,10 +1276,20 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
               <button
                 onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md shadow-slate-900/20 transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md shadow-slate-900/20 transition-all active:scale-95 cursor-pointer"
+                title="Import Teacher Schedules (CSV)"
               >
                 <Upload className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                <span>{isKhmer ? 'នាំចូលកាលវិភាគ' : 'Import Schedules (CSV)'}</span>
+                <span>{isKhmer ? 'នាំចូលកាលវិភាគ' : 'Import (CSV)'}</span>
+              </button>
+
+              <button
+                onClick={() => handleExportSchedules()}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold border border-slate-300 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                title="Export Schedules in re-importable CSV format"
+              >
+                <Download className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                <span>{isKhmer ? 'នាំចេញកាលវិភាគ' : 'Export (CSV)'}</span>
               </button>
 
               <button
@@ -1830,15 +1857,26 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               )}
             </div>
 
-            <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder={isKhmer ? 'ស្វែងរកមុខវិជ្ជា, ថ្នាក់, បន្ទប់...' : 'Search subject, class, room...'}
-                value={subjectSearchQuery}
-                onChange={e => setSubjectSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium focus:outline-hidden"
-              />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder={isKhmer ? 'ស្វែងរកមុខវិជ្ជា, ថ្នាក់, បន្ទប់...' : 'Search subject, class, room...'}
+                  value={subjectSearchQuery}
+                  onChange={e => setSubjectSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium focus:outline-hidden"
+                />
+              </div>
+
+              <button
+                onClick={() => handleExportSchedules(filteredSubjectSchedules)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-300 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                title="Export currently filtered subject schedules to CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">{isKhmer ? 'នាំចេញ CSV' : 'Export CSV'}</span>
+              </button>
             </div>
           </div>
 

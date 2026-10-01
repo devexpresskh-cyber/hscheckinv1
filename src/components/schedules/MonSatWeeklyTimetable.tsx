@@ -4,6 +4,7 @@ import { StorageService } from '../../services/storageService.ts';
 import { PeriodModal } from './PeriodModal.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
+import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
 import {
   Clock,
   MapPin,
@@ -14,6 +15,7 @@ import {
   Filter,
   Search,
   Printer,
+  Download,
   CalendarDays,
   CheckCircle2,
   User,
@@ -251,6 +253,12 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
     window.print();
   };
 
+  const handleExportCsv = () => {
+    const listToExport = filteredSchedules.length > 0 ? filteredSchedules : subjectSchedules;
+    if (listToExport.length === 0) return;
+    exportSchedulesToCsv(listToExport, teachers, 'weekly_timetable_schedules');
+  };
+
   return (
     <div className="space-y-4">
       {/* Timetable Filter Toolbar */}
@@ -352,8 +360,17 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
           )}
 
           <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold transition-colors border border-slate-300 shadow-2xs shrink-0 cursor-pointer"
+            title="Export Weekly Schedule (CSV format compatible with import)"
+          >
+            <Download className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">{isKhmer ? 'នាំចេញ CSV' : 'Export CSV'}</span>
+          </button>
+
+          <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shrink-0 cursor-pointer"
             title="Print Mon-Sat Weekly Timetable"
           >
             <Printer className="w-3.5 h-3.5" />

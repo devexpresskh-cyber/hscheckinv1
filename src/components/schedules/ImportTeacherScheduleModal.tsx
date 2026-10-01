@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Teacher, TeacherSubjectSchedule } from '../../types/index.ts';
 import { StorageService } from '../../services/storageService.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
+import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
 import {
   Upload,
   FileSpreadsheet,
@@ -432,6 +433,12 @@ export const ImportTeacherScheduleModal: React.FC<ImportTeacherScheduleModalProp
     document.body.removeChild(link);
   };
 
+  // Export current active schedules in exact re-import format
+  const handleExportCurrentSchedules = () => {
+    const currentList = StorageService.getSubjectSchedules();
+    exportSchedulesToCsv(currentList, teachers, 'current_teacher_schedules');
+  };
+
   // Perform Final Import
   const handleCommitImport = () => {
     const validRows = parsedRows.filter(r => r.isValid && r.matchedTeacherId);
@@ -540,14 +547,27 @@ export const ImportTeacherScheduleModal: React.FC<ImportTeacherScheduleModalProp
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDownloadTemplate}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-colors self-start sm:self-auto"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download Template (CSV)</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={handleExportCurrentSchedules}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-300 transition-colors shadow-2xs cursor-pointer"
+                title="Export current schedules to edit and re-import"
+              >
+                <Download className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{isKhmer ? 'នាំចេញកាលវិភាគបច្ចុប្បន្ន' : 'Export Current (CSV)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition-colors cursor-pointer"
+                title="Download blank import template CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'ទម្រង់គំរូ' : 'Blank Template'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Input Method: Upload or Paste */}
