@@ -35,7 +35,9 @@ import {
   ArrowUpDown,
   Layers,
   List,
-  RefreshCw
+  RefreshCw,
+  QrCode,
+  Camera
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
@@ -43,6 +45,8 @@ import { MonSatWeeklyTimetable } from './MonSatWeeklyTimetable.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
 import { AcademicDatesModal } from './AcademicDatesModal.tsx';
 import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
+import { ScheduleQRCodeModal } from './ScheduleQRCodeModal.tsx';
+import { ScheduleQRScanModal } from './ScheduleQRScanModal.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 
@@ -94,6 +98,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSettings());
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState(false);
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
+  const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
+  const [selectedScheduleForQR, setSelectedScheduleForQR] = useState<TeacherSubjectSchedule | null>(null);
+  const [selectedTeacherForQR, setSelectedTeacherForQR] = useState<Teacher | null>(null);
+  const [isQRScanModalOpen, setIsQRScanModalOpen] = useState(false);
 
   const systemGraceMinutes = useMemo(() => {
     return systemSettings?.defaultGracePeriodMinutes ?? systemSettings?.defaultGracePeriod ?? 15;
@@ -1229,6 +1237,27 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               </button>
 
               <button
+                onClick={() => {
+                  setSelectedScheduleForQR(null);
+                  setIsQRCodeModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                title="Create & Print Schedule QR Code Door Sign"
+              >
+                <QrCode className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                <span>{isKhmer ? 'QR កាលវិភាគ' : 'Schedule QR'}</span>
+              </button>
+
+              <button
+                onClick={() => setIsQRScanModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+                title="Scan Schedule QR Code & confirm PIN"
+              >
+                <Camera className="w-3.5 h-3.5 shrink-0" />
+                <span>{isKhmer ? 'ស្កេន QR' : 'Scan QR'}</span>
+              </button>
+
+              <button
                 onClick={() => setIsImportModalOpen(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md shadow-slate-900/20 transition-all active:scale-95"
               >
@@ -1251,15 +1280,39 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           )}
 
           {isTeacher && (
-            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl text-indigo-900 shadow-2xs">
-              <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
-              <div className="text-left">
-                <span className="text-xs font-black block leading-tight">
-                  {activeTeacher?.fullName || currentUser.fullName}
-                </span>
-                <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block">
-                  {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned Schedule Only'}
-                </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsQRScanModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
+                title="Scan Classroom QR Code with PIN confirmation"
+              >
+                <Camera className="w-3.5 h-3.5 shrink-0" />
+                <span>{isKhmer ? 'ស្កេន QR' : 'Scan Class QR'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedScheduleForQR(null);
+                  setSelectedTeacherForQR(activeTeacher || null);
+                  setIsQRCodeModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                title="View & Download My Smart QR Card for all classes"
+              >
+                <QrCode className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                <span>{isKhmer ? 'កូដ QR របស់ខ្ញុំ' : 'My QR Card'}</span>
+              </button>
+
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl text-indigo-900 shadow-2xs">
+                <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                <div className="text-left">
+                  <span className="text-xs font-black block leading-tight">
+                    {activeTeacher?.fullName || currentUser.fullName}
+                  </span>
+                  <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block">
+                    {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned Schedule Only'}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -2826,6 +2879,28 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           onSaved={() => {
             setSystemSettings(StorageService.getSettings());
           }}
+        />
+      )}
+
+      {/* Schedule QR Code Creator & Printable Door Sign Modal */}
+      {isQRCodeModalOpen && (
+        <ScheduleQRCodeModal
+          isOpen={isQRCodeModalOpen}
+          onClose={() => {
+            setIsQRCodeModalOpen(false);
+            setSelectedScheduleForQR(null);
+            setSelectedTeacherForQR(null);
+          }}
+          initialSubjectSchedule={selectedScheduleForQR}
+          initialTeacher={selectedTeacherForQR}
+        />
+      )}
+
+      {/* Schedule QR Code Scanner & PIN Confirmation Modal */}
+      {isQRScanModalOpen && (
+        <ScheduleQRScanModal
+          isOpen={isQRScanModalOpen}
+          onClose={() => setIsQRScanModalOpen(false)}
         />
       )}
 

@@ -17,9 +17,12 @@ import {
   Search,
   ChevronRight,
   Phone,
-  Smartphone
+  Smartphone,
+  QrCode,
+  Sparkles
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
+import { ScheduleQRScanModal } from '../schedules/ScheduleQRScanModal.tsx';
 
 interface LoginPageProps {
   onLoginSuccess?: () => void;
@@ -31,6 +34,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   // Mode: 'phone' for phone number + PIN (No Google phone auth), 'pin' for Staff ID + PIN, 'standard' for password & Google
   const [authMode, setAuthMode] = useState<'phone' | 'pin' | 'standard'>('phone');
+  const [isQRScanModalOpen, setIsQRScanModalOpen] = useState(false);
 
   // Phone Number Login States
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -228,8 +232,39 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 : 'Fast PIN access for faculty, or sign in via Google & institutional email'}
             </p>
 
+            {/* Quick Teacher Schedule QR Scan Button (Direct without login) */}
+            <div className="mt-3 sm:mt-4">
+              <button
+                type="button"
+                onClick={() => setIsQRScanModalOpen(true)}
+                className="w-full flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all cursor-pointer group border border-emerald-500/30"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform">
+                    <QrCode className="w-5 h-5" />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <div className="text-xs font-black tracking-tight flex items-center gap-1.5 flex-wrap">
+                      <span>{isKhmer ? 'ស្កេន QR កាលវិភាគបង្រៀន' : 'Scan Schedule QR Code'}</span>
+                      <span className="px-1.5 py-0.2 rounded-md bg-white/25 text-[10px] font-bold">
+                        {isKhmer ? 'មិនបាច់ Login' : 'No Login'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-emerald-100 font-medium truncate">
+                      {isKhmer
+                        ? 'គ្រាន់តែស្កេន QR និងផ្ទៀងផ្ទាត់កូដ PIN ៤ ខ្ទង់ដើម្បីចុះវត្តមាន'
+                        : 'Scan QR & enter your 4-digit PIN to mark attendance'}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0 group-hover:translate-x-0.5 transition-transform ml-2">
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </button>
+            </div>
+
             {/* Mode Switcher Tabs */}
-            <div className="mt-4 sm:mt-5 grid grid-cols-3 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
+            <div className="mt-3 sm:mt-4 grid grid-cols-3 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -617,6 +652,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           <PWAInstallButton variant="login" />
         </div>
       </main>
+
+      {/* Schedule QR Code Scanner & PIN Confirmation Modal (No Login Needed) */}
+      <ScheduleQRScanModal
+        isOpen={isQRScanModalOpen}
+        onClose={() => setIsQRScanModalOpen(false)}
+      />
 
       {/* Bottom Footer Info */}
       <footer className="text-center text-xs text-slate-400 py-2">

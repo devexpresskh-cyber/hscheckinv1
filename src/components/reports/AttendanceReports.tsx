@@ -39,7 +39,7 @@ export const AttendanceReports: React.FC = () => {
   const canEditAcademicDates =
     currentUser.role === 'super_admin' ||
     currentUser.role === 'admin_hr' ||
-    hasPermission('settings.edit') ||
+    hasPermission('settings.manage') ||
     hasPermission('schedules.edit');
 
   const [reportType, setReportType] = useState<'teaching_wage' | 'period_attendance' | 'sheet_31days' | 'monthly' | 'daily'>('sheet_31days');

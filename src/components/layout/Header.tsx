@@ -61,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   const canEditAcademicDates =
     currentUser.role === 'super_admin' ||
     currentUser.role === 'admin_hr' ||
-    hasPermission('settings.edit') ||
+    hasPermission('settings.manage') ||
     hasPermission('schedules.edit');
 
   useEffect(() => {
