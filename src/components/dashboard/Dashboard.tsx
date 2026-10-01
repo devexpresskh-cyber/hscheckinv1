@@ -49,6 +49,7 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   );
   const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>(() => StorageService.getAttendance());
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
   const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() =>
     StorageService.getSubjectSchedules()
   );
@@ -61,6 +62,7 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
       setDepartments(StorageService.getDepartments());
       setAllAttendance(StorageService.getAttendance());
       setSubjectSchedules(StorageService.getSubjectSchedules());
+      setSystemSettings(StorageService.getSystemSettings());
     });
     return unsub;
   }, []);
@@ -198,12 +200,16 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
               {currentUser.role === 'teacher'
                 ? (isKhmer ? 'ផតថលគ្រូបង្រៀន • សកម្ម' : 'Faculty Teacher Portal • Active')
-                : (isKhmer ? 'ឆ្នាំសិក្សា ២០២៦-២០២៧' : 'Academic Year 2026-2027')}
+                : (isKhmer
+                    ? `ឆ្នាំសិក្សា ${systemSettings.academicYear || '២០២៦-២០២៧'}`
+                    : `Academic Year ${systemSettings.academicYear || '2026-2027'}`)}
             </span>
             <span className="text-xs text-slate-400">
               {currentUser.role === 'teacher'
                 ? (isKhmer ? 'កាលវិភាគបង្រៀន និងវត្តមានផ្ទាល់ខ្លួន' : 'Personal Teaching Schedule & Attendance')
-                : (isKhmer ? 'ឆមាសទី ១ • តាមដានពេលវេលាជាក់ស្តែង' : 'Term 1 • Live Monitoring')}
+                : (isKhmer
+                    ? `${systemSettings.currentSemester || 'ឆមាសទី ១'} (${systemSettings.academicStartDate || '01 Sep 2026'} – ${systemSettings.academicEndDate || '30 Jun 2027'})`
+                    : `${systemSettings.currentSemester || 'Term 1'} (${systemSettings.academicStartDate || '2026-09-01'} to ${systemSettings.academicEndDate || '2027-06-30'})`)}
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">

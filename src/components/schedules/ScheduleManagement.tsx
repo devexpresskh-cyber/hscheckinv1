@@ -41,6 +41,7 @@ import confetti from 'canvas-confetti';
 import { ImportTeacherScheduleModal } from './ImportTeacherScheduleModal.tsx';
 import { MonSatWeeklyTimetable } from './MonSatWeeklyTimetable.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
+import { AcademicDatesModal } from './AcademicDatesModal.tsx';
 import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
@@ -92,6 +93,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [locations, setLocations] = useState<WorkLocation[]>(() => StorageService.getLocations());
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSettings());
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState(false);
+  const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
 
   const systemGraceMinutes = useMemo(() => {
     return systemSettings?.defaultGracePeriodMinutes ?? systemSettings?.defaultGracePeriod ?? 15;
@@ -1204,6 +1206,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
           {hasPermission('schedules.create') && !isTeacher && (
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAcademicDatesModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                title="Configure Academic Start Date & End Date"
+              >
+                <CalendarDays className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                <span>
+                  {systemSettings?.academicStartDate && systemSettings?.academicEndDate
+                    ? `${systemSettings.academicYear || 'AY'}: ${systemSettings.academicStartDate} – ${systemSettings.academicEndDate}`
+                    : (isKhmer ? 'កាលបរិច្ឆេទឆ្នាំសិក្សា' : 'Set Academic Dates')}
+                </span>
+              </button>
+
               <button
                 onClick={() => setIsPeriodManageModalOpen(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95"
@@ -2800,6 +2815,17 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           onDeletePeriod={(id) => StorageService.deletePeriod(id)}
           onResetDefaults={() => StorageService.resetPeriodsToDefault()}
           isKhmer={isKhmer}
+        />
+      )}
+
+      {/* Academic Dates Modal */}
+      {isAcademicDatesModalOpen && (
+        <AcademicDatesModal
+          isOpen={isAcademicDatesModalOpen}
+          onClose={() => setIsAcademicDatesModalOpen(false)}
+          onSaved={() => {
+            setSystemSettings(StorageService.getSettings());
+          }}
         />
       )}
 

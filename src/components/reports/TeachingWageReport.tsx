@@ -24,8 +24,10 @@ import {
   BookOpen,
   UserCheck,
   ShieldCheck,
-  FileCheck
+  FileCheck,
+  CalendarDays
 } from 'lucide-react';
+import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
 
 function buildPayslipHtml(
   summary: TeacherWageSummary,
@@ -250,6 +252,7 @@ function buildPayslipHtml(
         <div class="meta-strip">
           <div class="meta-item"><strong>Voucher No:</strong> <span style="font-family: monospace;">${voucherNo}</span></div>
           <div class="meta-item"><strong>Period:</strong> ${periodStr}</div>
+          <div class="meta-item"><strong>Academic Year:</strong> ${systemSettings?.academicYear || '2026-2027'}${systemSettings?.academicStartDate && systemSettings?.academicEndDate ? ` (${systemSettings.academicStartDate} to ${systemSettings.academicEndDate})` : ''}</div>
           <div class="meta-item"><strong>Date Issued:</strong> ${currentDate}</div>
         </div>
 
@@ -392,6 +395,12 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const [lateDeductionMode, setLateDeductionMode] = useState<'deduct' | 'non_deduct'>('non_deduct');
   const [selectedTeacherForDetail, setSelectedTeacherForDetail] = useState<TeacherWageSummary | null>(null);
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
+  const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
+
+  const canEditAcademicDates =
+    currentUser.role === 'super_admin' ||
+    currentUser.role === 'admin_hr' ||
+    currentUser.role === 'supervisor';
 
   const departments = StorageService.getDepartments();
   const teachers = StorageService.getTeachers().filter(t => t.status === 'Active');
@@ -658,13 +667,21 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
     ]);
 
     const periodLabel = dateFilterMode === 'month' ? selectedMonth : `${startDate}_to_${endDate}`;
+    const metaRows = [
+      `# Organization: "${systemSettings.organizationName || 'EduTrack MIS'}"`,
+      `# Academic Year: "${systemSettings.academicYear || '2026-2027'} (${systemSettings.academicStartDate || ''} to ${systemSettings.academicEndDate || ''})"`,
+      `# Payroll Period: "${periodLabel}"`,
+      `# Generated Date: "${new Date().toISOString()}"`,
+      ''
+    ];
+
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      [...metaRows, headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Teacher_Teaching_Hours_Wage_Report_${periodLabel}.csv`);
+    link.setAttribute('download', `Teacher_Teaching_Hours_Wage_Report_${periodLabel}_AY${systemSettings.academicYear || '2026-2027'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -744,14 +761,38 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 {isKhmer ? 'របាយការណ៍ម៉ោងបង្រៀន និងប្រាក់ឈ្នួលគ្រូ' : 'Teaching Hours & Wage Summary Report'}
               </h2>
-              <p className="text-xs text-slate-500 font-khmer mt-0.5">
-                គណនាស្វ័យប្រវត្តិនូវម៉ោងបង្រៀនជាក់ស្តែង និងប្រាក់ឈ្នួលសរុបផ្អែកលើអត្រាកម្រៃបង្រៀនក្នុងមួយម៉ោង
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                <p className="text-xs text-slate-500 font-khmer">
+                  គណនាស្វ័យប្រវត្តិនូវម៉ោងបង្រៀនជាក់ស្តែង និងប្រាក់ឈ្នួលសរុបផ្អែកលើអត្រាកម្រៃបង្រៀនក្នុងមួយម៉ោង
+                </p>
+                {systemSettings.academicYear && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    <GraduationCap className="w-3 h-3 text-emerald-600" />
+                    <span>AY {systemSettings.academicYear}</span>
+                    {systemSettings.academicStartDate && systemSettings.academicEndDate && (
+                      <span className="text-slate-500 font-normal">
+                        ({systemSettings.academicStartDate} – {systemSettings.academicEndDate})
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {canEditAcademicDates && (
+            <button
+              type="button"
+              onClick={() => setIsAcademicDatesModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="Configure Academic Year start and end dates"
+            >
+              <CalendarDays className="w-3.5 h-3.5 text-amber-600" />
+              <span>Set Academic Dates</span>
+            </button>
+          )}
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
@@ -988,12 +1029,23 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           </div>
 
           {/* Administrative Reference Matrix */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 border border-slate-200 rounded-2xl p-3 sm:p-4 text-xs">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Reference No. (លេខយោង)</span>
               <span className="font-mono font-bold text-slate-800">
                 REP-PAY-${dateFilterMode === 'month' ? selectedMonth.replace('-', '') : 'PAY'}
               </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Academic Year (ឆ្នាំសិក្សា)</span>
+              <span className="font-bold text-slate-800 font-mono">
+                {systemSettings.academicYear || '2026-2027'}
+              </span>
+              {systemSettings.academicStartDate && systemSettings.academicEndDate && (
+                <span className="text-[10px] text-slate-500 block font-mono">
+                  {systemSettings.academicStartDate} to {systemSettings.academicEndDate}
+                </span>
+              )}
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Payroll Cycle (ការបរិច្ឆេទ)</span>
@@ -1372,6 +1424,13 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                 <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">
                   Official Faculty Teaching Wage Voucher
                 </p>
+                <p className="text-xs text-slate-600 mt-1">
+                  Academic Year: {systemSettings.academicYear || '2026-2027'}
+                  {systemSettings.academicStartDate && systemSettings.academicEndDate && (
+                    <span> ({systemSettings.academicStartDate} to {systemSettings.academicEndDate})</span>
+                  )}
+                  <span> • Cycle: {dateFilterMode === 'month' ? selectedMonth : `${startDate} to ${endDate}`}</span>
+                </p>
               </div>
 
               {/* Teacher Profile Summary Card */}
@@ -1572,6 +1631,14 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
 
           </div>
         </div>
+      )}
+
+      {/* Academic Dates Configuration Modal */}
+      {isAcademicDatesModalOpen && (
+        <AcademicDatesModal
+          isOpen={isAcademicDatesModalOpen}
+          onClose={() => setIsAcademicDatesModalOpen(false)}
+        />
       )}
 
     </div>

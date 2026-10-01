@@ -7,6 +7,8 @@ import { SystemSettings } from '../../types/index.ts';
 import {
   Settings,
   Building,
+  Calendar,
+  CalendarDays,
   MapPin,
   Clock,
   Shield,
@@ -57,12 +59,21 @@ export const SystemSettingsView: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (settings.academicStartDate && settings.academicEndDate && settings.academicStartDate >= settings.academicEndDate) {
+      showToast('Academic Start Date must be before Academic End Date!', 'error');
+      return;
+    }
+
     const updated: SystemSettings = {
       ...settings,
       organizationName: settings.organizationName || settings.schoolName || 'EduTrack Academy',
       schoolName: settings.organizationName || settings.schoolName || 'EduTrack Academy',
       khmerOrgName: settings.khmerOrgName || settings.khmerSchoolName || 'សាលាអន្តរជាតិ',
-      khmerSchoolName: settings.khmerOrgName || settings.khmerSchoolName || 'សាលាអន្តរជាតិ'
+      khmerSchoolName: settings.khmerOrgName || settings.khmerSchoolName || 'សាលាអន្តរជាតិ',
+      academicYear: settings.academicYear || '2026-2027',
+      academicStartDate: settings.academicStartDate || '2026-09-01',
+      academicEndDate: settings.academicEndDate || '2027-06-30'
     };
     StorageService.saveSystemSettings(updated);
     StorageService.addAuditLog({
@@ -70,10 +81,10 @@ export const SystemSettingsView: React.FC = () => {
       userName: currentUser.fullName,
       userRole: currentUser.role,
       action: 'Updated System Settings',
-      target: `Organization Name: ${updated.organizationName}`,
+      target: `Academic Year: ${updated.academicYear} (${updated.academicStartDate} to ${updated.academicEndDate})`,
       ipAddress: '127.0.0.1'
     });
-    showToast('System configuration & organization profile saved', 'success');
+    showToast('System configuration & academic session profile saved', 'success');
   };
 
   const handleExportBackup = () => {
@@ -265,6 +276,147 @@ export const SystemSettingsView: React.FC = () => {
                 disabled
                 value={settings.timezone}
                 className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-500 font-mono"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Academic Year & Session Dates */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-indigo-600" />
+                Academic Year & Session Calendar (កាលបរិច្ឆេទឆ្នាំសិក្សា)
+              </h3>
+              <p className="text-[11px] text-slate-500 font-khmer mt-0.5">
+                កំណត់កាលបរិច្ឆេទចាប់ផ្តើម-បញ្ចប់ឆ្នាំសិក្សា ឆមាសផ្លូវការ និងការរាប់ចំនួនថ្ងៃសិក្សា
+              </p>
+            </div>
+            
+            {/* Quick presets */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Presets:</span>
+              <button
+                type="button"
+                onClick={() => setSettings({
+                  ...settings,
+                  academicYear: '2026-2027',
+                  academicStartDate: '2026-09-01',
+                  academicEndDate: '2027-06-30',
+                  currentSemester: 'Semester 1',
+                  semesterStartDate: '2026-09-01',
+                  semesterEndDate: '2027-01-31'
+                })}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+              >
+                2026-2027 (01 Sep – 30 Jun)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettings({
+                  ...settings,
+                  academicYear: '2026-2027',
+                  academicStartDate: '2026-11-01',
+                  academicEndDate: '2027-08-31',
+                  currentSemester: 'Semester 1',
+                  semesterStartDate: '2026-11-01',
+                  semesterEndDate: '2027-03-31'
+                })}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700"
+              >
+                Cambodia (01 Nov – 31 Aug)
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Academic Year Title (ឆ្នាំសិក្សា) *
+              </label>
+              <input
+                type="text"
+                value={settings.academicYear || '2026-2027'}
+                onChange={e => setSettings({ ...settings, academicYear: e.target.value })}
+                placeholder="e.g. 2026-2027"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Active Semester / Term (ឆមាសបច្ចុប្បន្ន)
+              </label>
+              <select
+                value={settings.currentSemester || 'Semester 1'}
+                onChange={e => setSettings({ ...settings, currentSemester: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900"
+              >
+                <option value="Semester 1">Semester 1 (ឆមាសទី ១)</option>
+                <option value="Semester 2">Semester 2 (ឆមាសទី ២)</option>
+                <option value="Full Year">Full Academic Year (ពេញមួយឆ្នាំ)</option>
+                <option value="Summer Term">Summer / Vacation Term (វគ្គវិស្សមកាល)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="p-3.5 bg-indigo-50/40 rounded-2xl border border-indigo-100">
+              <label className="block font-extrabold text-indigo-950 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Academic Start Date (កាលបរិច្ឆេទចាប់ផ្តើម) *</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={settings.academicStartDate || '2026-09-01'}
+                onChange={e => setSettings({ ...settings, academicStartDate: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900 cursor-pointer"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">
+                The official opening date of the school year.
+              </span>
+            </div>
+
+            <div className="p-3.5 bg-indigo-50/40 rounded-2xl border border-indigo-100">
+              <label className="block font-extrabold text-indigo-950 mb-1 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Academic End Date (កាលបរិច្ឆេទបញ្ចប់) *</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={settings.academicEndDate || '2027-06-30'}
+                onChange={e => setSettings({ ...settings, academicEndDate: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900 cursor-pointer"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">
+                The official closing date / commencement of the school year.
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Semester Start Date (ថ្ងៃចាប់ផ្តើមឆមាស)
+              </label>
+              <input
+                type="date"
+                value={settings.semesterStartDate || '2026-09-01'}
+                onChange={e => setSettings({ ...settings, semesterStartDate: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900 cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">
+                Semester End Date (ថ្ងៃបញ្ចប់ឆមាស)
+              </label>
+              <input
+                type="date"
+                value={settings.semesterEndDate || '2027-01-31'}
+                onChange={e => setSettings({ ...settings, semesterEndDate: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900 cursor-pointer"
               />
             </div>
           </div>

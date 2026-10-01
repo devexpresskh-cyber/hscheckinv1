@@ -24,8 +24,10 @@ import {
   X,
   FileSpreadsheet,
   Check,
-  ChevronDown
+  ChevronDown,
+  CalendarDays
 } from 'lucide-react';
+import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
 
 interface Attendance31DaysSheetProps {
   onRequestCorrection?: (record?: Partial<AttendanceRecord>) => void;
@@ -93,6 +95,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
   const [leaveRequests, setLeaveRequests] = useState(() => StorageService.getLeaveRequests());
   const [subjectSchedules, setSubjectSchedules] = useState(() => StorageService.getSubjectSchedules());
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+  const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
 
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
@@ -592,11 +595,19 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
       ];
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const metaRows = [
+      `# Organization: "${systemSettings?.organizationName || 'EduTrack MIS'}"`,
+      `# Academic Year: "${systemSettings?.academicYear || '2026-2027'} (${systemSettings?.academicStartDate || ''} to ${systemSettings?.academicEndDate || ''})"`,
+      `# Attendance Month: "${monthLabel}"`,
+      `# Generated Date: "${new Date().toISOString()}"`,
+      ''
+    ];
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [...metaRows, headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Attendance_31Days_${selectedMonth}.csv`);
+    link.setAttribute('download', `Attendance_31Days_${selectedMonth}_AY${systemSettings?.academicYear || '2026-2027'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -758,6 +769,9 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
           <h1 class="org-title">${orgName}</h1>
           <div class="khmer-title">${khmerOrgName}</div>
           <div class="sheet-title">31-DAY ATTENDANCE ROSTER & AUDIT REGISTER (តារាងស្រង់វត្តមាន ៣១ ថ្ងៃ) • ${monthLabel}</div>
+          <div style="font-size: 10px; color: #475569; margin-top: 3px; font-weight: 600;">
+            Academic Year: ${systemSettings?.academicYear || '2026-2027'}${systemSettings?.academicStartDate && systemSettings?.academicEndDate ? ` (${systemSettings.academicStartDate} to ${systemSettings.academicEndDate})` : ''} • Month: ${monthLabel}
+          </div>
         </div>
 
         <div class="legend-bar">
@@ -924,7 +938,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
     <div className="space-y-4">
       
       {/* Top Controls Toolbar */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">
         
         {/* Left: Month Navigator & Search */}
         <div className="flex flex-wrap items-center gap-3">
@@ -968,6 +982,19 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
             </button>
           )}
 
+          {/* Academic Year Badge */}
+          {systemSettings.academicYear && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
+              <span>AY {systemSettings.academicYear}</span>
+              {systemSettings.academicStartDate && systemSettings.academicEndDate && (
+                <span className="text-slate-500 font-normal hidden xl:inline">
+                  ({systemSettings.academicStartDate} – {systemSettings.academicEndDate})
+                </span>
+              )}
+            </span>
+          )}
+
           {/* Search box */}
           <div className="relative min-w-[200px]">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -984,6 +1011,19 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
         {/* Right: Filters & Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           
+          {/* Set Academic Dates Button for Admins */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsAcademicDatesModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="Configure Academic Year start and end dates"
+            >
+              <CalendarDays className="w-3.5 h-3.5 text-amber-600" />
+              <span>Set Academic Dates</span>
+            </button>
+          )}
+
           {/* Staff Type Switcher */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
             <button
@@ -1043,6 +1083,36 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
 
         </div>
 
+      </div>
+
+      {/* Official In-Page Print Header (Only visible during standard print) */}
+      <div className="hidden print:block p-4 border-b-2 border-slate-900 text-center standard-admin-report-header">
+        <div className="text-xs font-khmer font-bold text-slate-800 tracking-wider">
+          ព្រះរាជាណាចក្រកម្ពុជា • ជាតិ សាសនា ព្រះមហាក្សត្រ
+        </div>
+        <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500 mt-0.5">
+          Kingdom of Cambodia • Nation Religion King
+        </div>
+        <div className="w-16 h-0.5 bg-slate-400 mx-auto my-1.5 rounded-full" />
+
+        <h1 className="text-xl font-black text-slate-950 uppercase tracking-tight">
+          {systemSettings.organizationName}
+        </h1>
+        {systemSettings.khmerOrgName && (
+          <p className="text-sm font-khmer font-bold text-slate-800 mt-0.5">
+            {systemSettings.khmerOrgName}
+          </p>
+        )}
+        <div className="text-sm font-black text-indigo-900 font-khmer mt-1">
+          តារាងស្រង់វត្តមាន ៣១ ថ្ងៃប្រចាំខែ (31-Day Faculty & Staff Attendance Register) • {monthLabel}
+        </div>
+        <div className="text-xs text-slate-600 font-medium mt-1">
+          Academic Year: <b>{systemSettings.academicYear || '2026-2027'}</b>
+          {systemSettings.academicStartDate && systemSettings.academicEndDate && (
+            <span> ({systemSettings.academicStartDate} to {systemSettings.academicEndDate})</span>
+          )}
+          <span> • Printed: {new Date().toLocaleDateString('en-GB')}</span>
+        </div>
       </div>
 
       {/* Legend & Month Summary Card */}
@@ -1335,6 +1405,39 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
           <span className="font-mono text-[11px] font-bold text-slate-600">
             {gridData.length} {isKhmer ? 'នាក់ត្រូវបានរាប់បញ្ចូល' : 'Faculty & Staff Included'}
           </span>
+        </div>
+
+        {/* Official In-Page Printable Signatures Footer */}
+        <div className="hidden print:block standard-admin-report-footer p-6 border-t-2 border-slate-900 bg-white">
+          <div className="grid grid-cols-3 gap-6 text-center text-xs">
+            <div className="signature-box border border-slate-300 rounded-xl p-3">
+              <div className="font-bold text-slate-800">Prepared By (រៀបចំដោយ)</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">HR Officer / Registrar</div>
+              <div className="my-8 border-b border-dashed border-slate-400 w-3/4 mx-auto" />
+              <div className="font-bold text-slate-900">{currentUser.fullName}</div>
+              <div className="text-[10px] text-slate-400">Date: {new Date().toLocaleDateString('en-GB')}</div>
+            </div>
+
+            <div className="signature-box border border-slate-300 rounded-xl p-3">
+              <div className="font-bold text-slate-800">Verified By (ត្រួតពិនិត្យដោយ)</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Academic Dean / Supervisor</div>
+              <div className="my-8 border-b border-dashed border-slate-400 w-3/4 mx-auto" />
+              <div className="font-bold text-slate-400">___________________</div>
+              <div className="text-[10px] text-slate-400">Date: ____ / ____ / 2026</div>
+            </div>
+
+            <div className="signature-box border border-slate-300 rounded-xl p-3">
+              <div className="font-bold text-slate-800">Approved By (អនុម័តដោយ)</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">School Director / Principal</div>
+              <div className="my-4 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full border-2 border-dashed border-slate-400 flex items-center justify-center text-[8px] text-slate-400 font-bold uppercase rotate-[-12deg]">
+                  Official Stamp
+                </div>
+              </div>
+              <div className="font-bold text-slate-400">___________________</div>
+              <div className="text-[10px] text-slate-400">Date: ____ / ____ / 2026</div>
+            </div>
+          </div>
         </div>
 
       </div>

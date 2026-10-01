@@ -57,6 +57,8 @@
   aside, 
   nav, 
   button, 
+  input,
+  select,
   .print\:hidden {
     display: none !important;
   }
@@ -72,6 +74,62 @@
 
   .print\:grid {
     display: grid !important;
+  }
+
+  .print\:inline-block {
+    display: inline-block !important;
+  }
+
+  /* Force table wrappers to not clip */
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-hidden {
+    overflow: visible !important;
+  }
+
+  /* Universal print table optimizations */
+  table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  tbody tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  th, td {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Page break helpers */
+  .page-break-avoid,
+  .print-break-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
   }
 
   /* Timetable Table Print Optimization */
@@ -104,7 +162,7 @@
     page-break-inside: avoid !important;
   }
 
-  /* Teacher Wage & Payroll Report & Payslip Print Optimizations */
+  /* Teacher Wage & Payroll Report & Attendance Print Optimizations */
   .standard-report-wrapper {
     overflow: visible !important;
     border: none !important;
@@ -154,7 +212,11 @@
     break-inside: avoid !important;
   }
 
-  .standard-admin-report-footer {
+  .standard-admin-report-footer,
+  .signatures,
+  .signature-box,
+  .sig-box,
+  .report-signatures {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     border-radius: 0 !important;

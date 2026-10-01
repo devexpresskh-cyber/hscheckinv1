@@ -433,7 +433,12 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
           <div className="text-right text-xs space-y-0.5">
             <div className="font-bold text-slate-900">
               <span className="text-slate-500 font-normal">{isKhmer ? 'ឆ្នាំសិក្សា៖ ' : 'Academic Year: '}</span>
-              2025–2026
+              {systemSettings.academicYear || '2026-2027'}
+              {systemSettings.academicStartDate && systemSettings.academicEndDate && (
+                <span className="text-[10px] text-slate-500 block font-normal font-mono">
+                  ({systemSettings.academicStartDate} – {systemSettings.academicEndDate})
+                </span>
+              )}
             </div>
             <div className="text-slate-600 font-medium">
               <span className="text-slate-500 font-normal">{isKhmer ? 'កាលបរិច្ឆេទបោះពុម្ព៖ ' : 'Printed Date: '}</span>

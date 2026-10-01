@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { StorageService } from '../../services/storageService.ts';
 import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
+import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
 import {
   Bell,
   Clock,
@@ -18,7 +19,8 @@ import {
   LogOut,
   GraduationCap,
   Users2,
-  ShieldCheck
+  ShieldCheck,
+  Calendar
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -43,9 +45,24 @@ export const Header: React.FC<HeaderProps> = ({
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
 
-  const systemSettings = StorageService.getSystemSettings();
-  const telegramSettings = StorageService.getTelegramSettings();
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+  const [telegramSettings, setTelegramSettings] = useState(() => StorageService.getTelegramSettings());
+
+  useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setSystemSettings(StorageService.getSystemSettings());
+      setTelegramSettings(StorageService.getTelegramSettings());
+    });
+    return unsub;
+  }, []);
+
+  const canEditAcademicDates =
+    currentUser.role === 'super_admin' ||
+    currentUser.role === 'admin_hr' ||
+    hasPermission('settings.edit') ||
+    hasPermission('schedules.edit');
 
   useEffect(() => {
     const updateTime = () => {
@@ -122,6 +139,46 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden xl:inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shrink-0">
                 School MIS
               </span>
+              {systemSettings.academicYear ? (
+                canEditAcademicDates ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAcademicDatesModalOpen(true)}
+                    title={
+                      systemSettings.academicStartDate && systemSettings.academicEndDate
+                        ? `Academic Term: ${systemSettings.academicStartDate} to ${systemSettings.academicEndDate} (Click to edit dates)`
+                        : `Academic Year: ${systemSettings.academicYear} (Click to edit dates)`
+                    }
+                    className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+                  >
+                    <GraduationCap className="w-3 h-3 text-emerald-600" />
+                    <span>AY {systemSettings.academicYear}</span>
+                    <span className="text-[9px] text-emerald-600 font-normal">✎</span>
+                  </button>
+                ) : (
+                  <span
+                    title={
+                      systemSettings.academicStartDate && systemSettings.academicEndDate
+                        ? `Academic Term: ${systemSettings.academicStartDate} to ${systemSettings.academicEndDate}`
+                        : `Academic Year: ${systemSettings.academicYear}`
+                    }
+                    className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0 cursor-default shadow-2xs"
+                  >
+                    <GraduationCap className="w-3 h-3 text-emerald-600" />
+                    <span>AY {systemSettings.academicYear}</span>
+                  </span>
+                )
+              ) : canEditAcademicDates ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAcademicDatesModalOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                  title="Click to set Academic Start & End Dates"
+                >
+                  <Calendar className="w-3 h-3 text-amber-600" />
+                  <span>{isKhmer ? 'កំណត់ឆ្នាំសិក្សា' : 'Set Academic Dates'}</span>
+                </button>
+              ) : null}
             </div>
             <p className="text-[11px] text-slate-500 font-medium hidden sm:block truncate">
               {isKhmer
@@ -367,6 +424,14 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
+
+      {/* Quick Academic Dates Modal for Admins */}
+      {isAcademicDatesModalOpen && (
+        <AcademicDatesModal
+          isOpen={isAcademicDatesModalOpen}
+          onClose={() => setIsAcademicDatesModalOpen(false)}
+        />
+      )}
     </header>
   );
 };

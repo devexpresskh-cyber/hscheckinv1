@@ -393,6 +393,12 @@ export interface SystemSettings {
   khmerOrgName: string;
   schoolName?: string;
   khmerSchoolName?: string;
+  academicYear?: string; // e.g. '2026-2027'
+  academicStartDate?: string; // '2026-09-01'
+  academicEndDate?: string; // '2027-06-30'
+  currentSemester?: string; // 'Semester 1' | 'Semester 2' | 'Full Year' | 'Summer Term'
+  semesterStartDate?: string; // '2026-09-01'
+  semesterEndDate?: string; // '2027-01-31'
   contactPhone?: string;
   contactEmail?: string;
   tagline: string;
