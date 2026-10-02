@@ -48,7 +48,7 @@ export const TelegramCenter: React.FC = () => {
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'bot'; text: string; time: string }>>([
     {
       sender: 'bot',
-      text: '👋 <b>EduTrack Telegram Bot Initialized</b>\nConnected to school attendance dispatch engine.\nTry typing: /status, /myschedule, or /checkin',
+      text: '👋 <b>ប្រព័ន្ធតេឡេក្រាម Bot ត្រូវបានតភ្ជាប់</b>\nភ្ជាប់ជាមួយប្រព័ន្ធបញ្ជូនដំណឹងវត្តមានរបស់សាលា Heart School។\nសាកល្បងវាយ៖ /status, /myschedule, ឬ /checkin',
       time: '12:00'
     }
   ]);
@@ -74,19 +74,19 @@ export const TelegramCenter: React.FC = () => {
     if (type === 'checkin') {
       result = await TelegramService.dispatchMessage({
         chatId: settings.groupChatId || settings.adminChatId,
-        text: `✅ <b>Attendance Check-in</b>\n\n<b>Name:</b> Sok Chenda (សុខ ចិន្តា)\n<b>Department:</b> Mathematics & Science\n<b>Time:</b> 07:28\n<b>Status:</b> Present (On-time)\n<b>System:</b> EduTrack School Attendance`,
+        text: `✅ <b>[គ្រូបង្រៀន] វត្តមានស្កេនចូលបម្រើការ (Check-in)</b>\n\n👤 <b>ឈ្មោះ៖</b> សុខ ចិន្តា (Sok Chenda)\n🏷️ <b>តួនាទី៖</b> គ្រូបង្រៀន\n🏢 <b>ដេប៉ាតឺម៉ង់៖</b> គណិតវិទ្យា និងវិទ្យាសាស្ត្រ\n⏰ <b>ម៉ោងស្កេនចូល៖</b> 07:28\n📋 <b>វេនកំណត់៖</b> 07:30\n📊 <b>ស្ថានភាព៖</b> មានវត្តមាន (ទាន់ពេល)\n🏫 <b>សាលា៖</b> Heart School`,
         type: 'checkin'
       });
     } else if (type === 'late') {
       result = await TelegramService.dispatchMessage({
         chatId: settings.adminChatId,
-        text: `⚠️ <b>Late Arrival Alert</b>\n\n<b>Name:</b> Chann Borey (ចាន់ បូរី)\n<b>Department:</b> Languages & Humanities\n<b>Scheduled:</b> 07:30\n<b>Check-in:</b> 07:52\n<b>Late:</b> 22 minutes\n<b>System:</b> EduTrack School Attendance`,
+        text: `⚠️ <b>[គ្រូបង្រៀន] វត្តមានមកយឺត (Late Check-in)</b>\n\n👤 <b>ឈ្មោះ៖</b> ចាន់ បូរី (Chann Borey)\n🏷️ <b>តួនាទី៖</b> គ្រូបង្រៀន\n🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ភាសា និងមនុស្សសាស្ត្រ\n⏰ <b>ម៉ោងស្កេនចូល៖</b> 07:52\n📋 <b>វេនកំណត់៖</b> 07:30\n⏳ <b>យឺត៖</b> 22 នាទី\n📊 <b>ស្ថានភាព៖</b> មកយឺត\n🏫 <b>សាលា៖</b> Heart School`,
         type: 'late'
       });
     } else if (type === 'absence') {
       result = await TelegramService.dispatchMessage({
         chatId: settings.adminChatId,
-        text: `🚨 <b>Absence Alert</b>\n\n<b>Name:</b> Kim Sreypov (គីម ស្រីពៅ)\n<b>Department:</b> Mathematics & Science\n<b>Date:</b> ${new Date().toISOString().split('T')[0]}\n<b>Status:</b> No check-in detected by 08:30 deadline.\n<b>Action:</b> Contact faculty member.\n<b>System:</b> EduTrack School Attendance`,
+        text: `🚨 <b>[គ្រូបង្រៀន] សេចក្តីជូនដំណឹងអំពីអវត្តមាន</b>\n\n👤 <b>ឈ្មោះ៖</b> គីម ស្រីពៅ (Kim Sreypov)\n🏷️ <b>តួនាទី៖</b> គ្រូបង្រៀន\n🏢 <b>ដេប៉ាតឺម៉ង់៖</b> គណិតវិទ្យា និងវិទ្យាសាស្ត្រ\n📅 <b>កាលបរិច្ឆេទ៖</b> ${new Date().toISOString().split('T')[0]}\n⚠️ <b>ស្ថានភាព៖</b> មិនមានការស្កេនវត្តមានត្រឹមពេលកំណត់ទេ\n🏫 <b>ប្រព័ន្ធ៖</b> Heart School - ប្រព័ន្ធគ្រប់គ្រងវត្តមាន`,
         type: 'absence'
       });
     } else {

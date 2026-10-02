@@ -538,16 +538,16 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
         });
 
         // Telegram notification
-        TelegramService.sendCheckInAlert({
+        TelegramService.sendCheckOutAlert({
           name: teacher.fullName,
           khmerName: teacher.khmerName,
           personType: 'teacher',
           department: teacher.department || 'Academic',
-          time: `Out: ${timeStr} (In: ${existingRecord.checkInTime})`,
-          scheduled: `${existingRecord.scheduledStart} - ${existingRecord.scheduledEnd}`,
-          status: updatedRecord.status,
-          lateMinutes: existingRecord.lateMinutes,
-          subjectInfo: `${existingRecord.subject || 'Class'} (Checked Out)`
+          checkOutTime: timeStr,
+          workingTime: `${existingRecord.checkInTime} — ${timeStr}`,
+          earlyLeaveMinutes: 0,
+          overtimeMinutes: 0,
+          subjectInfo: `${existingRecord.subject || 'Class'}`
         });
 
         try {

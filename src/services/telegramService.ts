@@ -66,7 +66,7 @@ export const TelegramService = {
     // Also push to in-app notification center
     if (params.type === 'late' || params.type === 'absence') {
       StorageService.addNotification({
-        title: params.type === 'late' ? '⚠️ Telegram Alert: Late Arrival' : '🚨 Telegram Alert: Absence',
+        title: params.type === 'late' ? '⚠️ ការជូនដំណឹង Telegram៖ វត្តមានមកយឺត' : '🚨 ការជូនដំណឹង Telegram៖ អវត្តមាន',
         message: params.text.slice(0, 140) + '...',
         type: params.type === 'late' ? 'warning' : 'error',
         category: 'attendance'
@@ -98,29 +98,31 @@ export const TelegramService = {
     const groupChatId = (settings.groupChatId || '').trim();
     const adminChatId = (settings.adminChatId || '').trim();
     const isTeacher = data.personType?.toLowerCase() === 'teacher';
-    const roleTag = isTeacher ? 'Teacher / គ្រូបង្រៀន' : 'Employee (Staff) / បុគ្គលិក';
-    const subjectLine = data.subjectInfo ? `\n📚 <b>Class Session:</b> ${data.subjectInfo}` : '';
+    const roleTagKhmer = isTeacher ? 'គ្រូបង្រៀន' : 'បុគ្គលិក';
+    const displayName = data.khmerName ? `${data.khmerName} (${data.name})` : data.name;
+    const subjectLine = data.subjectInfo ? `\n📚 <b>ថ្នាក់/មុខវិជ្ជា៖</b> ${data.subjectInfo}` : '';
     const isLate = data.status === 'Late';
 
     let msg = '';
     if (isLate) {
-      msg = `⚠️ <b>[${roleTag}] វត្តមានមកយឺត (Late Check-in)</b>\n\n` +
-        `👤 <b>Name / ឈ្មោះ:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
-        `🏷️ <b>Role:</b> ${isTeacher ? 'Teacher' : 'Staff Employee'}\n` +
-        `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
-        `⏰ <b>Check-in Time / ម៉ោងស្កេនចូល:</b> ${data.time}\n` +
-        `📋 <b>Scheduled Shift:</b> ${data.scheduled}\n` +
-        `⏳ <b>Lateness / យឺត:</b> ${data.lateMinutes} mins\n` +
-        `🏫 <b>School:</b> Heart School`;
+      msg = `⚠️ <b>[${roleTagKhmer}] វត្តមានមកយឺត (Late Check-in)</b>\n\n` +
+        `👤 <b>ឈ្មោះ៖</b> ${displayName}\n` +
+        `🏷️ <b>តួនាទី៖</b> ${roleTagKhmer}\n` +
+        `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${data.department}${subjectLine}\n` +
+        `⏰ <b>ម៉ោងស្កេនចូល៖</b> ${data.time}\n` +
+        `📋 <b>វេនកំណត់៖</b> ${data.scheduled}\n` +
+        `⏳ <b>យឺត៖</b> ${data.lateMinutes} នាទី\n` +
+        `📊 <b>ស្ថានភាព៖</b> មកយឺត\n` +
+        `🏫 <b>សាលា៖</b> Heart School`;
     } else {
-      msg = `✅ <b>[${roleTag}] វត្តមានចូលបម្រើការ (Check-in)</b>\n\n` +
-        `👤 <b>Name / ឈ្មោះ:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
-        `🏷️ <b>Role:</b> ${isTeacher ? 'Teacher' : 'Staff Employee'}\n` +
-        `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
-        `⏰ <b>Check-in Time / ម៉ោងស្កេនចូល:</b> ${data.time}\n` +
-        `📋 <b>Scheduled Shift:</b> ${data.scheduled}\n` +
-        `📊 <b>Status:</b> Present (On-time / ទាន់ពេល)\n` +
-        `🏫 <b>School:</b> Heart School`;
+      msg = `✅ <b>[${roleTagKhmer}] វត្តមានស្កេនចូលបម្រើការ (Check-in)</b>\n\n` +
+        `👤 <b>ឈ្មោះ៖</b> ${displayName}\n` +
+        `🏷️ <b>តួនាទី៖</b> ${roleTagKhmer}\n` +
+        `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${data.department}${subjectLine}\n` +
+        `⏰ <b>ម៉ោងស្កេនចូល៖</b> ${data.time}\n` +
+        `📋 <b>វេនកំណត់៖</b> ${data.scheduled}\n` +
+        `📊 <b>ស្ថានភាព៖</b> មានវត្តមាន (ទាន់ពេល)\n` +
+        `🏫 <b>សាលា៖</b> Heart School`;
     }
 
     // 1. Prioritize Telegram Group
@@ -165,16 +167,18 @@ export const TelegramService = {
 
     const groupChatId = (settings.groupChatId || '').trim();
     const adminChatId = (settings.adminChatId || '').trim();
-    const roleTag = data.personType || (data.subjectInfo ? 'Teacher' : 'Staff');
+    const isTeacher = data.personType?.toLowerCase() === 'teacher';
+    const roleTagKhmer = isTeacher ? 'គ្រូបង្រៀន' : 'បុគ្គលិក';
+    const displayName = data.khmerName ? `${data.khmerName} (${data.name})` : data.name;
 
-    const subjectLine = data.subjectInfo ? `\n<b>Class Session:</b> ${data.subjectInfo}` : '';
-    const msg = `🚨 <b>[${roleTag}] Absence Alert</b>\n\n` +
-      `👤 <b>Name:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
-      `🏷️ <b>Role:</b> ${roleTag}\n` +
-      `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
-      `📅 <b>Date:</b> ${data.date}\n` +
-      `⚠️ <b>Status:</b> No check-in detected by deadline.\n` +
-      `🏫 <b>System:</b> EduTrack School Attendance`;
+    const subjectLine = data.subjectInfo ? `\n📚 <b>ថ្នាក់/មុខវិជ្ជា៖</b> ${data.subjectInfo}` : '';
+    const msg = `🚨 <b>[${roleTagKhmer}] សេចក្តីជូនដំណឹងអំពីអវត្តមាន</b>\n\n` +
+      `👤 <b>ឈ្មោះ៖</b> ${displayName}\n` +
+      `🏷️ <b>តួនាទី៖</b> ${roleTagKhmer}\n` +
+      `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${data.department}${subjectLine}\n` +
+      `📅 <b>កាលបរិច្ឆេទ៖</b> ${data.date}\n` +
+      `⚠️ <b>ស្ថានភាព៖</b> មិនមានការស្កេនវត្តមានត្រឹមពេលកំណត់ទេ\n` +
+      `🏫 <b>ប្រព័ន្ធ៖</b> Heart School - ប្រព័ន្ធគ្រប់គ្រងវត្តមាន`;
 
     const targetChat = groupChatId || adminChatId;
     if (targetChat) {
@@ -211,23 +215,24 @@ export const TelegramService = {
     const groupChatId = (settings.groupChatId || '').trim();
     const adminChatId = (settings.adminChatId || '').trim();
     const isTeacher = data.personType?.toLowerCase() === 'teacher';
-    const roleTag = isTeacher ? 'Teacher / គ្រូបង្រៀន' : 'Employee (Staff) / បុគ្គលិក';
+    const roleTagKhmer = isTeacher ? 'គ្រូបង្រៀន' : 'បុគ្គលិក';
+    const displayName = data.khmerName ? `${data.khmerName} (${data.name})` : data.name;
 
-    const subjectLine = data.subjectInfo ? `\n📚 <b>Class Session:</b> ${data.subjectInfo}` : '';
+    const subjectLine = data.subjectInfo ? `\n📚 <b>ថ្នាក់/មុខវិជ្ជា៖</b> ${data.subjectInfo}` : '';
     let extraInfo = '';
     if (data.earlyLeaveMinutes > 0) {
-      extraInfo = `\n⚠️ <b>Early Leave / ចេញមុនម៉ោង:</b> ${data.earlyLeaveMinutes} mins`;
+      extraInfo = `\n⚠️ <b>ចេញមុនម៉ោង៖</b> ${data.earlyLeaveMinutes} នាទី`;
     } else if (data.overtimeMinutes > 0) {
-      extraInfo = `\n⭐ <b>Overtime / ថែមម៉ោង:</b> +${data.overtimeMinutes} mins`;
+      extraInfo = `\n⭐ <b>ថែមម៉ោង (OT)៖</b> +${data.overtimeMinutes} នាទី`;
     }
 
-    const msg = `👋 <b>[${roleTag}] វត្តមានស្កេនចេញ (Check-out)</b>\n\n` +
-      `👤 <b>Name / ឈ្មោះ:</b> ${data.name} ${data.khmerName ? `(${data.khmerName})` : ''}\n` +
-      `🏷️ <b>Role:</b> ${isTeacher ? 'Teacher' : 'Staff Employee'}\n` +
-      `🏢 <b>Department:</b> ${data.department}${subjectLine}\n` +
-      `⏰ <b>Check-out Time / ម៉ោងស្កេនចេញ:</b> ${data.checkOutTime}\n` +
-      `⌛ <b>Working Duration / រយៈពេលបម្រើការ:</b> ${data.workingTime}${extraInfo}\n` +
-      `🏫 <b>School:</b> Heart School`;
+    const msg = `👋 <b>[${roleTagKhmer}] វត្តមានស្កេនចេញ (Check-out)</b>\n\n` +
+      `👤 <b>ឈ្មោះ៖</b> ${displayName}\n` +
+      `🏷️ <b>តួនាទី៖</b> ${roleTagKhmer}\n` +
+      `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${data.department}${subjectLine}\n` +
+      `⏰ <b>ម៉ោងស្កេនចេញ៖</b> ${data.checkOutTime}\n` +
+      `⌛ <b>រយៈពេលបំពេញការងារ៖</b> ${data.workingTime}${extraInfo}\n` +
+      `🏫 <b>សាលា៖</b> Heart School`;
 
     // 1. Prioritize Telegram Group
     if (groupChatId) {
@@ -271,7 +276,16 @@ export const TelegramService = {
     const leave = records.filter(r => r.status === 'Leave').length;
     const missing = records.filter(r => r.status === 'Missing Check-out' || (r.checkInTime && !r.checkOutTime)).length;
 
-    const msg = `📊 <b>Daily Attendance Summary</b>\n\n<b>Date:</b> ${today}\n\n<b>Active Teachers:</b> ${teachers.length}\n<b>Active Employees:</b> ${employees.length}\n\n✅ <b>Present:</b> ${present}\n⚠️ <b>Late:</b> ${late}\n🚨 <b>Absent:</b> ${absent}\n🏖️ <b>On Leave:</b> ${leave}\n⏳ <b>Incomplete / Missing Checkout:</b> ${missing}\n\n<i>Generated by EduTrack Automated Attendance Engine</i>`;
+    const msg = `📊 <b>របាយការណ៍សង្ខេបវត្តមានប្រចាំថ្ងៃ</b>\n\n` +
+      `📅 <b>កាលបរិច្ឆេទ៖</b> ${today}\n\n` +
+      `👨‍🏫 <b>ចំនួនគ្រូបង្រៀនសកម្ម៖</b> ${teachers.length} នាក់\n` +
+      `👥 <b>ចំនួនបុគ្គលិកសកម្ម៖</b> ${employees.length} នាក់\n\n` +
+      `✅ <b>មានវត្តមាន៖</b> ${present} នាក់\n` +
+      `⚠️ <b>មកយឺត៖</b> ${late} នាក់\n` +
+      `🚨 <b>អវត្តមាន៖</b> ${absent} នាក់\n` +
+      `🏖️ <b>សុំច្បាប់៖</b> ${leave} នាក់\n` +
+      `⏳ <b>មិនទាន់ស្កេនចេញ / ខ្វះទិន្នន័យ៖</b> ${missing} នាក់\n\n` +
+      `<i>រៀបចំដោយស្វ័យប្រវត្តិតាមប្រព័ន្ធវត្តមាន Heart School</i>`;
 
     return this.dispatchMessage({
       chatId: settings.adminChatId,
@@ -285,7 +299,13 @@ export const TelegramService = {
     const settings = StorageService.getTelegramSettings();
     if (!settings.isEnabled || !settings.notifyReminder) return;
 
-    const msg = `🔔 <b>Schedule Reminder</b>\n\nGood morning <b>${personName}</b>.\n\nYour work schedule begins at <b>${startTime}</b>.\n\n<b>Campus Location:</b> ${location}\n<b>Department:</b> ${department}\n\nPlease remember to check in on time via mobile kiosk.`;
+    const msg = `🔔 <b>សេចក្តីរំលឹកកាលវិភាគការងារ / បង្រៀន</b>\n\n` +
+      `សួស្តីលោក/លោកស្រី <b>${personName}</b>\n\n` +
+      `កាលវិភាគការងាររបស់អ្នកនឹងចាប់ផ្តើមនៅម៉ោង <b>${startTime}</b>។\n\n` +
+      `📍 <b>ទីតាំង / បន្ទប់៖</b> ${location}\n` +
+      `🏢 <b>ដេប៉ាតឺម៉ង់ / មុខវិជ្ជា៖</b> ${department}\n\n` +
+      `សូមមេត្តាស្កេនវត្តមានចូលឱ្យបានទាន់ពេលវេលា។\n` +
+      `🏫 <b>ស្ថាប័ន៖</b> Heart School`;
 
     return this.dispatchMessage({
       chatId: settings.groupChatId || settings.adminChatId,
@@ -301,25 +321,58 @@ export const TelegramService = {
     const teachers = StorageService.getTeachers();
     const employees = StorageService.getEmployees();
     const staff = teachers.find(t => t.id === personId) || employees.find(e => e.id === personId) || teachers[0];
+    const displayName = staff.khmerName ? `${staff.khmerName} (${staff.fullName})` : staff.fullName;
+
+    const khmerStatusMap: Record<string, string> = {
+      'Present': 'មានវត្តមាន (ទាន់ពេល)',
+      'Late': 'មកយឺត',
+      'Absent': 'អវត្តមាន',
+      'Leave': 'សុំច្បាប់',
+      'Missing Check-out': 'មិនទាន់ស្កេនចេញ'
+    };
 
     const attendance = StorageService.getAttendance().find(
       r => r.personId === staff.id && r.date === today
     );
 
     if (cmd === '/start') {
-      return `👋 <b>Welcome to EduTrack Bot</b>\n\nHello ${staff.fullName}!\nI can help you check your schedule, report attendance, and receive alerts.\n\n<b>Available Commands:</b>\n/status - View today's attendance status\n/checkin - Submit instant check-in\n/checkout - Submit shift check-out\n/myschedule - View your assigned shift\n/myattendance - View recent records\n/help - Instructions & support`;
+      return `👋 <b>សូមស្វាគមន៍មកកាន់ប្រព័ន្ធ Bot វត្តមាន Heart School</b>\n\n` +
+        `សួស្តី <b>${displayName}</b>!\n` +
+        `ខ្ញុំអាចជួយលោកអ្នកពិនិត្យកាលវិភាគ ស្ថានភាពវត្តមាន និងទទួលការជូនដំណឹងផ្សេងៗ។\n\n` +
+        `<b>ពាក្យបញ្ជាដែលអាចប្រើបាន៖</b>\n` +
+        `/status - ពិនិត្យស្ថានភាពវត្តមានថ្ងៃនេះ\n` +
+        `/checkin - ស្កេនវត្តមានចូលភ្លាមៗ\n` +
+        `/checkout - ស្កេនវត្តមានចេញ\n` +
+        `/myschedule - មើលកាលវិភាគការងារដែលបានចាត់តាំង\n` +
+        `/myattendance - មើលប្រវត្តិវត្តមានថ្មីៗ\n` +
+        `/help - ជំនួយ និងព័ត៌មានបន្ថែម`;
     }
 
     if (cmd === '/status') {
       if (!attendance) {
-        return `📅 <b>Today's Attendance (${today})</b>\n\nStaff: <b>${staff.fullName}</b>\nStatus: <b>Not checked in yet</b>\nScheduled: 07:30 - 11:30\n\nType /checkin to record your attendance.`;
+        return `📅 <b>ស្ថានភាពវត្តមានថ្ងៃនេះ (${today})</b>\n\n` +
+          `👤 <b>បុគ្គលិក/គ្រូ៖</b> <b>${displayName}</b>\n` +
+          `📊 <b>ស្ថានភាព៖</b> <b>មិនទាន់ស្កេនវត្តមានចូលនៅឡើយទេ</b>\n` +
+          `⏰ <b>ម៉ោងកំណត់៖</b> 07:30 - 11:30\n\n` +
+          `សូមប្រើប្រាស់ស្ថានីយស្កេន ឬវាយពាក្យបញ្ជា /checkin ដើម្បីស្កេនវត្តមានចូល។`;
       }
-      return `📅 <b>Today's Attendance (${today})</b>\n\nStaff: <b>${staff.fullName}</b>\nStatus: <b>${attendance.status}</b>\nCheck-in: <b>${attendance.checkInTime || 'None'}</b>\nCheck-out: <b>${attendance.checkOutTime || 'Not yet'}</b>\n${attendance.lateMinutes > 0 ? `Late by: ${attendance.lateMinutes} minutes\n` : ''}Location Verified: ${attendance.locationVerified ? '✅ Yes' : '⚠️ No'}`;
+      return `📅 <b>ស្ថានភាពវត្តមានថ្ងៃនេះ (${today})</b>\n\n` +
+        `👤 <b>បុគ្គលិក/គ្រូ៖</b> <b>${displayName}</b>\n` +
+        `📊 <b>ស្ថានភាព៖</b> <b>${khmerStatusMap[attendance.status] || attendance.status}</b>\n` +
+        `⏰ <b>ម៉ោងស្កេនចូល៖</b> <b>${attendance.checkInTime || 'គ្មាន'}</b>\n` +
+        `🚪 <b>ម៉ោងស្កេនចេញ៖</b> <b>${attendance.checkOutTime || 'មិនទាន់ស្កេនចេញ'}</b>\n` +
+        `${attendance.lateMinutes > 0 ? `⏳ <b>យឺត៖</b> ${attendance.lateMinutes} នាទី\n` : ''}` +
+        `📍 <b>ផ្ទៀងផ្ទាត់ទីតាំង៖</b> ${attendance.locationVerified ? '✅ ត្រឹមត្រូវ' : '⚠️ មិនត្រឹមត្រូវ'}`;
     }
 
     if (cmd === '/myschedule') {
       const schedule = StorageService.getSchedules().find(s => s.id === staff.assignedScheduleId) || StorageService.getSchedules()[0];
-      return `⏰ <b>Your Assigned Schedule</b>\n\nStaff: <b>${staff.fullName}</b>\nSchedule: <b>${schedule.name}</b>\nWorking Hours: <b>${schedule.startTime} — ${schedule.endTime}</b>\nGrace Period: <b>${schedule.gracePeriodMinutes} minutes</b>\nCampus Location: <b>${schedule.location}</b>`;
+      return `⏰ <b>កាលវិភាគការងារដែលបានចាត់តាំង</b>\n\n` +
+        `👤 <b>បុគ្គលិក/គ្រូ៖</b> <b>${displayName}</b>\n` +
+        `📋 <b>កាលវិភាគ៖</b> <b>${schedule.khmerName || schedule.name}</b>\n` +
+        `⏱️ <b>ម៉ោងបំពេញការងារ៖</b> <b>${schedule.startTime} — ${schedule.endTime}</b>\n` +
+        `⌛ <b>រយៈពេលអនុគ្រោះ៖</b> <b>${schedule.gracePeriodMinutes} នាទី</b>\n` +
+        `📍 <b>ទីតាំង៖</b> <b>${schedule.location}</b>`;
     }
 
     if (cmd === '/myattendance') {
@@ -328,17 +381,17 @@ export const TelegramService = {
         .slice(0, 5);
 
       if (myRecords.length === 0) {
-        return `📜 <b>Attendance History</b>\n\nNo records found for ${staff.fullName}.`;
+        return `📜 <b>ប្រវត្តិវត្តមាន</b>\n\nមិនមានកំណត់ត្រាវត្តមានសម្រាប់ ${displayName} នៅឡើយទេ។`;
       }
 
-      const rows = myRecords.map(r => `• ${r.date}: <b>${r.status}</b> (In: ${r.checkInTime || '-'}, Out: ${r.checkOutTime || '-'})`).join('\n');
-      return `📜 <b>Recent Attendance History (${staff.fullName})</b>\n\n${rows}`;
+      const rows = myRecords.map(r => `• ${r.date}: <b>${khmerStatusMap[r.status] || r.status}</b> (ចូល: ${r.checkInTime || '-'}, ចេញ: ${r.checkOutTime || '-'})`).join('\n');
+      return `📜 <b>ប្រវត្តិវត្តមានថ្មីៗ (${displayName})</b>\n\n${rows}`;
     }
 
     if (cmd === '/help') {
-      return `ℹ️ <b>EduTrack Telegram Support</b>\n\nFor questions about schedule changes or leave approvals, please contact HR at +855 12 345 678 or reach out to your department supervisor.`;
+      return `ℹ️ <b>ជំនួយពីប្រព័ន្ធតេឡេក្រាម Heart School</b>\n\nសម្រាប់ចម្ងល់អំពីការផ្លាស់ប្តូរកាលវិភាគ ឬការស្នើសុំច្បាប់ឈប់សម្រាក សូមទាក់ទងមកកាន់ការិយាល័យ ឬទូរស័ព្ទលេខ +855 12 345 678 ឬទាក់ទងប្រធានផ្នែករបស់អ្នកផ្ទាល់។`;
     }
 
-    return `❓ <b>Unknown command</b>. Available commands:\n/start, /status, /checkin, /checkout, /myschedule, /myattendance, /help`;
+    return `❓ <b>ពាក្យបញ្ជាមិនត្រឹមត្រូវ</b>។ ពាក្យបញ្ជាដែលអាចប្រើបាន៖\n/start, /status, /checkin, /checkout, /myschedule, /myattendance, /help`;
   }
 };
