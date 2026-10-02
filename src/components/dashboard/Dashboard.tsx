@@ -36,6 +36,8 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   const { showToast } = useNotification();
   const { t, isKhmer } = useLanguage();
 
+  const isAdmin = currentUser.role === 'super_admin' || currentUser.role === 'admin_hr' || currentUser.role === 'supervisor';
+
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
@@ -194,8 +196,8 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   return (
     <div className="space-y-6">
       
-      {/* Pinned Check-In / Check-Out Station at Top Home Page */}
-      <PinnedCheckInWidget onOpenCheckIn={onOpenCheckIn} />
+      {/* Pinned Check-In / Check-Out Station at Top Home Page (Hidden on Admin Dashboard, shown for staff) */}
+      {!isAdmin && <PinnedCheckInWidget onOpenCheckIn={onOpenCheckIn} />}
 
       {/* Top Banner / Welcome & Quick Actions */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
