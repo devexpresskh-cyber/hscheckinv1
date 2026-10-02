@@ -255,7 +255,7 @@ export interface AttendanceRecord {
   gradeClass?: string;
   room?: string;
   periodName?: string;
-  session?: 'morning' | 'afternoon' | 'full';
+  session?: 'morning' | 'afternoon' | 'evening' | 'full';
   scheduledStart: string;
   scheduledEnd: string;
   checkInTime?: string; // '07:42'

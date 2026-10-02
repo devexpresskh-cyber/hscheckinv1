@@ -19,6 +19,10 @@ import {
   Navigation,
   ShieldCheck,
   User,
+  Users,
+  Sun,
+  Moon,
+  LogIn,
   Sparkles,
   Info,
   BookOpen,
@@ -76,6 +80,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     isOpen: boolean;
     action: 'checkin' | 'checkout';
     specificSubjectId?: string;
+    shiftType?: 'morning' | 'evening';
     autoSetToEndOfSchedule?: boolean;
   }>({
     isOpen: false,
@@ -455,7 +460,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     ? curMins < startMins && curMins >= Math.max(0, startMins - earlyBufferMinutes)
     : false;
 
-  const isOverEndTime = curMins >= endMins;
+  // Over end time is strictly a teacher restriction (employees can check in/out before and after shifttime)
+  const isOverEndTime = isTeacher && curMins >= endMins;
 
   const isBeforeEndTime = isTeacher && activeSubject
     ? curMins < endMins
@@ -472,15 +478,47 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       )
     : undefined;
 
-  // General shift record (for employee)
+  // General shift records for employee (Morning & Evening shifts)
+  const [employeeSelectedShift, setEmployeeSelectedShift] = useState<'morning' | 'evening'>('morning');
+
+  const employeeMorningRecord = !isTeacher
+    ? attendanceList.find(
+        a =>
+          a.personId === activeStaff?.id &&
+          a.date === todayStr &&
+          !a.subjectScheduleId &&
+          (a.session === 'morning' || (!a.session && !a.scheduleName?.includes('Evening')))
+      )
+    : undefined;
+
+  const employeeEveningRecord = !isTeacher
+    ? attendanceList.find(
+        a =>
+          a.personId === activeStaff?.id &&
+          a.date === todayStr &&
+          !a.subjectScheduleId &&
+          (a.session === 'afternoon' || a.session === 'evening' || a.scheduleName?.includes('Evening'))
+      )
+    : undefined;
+
+  // Auto-switch employee default shift based on clock time
+  useEffect(() => {
+    if (!isTeacher) {
+      const curM = AttendanceEngine.timeToMinutes(effectiveTime);
+      if ((employeeMorningRecord?.checkInTime && curM >= 12 * 60) || curM >= 12 * 60 + 30) {
+        setEmployeeSelectedShift('evening');
+      }
+    }
+  }, [effectiveTime, isTeacher, employeeMorningRecord?.checkInTime]);
+
   const generalRecord = !isTeacher
-    ? attendanceList.find(a => a.personId === activeStaff?.id && a.date === todayStr && !a.subjectScheduleId)
+    ? (employeeSelectedShift === 'evening' ? employeeEveningRecord : employeeMorningRecord)
     : undefined;
 
   const currentRecord = isTeacher ? activeSubjectRecord : generalRecord;
 
   // Actual Check-in Execution
-  const executeCheckIn = (specificSubjectId?: string) => {
+  const executeCheckIn = (specificSubjectId?: string, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
 
     const targetSubject = isTeacher
@@ -525,19 +563,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         );
         return;
       }
-    } else {
-      const targetEndTime = activeSchedule.endTime;
-      const endMins = AttendanceEngine.timeToMinutes(targetEndTime);
-      if (curMins >= endMins) {
-        showToast(
-          isKhmer
-            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ម៉ោងបច្ចុប្បន្ន (${effectiveTime}) បានដល់ ឬហួសម៉ោងបញ្ចប់កាលវិភាគ (${targetEndTime}) រួចហើយ!`
-            : `Cannot scan in: Current time (${effectiveTime}) is over the scheduled end-time (${targetEndTime}). Scanning in after end-time is strictly prohibited.`,
-          'error'
-        );
-        return;
-      }
     }
+    // Note: Employees can check in before and after shifttime freely without blocking!
 
     setIsSubmitting(true);
 
@@ -554,6 +581,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       lng = isOnCampus ? systemSettings.defaultLocationLongitude : systemSettings.defaultLocationLongitude + 0.05;
     }
 
+    const effectiveShift = shiftType || employeeSelectedShift;
+
     setTimeout(() => {
       const result = AttendanceEngine.processCheckIn({
         personId: activeStaff.id,
@@ -563,6 +592,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         department: activeStaff.dept,
         scheduleId: activeStaff.scheduleId,
         subjectScheduleId: targetSubject?.id,
+        shiftType: !isTeacher ? effectiveShift : undefined,
+        session: !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
         customTime: effectiveTime,
         latitude: lat,
         longitude: lng
@@ -589,7 +620,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   };
 
   // Actual Check-out Execution
-  const executeCheckOut = (specificSubjectId?: string, autoSetToEndOfSchedule?: boolean) => {
+  const executeCheckOut = (specificSubjectId?: string, autoSetToEndOfSchedule?: boolean, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
 
     const targetSubjectId = isTeacher
@@ -624,6 +655,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       }
     }
 
+    const effectiveShift = shiftType || employeeSelectedShift;
     setIsSubmitting(true);
 
     setTimeout(() => {
@@ -631,6 +663,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         personId: activeStaff.id,
         personName: activeStaff.name,
         subjectScheduleId: targetSubjectId,
+        shiftType: !isTeacher ? effectiveShift : undefined,
+        session: !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
         customTime: shouldAutoSetToEnd && targetSubject ? targetSubject.endTime : effectiveTime,
         autoSetToEndOfSchedule: shouldAutoSetToEnd
       });
@@ -656,27 +690,30 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   };
 
   // Trigger Check-in (Checks Anti-Proxy PIN restriction)
-  const handleCheckIn = (specificSubjectId?: string) => {
+  const handleCheckIn = (specificSubjectId?: string, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
 
+    const targetShift = shiftType || employeeSelectedShift;
     if (systemSettings.requirePinForKiosk !== false) {
       setPinError(null);
       setEnteredPin('');
       setPinModal({
         isOpen: true,
         action: 'checkin',
-        specificSubjectId
+        specificSubjectId,
+        shiftType: targetShift
       });
       return;
     }
 
-    executeCheckIn(specificSubjectId);
+    executeCheckIn(specificSubjectId, targetShift);
   };
 
   // Trigger Check-out (Checks Anti-Proxy PIN restriction)
-  const handleCheckOut = (specificSubjectId?: string, autoSetToEndOfSchedule = false) => {
+  const handleCheckOut = (specificSubjectId?: string, autoSetToEndOfSchedule = false, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
 
+    const targetShift = shiftType || employeeSelectedShift;
     if (systemSettings.requirePinForKiosk !== false) {
       setPinError(null);
       setEnteredPin('');
@@ -684,12 +721,13 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         isOpen: true,
         action: 'checkout',
         specificSubjectId,
+        shiftType: targetShift,
         autoSetToEndOfSchedule
       });
       return;
     }
 
-    executeCheckOut(specificSubjectId, autoSetToEndOfSchedule);
+    executeCheckOut(specificSubjectId, autoSetToEndOfSchedule, targetShift);
   };
 
   // Verify PIN submission before executing attendance action
@@ -701,7 +739,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       setPinError(
         isKhmer
           ? 'លេខកូដសម្ងាត់ PIN មិនត្រឹមត្រូវ! មិនអនុញ្ញាតឱ្យស្កេនជំនួសគ្រូដទៃឡើយ!'
-          : 'Incorrect PIN! You cannot clock in/out for another teacher.'
+          : 'Incorrect PIN! You cannot clock in/out for another staff member.'
       );
       // Log unauthorized attempt to audit logs
       StorageService.addAuditLog({
@@ -719,15 +757,16 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     // Success: close modal and perform action
     const currentAction = pinModal.action;
     const currentSubId = pinModal.specificSubjectId;
+    const currentShift = pinModal.shiftType;
     const autoSetToEnd = pinModal.autoSetToEndOfSchedule;
     setPinModal({ isOpen: false, action: 'checkin' });
     setEnteredPin('');
     setPinError(null);
 
     if (currentAction === 'checkin') {
-      executeCheckIn(currentSubId);
+      executeCheckIn(currentSubId, currentShift);
     } else {
-      executeCheckOut(currentSubId, autoSetToEnd);
+      executeCheckOut(currentSubId, autoSetToEnd, currentShift);
     }
   };
 
@@ -1255,197 +1294,403 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
           {/* Current Session Attendance Status Banner & Action Buttons */}
           {activeStaff && (
             <>
-              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-xs shrink-0">
-                {isTeacher ? <GraduationCap className="w-5 h-5 text-indigo-600" /> : <Calendar className="w-5 h-5 text-indigo-600" />}
-              </div>
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">
-                  {isTeacher
-                    ? (isKhmer ? `ស្ថានភាពម៉ោងបង្រៀន៖ ${activeSubject?.subject || 'មុខវិជ្ជា'}` : `Selected Class Status: ${activeSubject?.subject || 'Subject'}`)
-                    : (isKhmer ? 'ស្ថានភាពវត្តមានថ្ងៃនេះ' : "Today's Attendance Status")}
-                </span>
-                <span className="text-sm sm:text-base font-extrabold text-slate-900">
-                  {currentRecord ? (
-                    isKhmer ? (
-                      currentRecord.status === 'Present' ? 'មានវត្តមាន (ទាន់ម៉ោង)' :
-                      currentRecord.status === 'Late' ? `មកយឺត (${currentRecord.lateMinutes} នាទី)` :
-                      currentRecord.status === 'Absent' ? 'អវត្តមាន' :
-                      currentRecord.status === 'Leave' ? 'សុំច្បាប់' : currentRecord.status
-                    ) : (
-                      currentRecord.status === 'Late' ? `Late (${currentRecord.lateMinutes}m)` : currentRecord.status
-                    )
-                  ) : (
-                    isKhmer ? 'មិនទាន់ស្កេនវត្តមាន' : 'Not Checked In'
-                  )}
-                </span>
-              </div>
-            </div>
+              {isTeacher ? (
+                /* ================= TEACHER CLASS STATUS & BUTTONS ================= */
+                <>
+                  <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-xs shrink-0">
+                        <GraduationCap className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase block">
+                          {isKhmer ? `ស្ថានភាពម៉ោងបង្រៀន៖ ${activeSubject?.subject || 'មុខវិជ្ជា'}` : `Selected Class Status: ${activeSubject?.subject || 'Subject'}`}
+                        </span>
+                        <span className="text-sm sm:text-base font-extrabold text-slate-900">
+                          {currentRecord ? (
+                            isKhmer ? (
+                              currentRecord.status === 'Present' ? 'មានវត្តមាន (ទាន់ម៉ោង)' :
+                              currentRecord.status === 'Late' ? `មកយឺត (${currentRecord.lateMinutes} នាទី)` :
+                              currentRecord.status === 'Absent' ? 'អវត្តមាន' :
+                              currentRecord.status === 'Leave' ? 'សុំច្បាប់' : currentRecord.status
+                            ) : (
+                              currentRecord.status === 'Late' ? `Late (${currentRecord.lateMinutes}m)` : currentRecord.status
+                            )
+                          ) : (
+                            isKhmer ? 'មិនទាន់ស្កេនវត្តមាន' : 'Not Checked In'
+                          )}
+                        </span>
+                      </div>
+                    </div>
 
-            {/* Timestamps if recorded */}
-            <div className="text-left sm:text-right text-xs">
-              {currentRecord?.checkInTime && (
-                <div className="font-semibold text-emerald-700">
-                  {isKhmer ? 'ស្កេនចូល៖ ' : 'Checked in: '}
-                  <span className="font-mono font-bold">{currentRecord.checkInTime}</span>
-                  {currentRecord.lateMinutes > 0 && (
-                    <span className="text-amber-700 ml-1">
-                      ({isKhmer ? `យឺត ${currentRecord.lateMinutes} នាទី` : `${currentRecord.lateMinutes}m late`})
+                    {/* Timestamps if recorded */}
+                    <div className="text-left sm:text-right text-xs">
+                      {currentRecord?.checkInTime && (
+                        <div className="font-semibold text-emerald-700">
+                          {isKhmer ? 'ស្កេនចូល៖ ' : 'Checked in: '}
+                          <span className="font-mono font-bold">{currentRecord.checkInTime}</span>
+                          {currentRecord.lateMinutes > 0 && (
+                            <span className="text-amber-700 ml-1">
+                              ({isKhmer ? `យឺត ${currentRecord.lateMinutes} នាទី` : `${currentRecord.lateMinutes}m late`})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {currentRecord?.checkOutTime && (
+                        <div className="font-semibold text-sky-700 mt-0.5">
+                          {isKhmer ? 'ស្កេនចេញ៖ ' : 'Checked out: '}
+                          <span className="font-mono font-bold">{currentRecord.checkOutTime}</span>
+                        </div>
+                      )}
+                      {!currentRecord && (
+                        <span className="text-slate-400">
+                          {isKhmer ? `ត្រៀមស្កេនចូលបង្រៀនម៉ោង ${activeSubject?.startTime || ''}` : `Ready to clock in for ${activeSubject?.periodName || 'class'}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Teacher Large Action Buttons (Check-in & Check-out) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    {/* Teacher Check-in Button */}
+                    <button
+                      onClick={() => handleCheckIn()}
+                      disabled={
+                        isSubmitting ||
+                        Boolean(currentRecord?.checkInTime) ||
+                        !activeSubject ||
+                        isBeforeStartTime ||
+                        (!isCurrentSubjectPresentTime && !isEarlyArrival) ||
+                        isOverEndTime
+                      }
+                      className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
+                        currentRecord?.checkInTime ||
+                        !activeSubject ||
+                        isBeforeStartTime ||
+                        (!isCurrentSubjectPresentTime && !isEarlyArrival) ||
+                        isOverEndTime
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
+                          : isEarlyArrival
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:shadow-xl'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:shadow-xl'
+                      }`}
+                    >
+                      {isOverEndTime ? (
+                        <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-rose-500" />
+                      ) : isBeforeStartTime ? (
+                        <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
+                      ) : !isCurrentSubjectPresentTime && !isEarlyArrival ? (
+                        <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-slate-400" />
+                      ) : (
+                        <CheckCircle2 className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
+                      )}
+                      <span className="text-base sm:text-xl font-black tracking-tight uppercase">
+                        {!activeSubject
+                          ? (isKhmer ? 'ត្រូវមានកាលវិភាគមុខវិជ្ជា' : 'SUBJECT SCHEDULE REQUIRED')
+                          : currentRecord?.checkInTime
+                          ? (isKhmer ? 'បានស្កេនចូលរួចរាល់' : 'Already Checked In')
+                          : isOverEndTime
+                          ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — ហួសម៉ោងបញ្ចប់' : 'CANNOT SCAN IN — OVER END-TIME')
+                          : isBeforeStartTime
+                          ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — មិនទាន់ដល់ម៉ោង' : 'CANNOT SCAN IN — BEFORE SCHEDULE')
+                          : isEarlyArrival && activeSubject
+                          ? (isKhmer ? `ស្កេនចូលមុនម៉ោង៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `EARLY CHECK IN — ${activeSubject.subject}`)
+                          : !isCurrentSubjectPresentTime
+                          ? (isKhmer ? 'មិនមែនជាម៉ោងបង្រៀនបច្ចុប្បន្ន' : 'CANNOT SCAN IN — NOT PRESENT TIME')
+                          : activeSubject
+                          ? (isKhmer ? `ស្កេនចូល៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `CHECK IN — ${activeSubject.subject}`)
+                          : (isKhmer ? 'ស្កេនចូល (CHECK IN)' : 'CHECK IN')}
+                      </span>
+                      <span className="text-xs font-medium opacity-90 mt-1">
+                        {!activeSubject
+                          ? (isKhmer ? 'គ្រូត្រូវតែស្កេនចូលតាមកាលវិភាគមុខវិជ្ជា' : 'Teachers must clock in by specific subject period')
+                          : currentRecord?.checkInTime
+                          ? (isKhmer ? `បានកត់ត្រាម៉ោង ${currentRecord.checkInTime}` : `Recorded at ${currentRecord.checkInTime}`)
+                          : isOverEndTime
+                          ? (isKhmer ? `កាលវិភាគបានបញ្ចប់នៅម៉ោង ${currentScheduledEndTime}។ ម៉ោងបច្ចុប្បន្ន៖ ${effectiveTime}។ ហាមស្កេនចូលពេលហួសម៉ោងបញ្ចប់។` : `Schedule ended at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Scanning in after end-time is strictly prohibited.`)
+                          : isBeforeStartTime
+                          ? (isKhmer ? `ម៉ោងបង្រៀនចាប់ផ្តើមនៅម៉ោង ${currentScheduledStartTime} (នៅសល់ ${startMins - curMins} នាទី)។ អាចស្កេនមុនបាន ${earlyBufferMinutes} នាទី។` : `Class starts at ${currentScheduledStartTime}. Starts in ${startMins - curMins}m. Early check-in opens ${earlyBufferMinutes}m before class.`)
+                          : isEarlyArrival && activeSubject
+                          ? (isKhmer ? `មកដល់មុនម៉ោង (ចាប់ផ្តើម ${activeSubject.startTime}) • វត្តមាន៖ ទាន់ពេល` : `Early preparation check-in (Class starts ${activeSubject.startTime}) • Status: On Time`)
+                          : !isCurrentSubjectPresentTime
+                          ? (activeSubjectTimeCheck?.khmerMessage || activeSubjectTimeCheck?.message || (isKhmer ? 'មិនអនុញ្ញាតឱ្យស្កេនចូលម៉ោងដែលមិនមែនជាពេលបច្ចុប្បន្នឡើយ' : 'Teachers can only scan in during present class hours'))
+                          : activeSubject
+                          ? `${activeSubject.periodName} (${activeSubject.startTime} - ${activeSubject.endTime}) • ${activeSubject.gradeClass} (${activeSubject.room})`
+                          : (isKhmer ? 'ចុចទីនេះដើម្បីកត់ត្រាវត្តមានចូល' : "Clock in for today's shift")}
+                      </span>
+                    </button>
+
+                    {/* Teacher Check-out Button */}
+                    <button
+                      onClick={() => handleCheckOut(activeSubject?.id, isMissingCheckOut)}
+                      disabled={
+                        isSubmitting ||
+                        !currentRecord?.checkInTime ||
+                        Boolean(currentRecord?.checkOutTime) ||
+                        !activeSubject ||
+                        isBeforeEndTime
+                      }
+                      className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
+                        !currentRecord?.checkInTime ||
+                        currentRecord?.checkOutTime ||
+                        !activeSubject ||
+                        isBeforeEndTime
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
+                          : isMissingCheckOut
+                          ? 'bg-gradient-to-r from-amber-600 via-indigo-600 to-indigo-700 hover:from-amber-500 hover:to-indigo-600 text-white shadow-amber-600/25 hover:shadow-xl ring-2 ring-amber-400/30'
+                          : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:shadow-xl'
+                      }`}
+                    >
+                      {isBeforeEndTime ? (
+                        <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
+                      ) : isMissingCheckOut ? (
+                        <ClockAlert className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-200 animate-pulse" />
+                      ) : (
+                        <LogOut className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
+                      )}
+                      <span className="text-base sm:text-xl font-black tracking-tight uppercase">
+                        {!activeSubject
+                          ? (isKhmer ? 'ត្រូវមានកាលវិភាគមុខវិជ្ជា' : 'SUBJECT SCHEDULE REQUIRED')
+                          : currentRecord?.checkOutTime
+                          ? (isKhmer ? 'បានស្កេនចេញរួចរាល់' : 'Session Completed')
+                          : !currentRecord?.checkInTime
+                          ? (isKhmer ? 'ត្រូវស្កេនចូលជាមុនសិន' : 'Check-In Required First')
+                          : isBeforeEndTime
+                          ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចេញ — មិនទាន់ចប់ម៉ោង' : 'CANNOT CHECK OUT — BEFORE SCHEDULE')
+                          : isMissingCheckOut
+                          ? (isKhmer ? `ស្កេនចេញបំពេញម៉ោងខកខាន (${currentScheduledEndTime})` : `REQUEST SCAN OUT MISSING CHECK-OUT (${currentScheduledEndTime})`)
+                          : activeSubject
+                          ? (isKhmer ? `ស្កេនចេញ៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `CHECK OUT — ${activeSubject.subject}`)
+                          : (isKhmer ? 'ស្កេនចេញ (CHECK OUT)' : 'CHECK OUT')}
+                      </span>
+                      <span className="text-xs font-medium opacity-90 mt-1">
+                        {!activeSubject
+                          ? (isKhmer ? 'គ្រូត្រូវតែស្កេនចេញតាមកាលវិភាគមុខវិជ្ជា' : 'Teachers must clock out by specific subject period')
+                          : currentRecord?.checkOutTime
+                          ? (isKhmer ? `បានស្កេនចេញម៉ោង ${currentRecord.checkOutTime}` : `Checked out at ${currentRecord.checkOutTime}`)
+                          : !currentRecord?.checkInTime
+                          ? (isKhmer ? 'ត្រូវស្កេនចូលជាមុនសិន' : 'Check-in required first')
+                          : isBeforeEndTime
+                          ? (isKhmer ? `ម៉ោងបង្រៀនបញ្ចប់នៅម៉ោង ${currentScheduledEndTime} (នៅសល់ ${AttendanceEngine.timeToMinutes(currentScheduledEndTime) - AttendanceEngine.timeToMinutes(effectiveTime)} នាទី)។ ហាមស្កេនចេញមុនម៉ោងកាលវិភាគ។` : `Class ends at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Checking out before schedule is strictly prohibited.`)
+                          : isMissingCheckOut
+                          ? (isKhmer ? `កាលវិភាគបានបញ្ចប់នៅម៉ោង ${currentScheduledEndTime}។ ចុចទីនេះដើម្បីស្នើសុំស្កេនចេញ ដោយម៉ោងចេញនឹងកំណត់ស្វ័យប្រវត្តិតាមម៉ោងចប់កាលវិភាគ (${currentScheduledEndTime})។` : `Class ended at ${currentScheduledEndTime}. Click to resolve missing check-out; checkout time is auto-set to schedule end time (${currentScheduledEndTime}).`)
+                          : activeSubject
+                          ? (isKhmer ? `ចុចទីនេះដើម្បីបញ្ចប់ម៉ោងបង្រៀន ${activeSubject.subject}` : `End class session for ${activeSubject.gradeClass}`)
+                          : (isKhmer ? 'ចុចទីនេះដើម្បីស្កេនចេញបញ្ចប់ការងារ' : "Clock out from today's shift")}
+                      </span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* ================= EMPLOYEE TWO-SHIFT STATION ================= */
+                <div className="space-y-4 pt-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-indigo-950 text-xs sm:text-sm block">
+                          {isKhmer ? 'កាលវិភាគវត្តមានបុគ្គលិក ២ វេន (ព្រឹក និង ល្ងាច)' : 'Employee Two-Shift Attendance (Morning & Evening)'}
+                        </span>
+                        <span className="text-[11px] text-indigo-700">
+                          {isKhmer
+                            ? 'បុគ្គលិកត្រូវស្កេនវត្តមានទាំង ២ វេន • អាចស្កេនចូល/ចេញ មុន និងក្រោយម៉ោងវេនបាន'
+                            : 'Employees must check in/out both shifts • Early & late check-in/out allowed'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold bg-white px-2.5 py-1 rounded-lg border border-indigo-200 text-indigo-900 self-start sm:self-auto">
+                      {activeSchedule.name}
                     </span>
-                  )}
+                  </div>
+
+                  {/* Two Shift Cards: Morning & Evening */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* 1. MORNING SHIFT */}
+                    <div className="p-4 sm:p-5 rounded-3xl border-2 border-slate-200 bg-slate-50/70 hover:bg-white transition-all shadow-xs flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-xs">
+                              <Sun className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-slate-900 text-sm block">
+                                {isKhmer ? 'វេនព្រឹក (Morning Shift)' : 'Morning Shift'}
+                              </span>
+                              <span className="font-mono text-xs font-bold text-slate-500">
+                                {activeSchedule.startTime || '08:00'} — {activeSchedule.endTime || '12:00'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Morning Status Badge */}
+                          {employeeMorningRecord?.checkInTime && employeeMorningRecord?.checkOutTime ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{isKhmer ? 'រួចរាល់' : 'Completed'}</span>
+                            </span>
+                          ) : employeeMorningRecord?.checkInTime ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span>{isKhmer ? 'កំពុងធ្វើការ' : 'In Shift'}</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
+                              {isKhmer ? 'មិនទាន់ស្កេន' : 'Not Checked In'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Morning Timestamps */}
+                        <div className="bg-white p-3 rounded-2xl border border-slate-200 flex items-center justify-between text-xs text-slate-700">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">{isKhmer ? 'ម៉ោងចូល' : 'Clock In'}</span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {employeeMorningRecord?.checkInTime || '—'}
+                            </span>
+                            {employeeMorningRecord?.lateMinutes && employeeMorningRecord.lateMinutes > 0 ? (
+                              <span className="text-[10px] text-rose-600 font-bold block">
+                                {isKhmer ? `យឺត ${employeeMorningRecord.lateMinutes} នាទី` : `(+${employeeMorningRecord.lateMinutes}m)`}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">{isKhmer ? 'ម៉ោងចេញ' : 'Clock Out'}</span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {employeeMorningRecord?.checkOutTime || '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons for Morning */}
+                      <div className="pt-1">
+                        {!employeeMorningRecord?.checkInTime ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckIn(undefined, 'morning')}
+                            disabled={isSubmitting}
+                            className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-md shadow-emerald-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <LogIn className="w-4 h-4 shrink-0" />
+                            <span>{isKhmer ? 'ស្កេនចូល វេនព្រឹក (Morning In)' : 'Clock In Morning Shift'}</span>
+                          </button>
+                        ) : !employeeMorningRecord?.checkOutTime ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckOut(undefined, false, 'morning')}
+                            disabled={isSubmitting}
+                            className="w-full py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-black shadow-md shadow-indigo-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <LogOut className="w-4 h-4 shrink-0" />
+                            <span>{isKhmer ? 'ស្កេនចេញ វេនព្រឹក (Morning Out)' : 'Clock Out Morning Shift'}</span>
+                          </button>
+                        ) : (
+                          <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-center flex items-center justify-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>{isKhmer ? 'វេនព្រឹកបានកត់ត្រារួចរាល់' : 'Morning Shift Completed'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. EVENING SHIFT */}
+                    <div className="p-4 sm:p-5 rounded-3xl border-2 border-slate-200 bg-slate-50/70 hover:bg-white transition-all shadow-xs flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-9 h-9 rounded-2xl bg-indigo-100 text-indigo-800 flex items-center justify-center shrink-0 shadow-xs">
+                              <Moon className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-slate-900 text-sm block">
+                                {isKhmer ? 'វេនល្ងាច (Evening Shift)' : 'Evening Shift'}
+                              </span>
+                              <span className="font-mono text-xs font-bold text-slate-500">
+                                {activeSchedule.afternoonStartTime || '13:30'} — {activeSchedule.afternoonEndTime || '17:30'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Evening Status Badge */}
+                          {employeeEveningRecord?.checkInTime && employeeEveningRecord?.checkOutTime ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{isKhmer ? 'រួចរាល់' : 'Completed'}</span>
+                            </span>
+                          ) : employeeEveningRecord?.checkInTime ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span>{isKhmer ? 'កំពុងធ្វើការ' : 'In Shift'}</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
+                              {isKhmer ? 'មិនទាន់ស្កេន' : 'Not Checked In'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Evening Timestamps */}
+                        <div className="bg-white p-3 rounded-2xl border border-slate-200 flex items-center justify-between text-xs text-slate-700">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">{isKhmer ? 'ម៉ោងចូល' : 'Clock In'}</span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {employeeEveningRecord?.checkInTime || '—'}
+                            </span>
+                            {employeeEveningRecord?.lateMinutes && employeeEveningRecord.lateMinutes > 0 ? (
+                              <span className="text-[10px] text-rose-600 font-bold block">
+                                {isKhmer ? `យឺត ${employeeEveningRecord.lateMinutes} នាទី` : `(+${employeeEveningRecord.lateMinutes}m)`}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">{isKhmer ? 'ម៉ោងចេញ' : 'Clock Out'}</span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {employeeEveningRecord?.checkOutTime || '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons for Evening */}
+                      <div className="pt-1">
+                        {!employeeEveningRecord?.checkInTime ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckIn(undefined, 'evening')}
+                            disabled={isSubmitting}
+                            className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-md shadow-emerald-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <LogIn className="w-4 h-4 shrink-0" />
+                            <span>{isKhmer ? 'ស្កេនចូល វេនល្ងាច (Evening In)' : 'Clock In Evening Shift'}</span>
+                          </button>
+                        ) : !employeeEveningRecord?.checkOutTime ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCheckOut(undefined, false, 'evening')}
+                            disabled={isSubmitting}
+                            className="w-full py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-black shadow-md shadow-indigo-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <LogOut className="w-4 h-4 shrink-0" />
+                            <span>{isKhmer ? 'ស្កេនចេញ វេនល្ងាច (Evening Out)' : 'Clock Out Evening Shift'}</span>
+                          </button>
+                        ) : (
+                          <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold text-center flex items-center justify-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>{isKhmer ? 'វេនល្ងាចបានកត់ត្រារួចរាល់' : 'Evening Shift Completed'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
                 </div>
               )}
-              {currentRecord?.checkOutTime && (
-                <div className="font-semibold text-sky-700 mt-0.5">
-                  {isKhmer ? 'ស្កេនចេញ៖ ' : 'Checked out: '}
-                  <span className="font-mono font-bold">{currentRecord.checkOutTime}</span>
-                </div>
-              )}
-              {!currentRecord && (
-                <span className="text-slate-400">
-                  {isTeacher
-                    ? (isKhmer ? `ត្រៀមស្កេនចូលបង្រៀនម៉ោង ${activeSubject?.startTime || ''}` : `Ready to clock in for ${activeSubject?.periodName || 'class'}`)
-                    : (isKhmer ? 'ត្រៀមស្កេនវត្តមានសម្រាប់វេនការងារ' : "Ready for today's clock-in")}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Large Action Buttons (Check-in & Check-out) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            
-            {/* Check-in Button */}
-            <button
-              onClick={() => handleCheckIn()}
-              disabled={
-                isSubmitting ||
-                Boolean(currentRecord?.checkInTime) ||
-                (isTeacher && !activeSubject) ||
-                (isTeacher && isBeforeStartTime) ||
-                (isTeacher && !isCurrentSubjectPresentTime && !isEarlyArrival) ||
-                isOverEndTime
-              }
-              className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
-                currentRecord?.checkInTime ||
-                (isTeacher && !activeSubject) ||
-                (isTeacher && isBeforeStartTime) ||
-                (isTeacher && !isCurrentSubjectPresentTime && !isEarlyArrival) ||
-                isOverEndTime
-                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
-                  : isEarlyArrival
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:shadow-xl'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:shadow-xl'
-              }`}
-            >
-              {isOverEndTime ? (
-                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-rose-500" />
-              ) : isTeacher && isBeforeStartTime ? (
-                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
-              ) : isTeacher && !isCurrentSubjectPresentTime && !isEarlyArrival ? (
-                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-slate-400" />
-              ) : (
-                <CheckCircle2 className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
-              )}
-              <span className="text-base sm:text-xl font-black tracking-tight uppercase">
-                {isTeacher && !activeSubject
-                  ? (isKhmer ? 'ត្រូវមានកាលវិភាគមុខវិជ្ជា' : 'SUBJECT SCHEDULE REQUIRED')
-                  : currentRecord?.checkInTime
-                  ? (isKhmer ? 'បានស្កេនចូលរួចរាល់' : 'Already Checked In')
-                  : isOverEndTime
-                  ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — ហួសម៉ោងបញ្ចប់' : 'CANNOT SCAN IN — OVER END-TIME')
-                  : isTeacher && isBeforeStartTime
-                  ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចូល — មិនទាន់ដល់ម៉ោង' : 'CANNOT SCAN IN — BEFORE SCHEDULE')
-                  : isTeacher && isEarlyArrival && activeSubject
-                  ? (isKhmer ? `ស្កេនចូលមុនម៉ោង៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `EARLY CHECK IN — ${activeSubject.subject}`)
-                  : isTeacher && !isCurrentSubjectPresentTime
-                  ? (isKhmer ? 'មិនមែនជាម៉ោងបង្រៀនបច្ចុប្បន្ន' : 'CANNOT SCAN IN — NOT PRESENT TIME')
-                  : isTeacher && activeSubject
-                  ? (isKhmer ? `ស្កេនចូល៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `CHECK IN — ${activeSubject.subject}`)
-                  : (isKhmer ? 'ស្កេនចូល (CHECK IN)' : 'CHECK IN')}
-              </span>
-              <span className="text-xs font-medium opacity-90 mt-1">
-                {isTeacher && !activeSubject
-                  ? (isKhmer ? 'គ្រូត្រូវតែស្កេនចូលតាមកាលវិភាគមុខវិជ្ជា' : 'Teachers must clock in by specific subject period')
-                  : currentRecord?.checkInTime
-                  ? (isKhmer ? `បានកត់ត្រាម៉ោង ${currentRecord.checkInTime}` : `Recorded at ${currentRecord.checkInTime}`)
-                  : isOverEndTime
-                  ? (isKhmer ? `កាលវិភាគបានបញ្ចប់នៅម៉ោង ${currentScheduledEndTime}។ ម៉ោងបច្ចុប្បន្ន៖ ${effectiveTime}។ ហាមស្កេនចូលពេលហួសម៉ោងបញ្ចប់។` : `Schedule ended at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Scanning in after end-time is strictly prohibited.`)
-                  : isTeacher && isBeforeStartTime
-                  ? (isKhmer ? `ម៉ោងបង្រៀនចាប់ផ្តើមនៅម៉ោង ${currentScheduledStartTime} (នៅសល់ ${startMins - curMins} នាទី)។ អាចស្កេនមុនបាន ${earlyBufferMinutes} នាទី។` : `Class starts at ${currentScheduledStartTime}. Starts in ${startMins - curMins}m. Early check-in opens ${earlyBufferMinutes}m before class.`)
-                  : isTeacher && isEarlyArrival && activeSubject
-                  ? (isKhmer ? `មកដល់មុនម៉ោង (ចាប់ផ្តើម ${activeSubject.startTime}) • វត្តមាន៖ ទាន់ពេល` : `Early preparation check-in (Class starts ${activeSubject.startTime}) • Status: On Time`)
-                  : isTeacher && !isCurrentSubjectPresentTime
-                  ? (activeSubjectTimeCheck?.khmerMessage || activeSubjectTimeCheck?.message || (isKhmer ? 'មិនអនុញ្ញាតឱ្យស្កេនចូលម៉ោងដែលមិនមែនជាពេលបច្ចុប្បន្នឡើយ' : 'Teachers can only scan in during present class hours'))
-                  : isTeacher && activeSubject
-                  ? `${activeSubject.periodName} (${activeSubject.startTime} - ${activeSubject.endTime}) • ${activeSubject.gradeClass} (${activeSubject.room})`
-                  : (isKhmer ? 'ចុចទីនេះដើម្បីកត់ត្រាវត្តមានចូល' : "Clock in for today's shift")}
-              </span>
-            </button>
-
-            {/* Check-out Button */}
-            <button
-              onClick={() => handleCheckOut(activeSubject?.id, isTeacher && isMissingCheckOut)}
-              disabled={
-                isSubmitting ||
-                !currentRecord?.checkInTime ||
-                Boolean(currentRecord?.checkOutTime) ||
-                (isTeacher && !activeSubject) ||
-                (isTeacher && isBeforeEndTime)
-              }
-              className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
-                !currentRecord?.checkInTime ||
-                currentRecord?.checkOutTime ||
-                (isTeacher && !activeSubject) ||
-                (isTeacher && isBeforeEndTime)
-                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
-                  : isTeacher && isMissingCheckOut
-                  ? 'bg-gradient-to-r from-amber-600 via-indigo-600 to-indigo-700 hover:from-amber-500 hover:to-indigo-600 text-white shadow-amber-600/25 hover:shadow-xl ring-2 ring-amber-400/30'
-                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 hover:shadow-xl'
-              }`}
-            >
-              {isTeacher && isBeforeEndTime ? (
-                <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
-              ) : isTeacher && isMissingCheckOut ? (
-                <ClockAlert className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-200 animate-pulse" />
-              ) : (
-                <LogOut className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
-              )}
-              <span className="text-base sm:text-xl font-black tracking-tight uppercase">
-                {isTeacher && !activeSubject
-                  ? (isKhmer ? 'ត្រូវមានកាលវិភាគមុខវិជ្ជា' : 'SUBJECT SCHEDULE REQUIRED')
-                  : currentRecord?.checkOutTime
-                  ? (isKhmer ? 'បានស្កេនចេញរួចរាល់' : 'Session Completed')
-                  : !currentRecord?.checkInTime
-                  ? (isKhmer ? 'ត្រូវស្កេនចូលជាមុនសិន' : 'Check-In Required First')
-                  : isTeacher && isBeforeEndTime
-                  ? (isKhmer ? 'មិនអនុញ្ញាតស្កេនចេញ — មិនទាន់ចប់ម៉ោង' : 'CANNOT CHECK OUT — BEFORE SCHEDULE')
-                  : isTeacher && isMissingCheckOut
-                  ? (isKhmer ? `ស្កេនចេញបំពេញម៉ោងខកខាន (${currentScheduledEndTime})` : `REQUEST SCAN OUT MISSING CHECK-OUT (${currentScheduledEndTime})`)
-                  : isTeacher && activeSubject
-                  ? (isKhmer ? `ស្កេនចេញ៖ ${activeSubject.khmerSubject || activeSubject.subject}` : `CHECK OUT — ${activeSubject.subject}`)
-                  : (isKhmer ? 'ស្កេនចេញ (CHECK OUT)' : 'CHECK OUT')}
-              </span>
-              <span className="text-xs font-medium opacity-90 mt-1">
-                {isTeacher && !activeSubject
-                  ? (isKhmer ? 'គ្រូត្រូវតែស្កេនចេញតាមកាលវិភាគមុខវិជ្ជា' : 'Teachers must clock out by specific subject period')
-                  : currentRecord?.checkOutTime
-                  ? (isKhmer ? `បានស្កេនចេញម៉ោង ${currentRecord.checkOutTime}` : `Checked out at ${currentRecord.checkOutTime}`)
-                  : !currentRecord?.checkInTime
-                  ? (isKhmer ? 'ត្រូវស្កេនចូលជាមុនសិន' : 'Check-in required first')
-                  : isTeacher && isBeforeEndTime
-                  ? (isKhmer ? `ម៉ោងបង្រៀនបញ្ចប់នៅម៉ោង ${currentScheduledEndTime} (នៅសល់ ${AttendanceEngine.timeToMinutes(currentScheduledEndTime) - AttendanceEngine.timeToMinutes(effectiveTime)} នាទី)។ ហាមស្កេនចេញមុនម៉ោងកាលវិភាគ។` : `Class ends at ${currentScheduledEndTime}. Current time: ${effectiveTime}. Checking out before schedule is strictly prohibited.`)
-                  : isTeacher && isMissingCheckOut
-                  ? (isKhmer ? `កាលវិភាគបានបញ្ចប់នៅម៉ោង ${currentScheduledEndTime}។ ចុចទីនេះដើម្បីស្នើសុំស្កេនចេញ ដោយម៉ោងចេញនឹងកំណត់ស្វ័យប្រវត្តិតាមម៉ោងចប់កាលវិភាគ (${currentScheduledEndTime})។` : `Class ended at ${currentScheduledEndTime}. Click to resolve missing check-out; checkout time is auto-set to schedule end time (${currentScheduledEndTime}).`)
-                  : isTeacher && activeSubject
-                  ? (isKhmer ? `ចុចទីនេះដើម្បីបញ្ចប់ម៉ោងបង្រៀន ${activeSubject.subject}` : `End class session for ${activeSubject.gradeClass}`)
-                  : (isKhmer ? 'ចុចទីនេះដើម្បីស្កេនចេញបញ្ចប់ការងារ' : "Clock out from today's shift")}
-              </span>
-            </button>
-
-          </div>
-        </>
-      )}
+            </>
+          )}
 
         </div>
 

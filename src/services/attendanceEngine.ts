@@ -331,6 +331,8 @@ export const AttendanceEngine = {
     bypassGeofence?: boolean;
     bypassScheduleWindow?: boolean;
     allowEarlyCheckInMinutes?: number;
+    shiftType?: 'morning' | 'evening';
+    session?: 'morning' | 'afternoon' | 'evening';
   }): CheckInResult {
     const today = this.getCurrentDateString();
     const currentTime = params.customTime || this.getCurrentTimeString();
@@ -411,14 +413,53 @@ export const AttendanceEngine = {
     }
 
     const schedule = this.getScheduleForPerson(params.scheduleId || 'sch-standard-fulltime', params.department);
-    const scheduledStartTime = subjectSchedule ? subjectSchedule.startTime : schedule.startTime;
-    const scheduledEndTime = subjectSchedule ? subjectSchedule.endTime : schedule.endTime;
+    
+    // For employees: support both shifts (Morning & Evening)
+    const isExplicitEvening = params.shiftType === 'evening' || params.session === 'afternoon' || params.session === 'evening';
+    const isExplicitMorning = params.shiftType === 'morning' || params.session === 'morning';
+
+    const existingRecords = StorageService.getAttendance().filter(
+      r => r.personId === params.personId && r.date === today && !r.subjectScheduleId
+    );
+    const existingMorning = existingRecords.find(
+      r => r.session === 'morning' || (!r.session && !r.scheduleName?.includes('Evening'))
+    );
+
+    const morningStart = schedule.startTime || '08:00';
+    const morningEnd = schedule.endTime || '12:00';
+    const eveningStart = schedule.afternoonStartTime || '13:30';
+    const eveningEnd = schedule.afternoonEndTime || '17:30';
+
+    let isEveningShift = false;
+    if (params.personType === 'employee') {
+      if (isExplicitEvening) {
+        isEveningShift = true;
+      } else if (isExplicitMorning) {
+        isEveningShift = false;
+      } else {
+        // Auto-detect: if morning is already checked in and current time is past morning end, or current time is >= 12:30
+        if (existingMorning?.checkInTime && currentMins >= this.timeToMinutes(morningEnd)) {
+          isEveningShift = true;
+        } else if (currentMins >= 12 * 60 + 30) {
+          isEveningShift = true;
+        } else {
+          isEveningShift = false;
+        }
+      }
+    }
+
+    const scheduledStartTime = subjectSchedule
+      ? subjectSchedule.startTime
+      : (params.personType === 'employee' ? (isEveningShift ? eveningStart : morningStart) : schedule.startTime);
+    const scheduledEndTime = subjectSchedule
+      ? subjectSchedule.endTime
+      : (params.personType === 'employee' ? (isEveningShift ? eveningEnd : morningEnd) : schedule.endTime);
     const gracePeriod = subjectSchedule?.gracePeriodMinutes || schedule.gracePeriodMinutes || systemSettings.defaultGracePeriod;
 
     const scheduledStartMins = this.timeToMinutes(scheduledStartTime);
     const scheduledEndMins = this.timeToMinutes(scheduledEndTime);
 
-    // Validation: Early check-in window
+    // Validation: Early check-in window (Strictly for teachers only; employees can check in before shift time)
     const earlyBuffer = params.allowEarlyCheckInMinutes ?? 30;
     const earliestAllowedMins = Math.max(0, scheduledStartMins - earlyBuffer);
     if (!params.bypassScheduleWindow && params.personType === 'teacher' && currentMins < earliestAllowedMins) {
@@ -432,7 +473,7 @@ export const AttendanceEngine = {
       };
     }
 
-    // Validation: Over scheduled end-time check - Teachers cannot scan into overtime or completed schedules under any circumstance
+    // Validation: Over scheduled end-time check (Strictly for teachers only; employees can check in after shift time)
     if (params.personType === 'teacher' && currentMins >= scheduledEndMins) {
       const targetLabel = subjectSchedule
         ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
@@ -440,16 +481,6 @@ export const AttendanceEngine = {
       return {
         success: false,
         message: `Check-in denied: Schedule period has already ended (${scheduledEndTime}) for ${targetLabel}. Teachers are strictly not allowed to scan into overtime or completed schedules.`
-      };
-    }
-
-    if (!params.bypassScheduleWindow && currentMins >= scheduledEndMins) {
-      const targetLabel = subjectSchedule
-        ? `"${subjectSchedule.subject}" (${subjectSchedule.periodName}: ${subjectSchedule.startTime} - ${subjectSchedule.endTime})`
-        : `shift "${schedule.name}" (${schedule.startTime} - ${schedule.endTime})`;
-      return {
-        success: false,
-        message: `Check-in denied: Current time (${currentTime}) is over the scheduled end-time (${scheduledEndTime}) for ${targetLabel}. Checking in overtime or after schedule end-time is strictly prohibited.`
       };
     }
 
@@ -476,7 +507,7 @@ export const AttendanceEngine = {
     }
 
     // Check duplicate check-in
-    // Specifically query and target the active schedule ID to prevent cross-contamination with other overlapping or future schedules
+    // Specifically query and target the active schedule ID or specific shift to prevent cross-contamination
     const existing = StorageService.getAttendance().find(r => {
       if (subjectSchedule) {
         return (
@@ -485,13 +516,22 @@ export const AttendanceEngine = {
           (r.subjectScheduleId === subjectSchedule.id || r.scheduleId === subjectSchedule.id)
         );
       }
+      if (params.personType === 'employee') {
+        if (isEveningShift) {
+          return r.personId === params.personId && r.date === today && !r.subjectScheduleId &&
+            (r.session === 'afternoon' || r.session === 'evening' || r.scheduleName?.includes('Evening'));
+        } else {
+          return r.personId === params.personId && r.date === today && !r.subjectScheduleId &&
+            (r.session === 'morning' || (!r.session && !r.scheduleName?.includes('Evening')));
+        }
+      }
       return r.personId === params.personId && r.date === today && !r.subjectScheduleId;
     });
 
     if (existing && existing.checkInTime) {
       const targetLabel = subjectSchedule
         ? `${subjectSchedule.subject} (${subjectSchedule.periodName})`
-        : 'today';
+        : (params.personType === 'employee' ? (isEveningShift ? 'Evening Shift' : 'Morning Shift') : 'today');
       return {
         success: false,
         message: `Already checked in for ${targetLabel} at ${existing.checkInTime}. Duplicate check-ins are prevented.`
@@ -522,8 +562,9 @@ export const AttendanceEngine = {
       gracePeriod
     );
 
+    const shiftSuffix = params.personType === 'employee' ? (isEveningShift ? ' (Evening Shift)' : ' (Morning Shift)') : '';
     const newRecord: AttendanceRecord = {
-      id: existing ? existing.id : `att-${today}-${params.personId}-${subjectSchedule ? subjectSchedule.id : 'shift'}-${Date.now().toString().slice(-4)}`,
+      id: existing ? existing.id : `att-${today}-${params.personId}-${subjectSchedule ? subjectSchedule.id : (isEveningShift ? 'shift-eve' : 'shift-morn')}-${Date.now().toString().slice(-4)}`,
       personId: params.personId,
       personType: params.personType,
       personName: params.personName,
@@ -532,7 +573,7 @@ export const AttendanceEngine = {
       date: today,
       // Target active schedule ID specifically for both scheduleId and subjectScheduleId
       scheduleId: subjectSchedule ? subjectSchedule.id : schedule.id,
-      scheduleName: subjectSchedule ? `${subjectSchedule.subject} (${subjectSchedule.periodName})` : schedule.name,
+      scheduleName: subjectSchedule ? `${subjectSchedule.subject} (${subjectSchedule.periodName})` : `${schedule.name}${shiftSuffix}`,
       // Teacher Subject Schedule properties
       subjectScheduleId: subjectSchedule?.id,
       subject: subjectSchedule?.subject,
@@ -540,7 +581,9 @@ export const AttendanceEngine = {
       gradeClass: subjectSchedule?.gradeClass,
       room: subjectSchedule?.room,
       periodName: subjectSchedule?.periodName,
-      session: parseInt(scheduledStartTime.split(':')[0], 10) < 12 ? 'morning' : 'afternoon',
+      session: params.personType === 'employee'
+        ? (isEveningShift ? 'afternoon' : 'morning')
+        : (parseInt(scheduledStartTime.split(':')[0], 10) < 12 ? 'morning' : 'afternoon'),
       scheduledStart: scheduledStartTime,
       scheduledEnd: scheduledEndTime,
       checkInTime: currentTime,
@@ -608,6 +651,8 @@ export const AttendanceEngine = {
     customTime?: string;
     attendanceRecordId?: string;
     subjectScheduleId?: string;
+    shiftType?: 'morning' | 'evening';
+    session?: 'morning' | 'afternoon' | 'evening';
     autoSetToEndOfSchedule?: boolean;
   }): CheckOutResult {
     const today = this.getCurrentDateString();
@@ -617,6 +662,18 @@ export const AttendanceEngine = {
     let existing: AttendanceRecord | undefined;
     if (params.attendanceRecordId) {
       existing = StorageService.getAttendance().find(r => r.id === params.attendanceRecordId);
+    } else if (params.shiftType === 'morning' || params.session === 'morning') {
+      existing = StorageService.getAttendance().find(
+        r => r.personId === params.personId && r.date === today &&
+          (r.session === 'morning' || (!r.session && !r.scheduleName?.includes('Evening'))) &&
+          !r.checkOutTime
+      );
+    } else if (params.shiftType === 'evening' || params.session === 'afternoon' || params.session === 'evening') {
+      existing = StorageService.getAttendance().find(
+        r => r.personId === params.personId && r.date === today &&
+          (r.session === 'afternoon' || r.session === 'evening' || r.scheduleName?.includes('Evening')) &&
+          !r.checkOutTime
+      );
     } else if (params.subjectScheduleId) {
       existing = StorageService.getAttendance().find(
         r =>

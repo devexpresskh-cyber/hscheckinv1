@@ -6,6 +6,7 @@ import { StorageService } from '../../services/storageService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { AttendanceRecord, Teacher, Employee, Department, TeacherSubjectSchedule } from '../../types/index.ts';
+import { PinnedCheckInWidget } from './PinnedCheckInWidget.tsx';
 import {
   Users,
   GraduationCap,
@@ -193,6 +194,9 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   return (
     <div className="space-y-6">
       
+      {/* Pinned Check-In / Check-Out Station at Top Home Page */}
+      <PinnedCheckInWidget onOpenCheckIn={onOpenCheckIn} />
+
       {/* Top Banner / Welcome & Quick Actions */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div>
