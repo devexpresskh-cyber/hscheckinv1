@@ -375,23 +375,63 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const { canAccessDepartment, currentUser } = useAuth();
   const { showToast } = useNotification();
   const { isKhmer } = useLanguage();
-  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
 
   const isTeacherRole = currentUser.role === 'teacher';
   const effectiveTeacherId = lockedTeacherId || (isTeacherRole ? (currentUser.personId || currentUser.id) : undefined);
 
+  // Dynamic current month or latest month with attendance records
+  const currentYm = new Date().toISOString().slice(0, 7);
+  const getInitialMonth = () => {
+    const list = StorageService.getAttendance();
+    if (list.length > 0) {
+      const hasCurrentMonth = list.some(a => String(a.date || '').slice(0, 7) === currentYm);
+      if (hasCurrentMonth) return currentYm;
+      const dates = list.map(a => a.date).filter(Boolean).sort();
+      if (dates.length > 0) {
+        return dates[dates.length - 1].slice(0, 7);
+      }
+    }
+    return currentYm;
+  };
+
+  const initialMonth = getInitialMonth();
+
+  // Reactive state synchronized with StorageService
+  const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+  const [teachers, setTeachers] = useState<Teacher[]>(() =>
+    StorageService.getTeachers().filter(t => t.status === 'Active')
+  );
+  const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>(() =>
+    StorageService.getAttendance()
+  );
+  const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() =>
+    StorageService.getSubjectSchedules()
+  );
+
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setSystemSettings(StorageService.getSystemSettings());
+      setTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
+      const freshAtt = StorageService.getAttendance();
+      setAllAttendance(freshAtt);
+      setSubjectSchedules(StorageService.getSubjectSchedules());
+
+      // If no month is selected or default is needed, keep current month active
+      if (freshAtt.length > 0) {
+        setSelectedMonth(prev => {
+          if (!prev) return getInitialMonth();
+          return prev;
+        });
+      }
     });
     return unsub;
   }, []);
 
   // Filters
-  const [selectedMonth, setSelectedMonth] = useState('2026-09');
-  const [dateFilterMode, setDateFilterMode] = useState<'month' | 'custom'>('month');
-  const [startDate, setStartDate] = useState('2026-09-01');
-  const [endDate, setEndDate] = useState('2026-09-30');
+  const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
+  const [dateFilterMode, setDateFilterMode] = useState<'month' | 'custom' | 'all'>('month');
+  const [startDate, setStartDate] = useState<string>(() => `${initialMonth}-01`);
+  const [endDate, setEndDate] = useState<string>(() => `${initialMonth}-31`);
   const [selectedDept, setSelectedDept] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [lateDeductionMode, setLateDeductionMode] = useState<'deduct' | 'non_deduct'>('non_deduct');
@@ -408,9 +448,6 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
     currentUser.role === 'supervisor';
 
   const departments = StorageService.getDepartments();
-  const teachers = StorageService.getTeachers().filter(t => t.status === 'Active');
-  const allAttendance = StorageService.getAttendance();
-  const subjectSchedules = StorageService.getSubjectSchedules();
 
   // Helper: Convert time "07:30" to minutes
   const timeToMinutes = (timeStr?: string): number => {
@@ -450,23 +487,99 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   // Calculate Teaching Wage Summaries
   const wageSummaries: TeacherWageSummary[] = useMemo(() => {
     return filteredTeachers.map(teacher => {
-      const baseHourlyRate = teacher.hourlyRate || 20;
+      const baseHourlyRate = Number(
+        (teacher.hourlyRate && Number(teacher.hourlyRate) > 0)
+          ? teacher.hourlyRate
+          : 20
+      );
       const currency = teacher.currency || 'USD';
+
+      // Robust teacher ownership matching
+      const isTeacherMatch = (att: AttendanceRecord) => {
+        const pId = (att.personId || '').trim().toLowerCase();
+        const uId = (att.userId || '').trim().toLowerCase();
+        const tId = (teacher.id || '').trim().toLowerCase();
+        const tCode = (teacher.teacherId || '').trim().toLowerCase();
+        const tEmpId = (teacher.employeeId || '').trim().toLowerCase();
+        const pName = (att.personName || '').trim().toLowerCase();
+        const tName = (teacher.fullName || '').trim().toLowerCase();
+        const tEng = (teacher.englishName || '').trim().toLowerCase();
+        const pKhmer = (att.khmerName || '').trim();
+        const tKhmer = (teacher.khmerName || '').trim();
+
+        // 1. Direct ID matching (exact, normalized, usr- prefix stripping)
+        if (pId) {
+          if (pId === tId || pId === tCode || (tEmpId && pId === tEmpId)) return true;
+          if (pId.replace(/^usr-/, '') === tId.replace(/^usr-/, '')) return true;
+          if (pId.replace(/^usr-tch-/, 'tch-') === tId || tId.replace(/^usr-tch-/, 'tch-') === pId) return true;
+          if (tId && pId.includes(tId)) return true;
+          if (pId && tId.includes(pId)) return true;
+        }
+
+        // 2. User ID match
+        if (uId && (uId === tId || uId.includes(tId) || tId.includes(uId))) return true;
+
+        // 3. Subject schedule ownership confirmation
+        if (att.subjectScheduleId || att.scheduleId) {
+          const sched = subjectSchedules.find(s => s.id === (att.subjectScheduleId || att.scheduleId));
+          if (sched) {
+            const sTId = (sched.teacherId || '').trim().toLowerCase();
+            const sTName = (sched.teacherName || '').trim().toLowerCase();
+            if (sTId === tId || sTId === tCode || (tEmpId && sTId === tEmpId)) return true;
+            if (sTName && (sTName === tName || sTName === tEng)) return true;
+          }
+        }
+
+        // 4. Name matching
+        if (pName && tName) {
+          if (pName === tName || pName.includes(tName) || tName.includes(pName)) return true;
+        }
+        if (pName && tEng) {
+          if (pName === tEng || pName.includes(tEng) || tEng.includes(pName)) return true;
+        }
+
+        // 5. Khmer Name matching
+        if (pKhmer && tKhmer) {
+          if (pKhmer === tKhmer || pKhmer.includes(tKhmer) || tKhmer.includes(pKhmer)) return true;
+        }
+
+        return false;
+      };
 
       // Filter attendance records in date window
       const teacherRecords = allAttendance.filter(att => {
-        if (att.personId !== teacher.id) return false;
+        if (!isTeacherMatch(att)) return false;
+        if (dateFilterMode === 'all') return true;
+        const recDate = String(att.date || att.createdAt || '').slice(0, 10);
         if (dateFilterMode === 'month') {
-          return att.date.startsWith(selectedMonth);
+          return recDate.startsWith(selectedMonth);
         } else {
-          return att.date >= startDate && att.date <= endDate;
+          return recDate >= startDate && recDate <= endDate;
         }
       });
 
-      // Filter subject periods (classes)
-      const subjectRecords = teacherRecords.filter(r => Boolean(r.subjectScheduleId || r.subject || r.personType === 'teacher'));
+      // Filter subject periods (classes) - all records for this teacher in timeframe
+      const subjectRecords = teacherRecords;
 
-      let totalScheduledClasses = subjectRecords.length;
+      // Find all assigned subject schedules on the timetable for this teacher
+      const assignedSubjects = subjectSchedules.filter(
+        s => s.isActive && (
+          s.teacherId === teacher.id ||
+          s.teacherId === teacher.teacherId ||
+          (teacher.employeeId && s.teacherId === teacher.employeeId) ||
+          s.teacherName?.toLowerCase() === teacher.fullName.toLowerCase()
+        )
+      );
+
+      // Estimate weekly and monthly hours from timetable
+      const estWeeklyHours = assignedSubjects.reduce((sum, s) => {
+        const sStart = timeToMinutes(s.startTime);
+        const sEnd = timeToMinutes(s.endTime);
+        const daysCount = s.daysOfWeek ? s.daysOfWeek.length : 1;
+        return sum + Math.max(1, (sEnd - sStart) / 60) * daysCount;
+      }, 0);
+      const estMonthHours = estWeeklyHours * 4;
+
       let totalCompletedClasses = 0;
       let totalMissedClasses = 0;
       let totalLateClasses = 0;
@@ -479,28 +592,46 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
       const classSessions: TeacherClassSessionDetail[] = [];
 
       subjectRecords.forEach(rec => {
-        const scheduleRef = subjectSchedules.find(s => s.id === rec.subjectScheduleId);
-        const rateApplied = scheduleRef?.hourlyRate || baseHourlyRate;
+        const scheduleRef = subjectSchedules.find(
+          s => s.id === rec.subjectScheduleId || s.id === rec.scheduleId
+        );
+        const rateApplied = Number(
+          (scheduleRef?.hourlyRate && Number(scheduleRef.hourlyRate) > 0)
+            ? scheduleRef.hourlyRate
+            : baseHourlyRate
+        );
 
         // Calculate scheduled duration
         const schedStart = rec.scheduledStart || scheduleRef?.startTime || '08:00';
         const schedEnd = rec.scheduledEnd || scheduleRef?.endTime || '09:00';
         const schedStartMins = timeToMinutes(schedStart);
         const schedEndMins = timeToMinutes(schedEnd);
-        const schedDurationMinutes = Math.max(0, schedEndMins - schedStartMins) || 60;
-        const schedDurationHours = schedDurationMinutes / 60;
+        let schedDurationMinutes = schedEndMins > schedStartMins ? (schedEndMins - schedStartMins) : 60;
+        if (schedDurationMinutes <= 0) schedDurationMinutes = 60;
+        const schedDurationHours = Number((schedDurationMinutes / 60).toFixed(2));
         scheduledHours += schedDurationHours;
 
-        // Calculate actual / credited taught duration
+        // Determine if teacher has checked in:
+        // Teacher has checked in if:
+        // 1) checkInTime is present and not empty (e.g. "08:15", "12:18", etc.)
+        // 2) OR status is a positive attendance status: 'Present', 'Late', 'Missing Check-out', 'Early Leave'
+        // If checkInTime is present, the teacher verified check-in, regardless of whether earlier flagged absent!
+        const hasCheckInTime = Boolean(
+          rec.checkInTime &&
+          String(rec.checkInTime).trim().length > 0 &&
+          String(rec.checkInTime).trim() !== '--:--' &&
+          String(rec.checkInTime).trim() !== '-'
+        );
+        const isAttendedStatus = rec.status === 'Present' || rec.status === 'Late' || rec.status === 'Missing Check-out' || rec.status === 'Early Leave';
+        const hasCheckedIn = hasCheckInTime || (isAttendedStatus && rec.status !== 'Absent');
+
         let actualTaughtHours = 0;
-        // Teacher's Net Wage ($) Full Schedule is ONLY if they have checked in!
-        const hasCheckedIn = Boolean(rec.checkInTime && rec.checkInTime.trim().length > 0) && rec.status !== 'Absent';
 
         if (wageDurationMode === 'full_schedule') {
           // Full schedule duration charge wage policy:
-          // Teacher's Net Wage ($) Full Schedule is ONLY earned for sessions with verified check-in
-          // (e.g. teacher's schedule start 8:00 end 9:00 = 1h and Rate is 5.5
-          // but teacher scan late or overtime checkout just set Gross Wage = 1 h * 5.5$)
+          // Teacher's Gross Wage ($) Full Schedule is earned for sessions with verified check-in.
+          // Full scheduled duration is credited (e.g. scheduled 1h @ $5.50/hr -> Gross Wage = $5.50).
+          // Even if teacher scanned late or has overtime checkout, Gross Wage = schedDurationHours * rate.
           if (hasCheckedIn) {
             actualTaughtHours = schedDurationHours;
             totalCompletedClasses++;
@@ -509,17 +640,24 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
             totalMissedClasses++;
           }
         } else {
-          // Actual scan punch calculation mode (also requires verified check-in)
-          if (hasCheckedIn && rec.checkOutTime) {
-            const inMins = timeToMinutes(rec.checkInTime);
-            const outMins = timeToMinutes(rec.checkOutTime);
-            const actualDurationMinutes = Math.max(0, outMins - inMins);
-            // Credit up to scheduled duration plus minor overtime
-            actualTaughtHours = Math.min(schedDurationHours + 0.5, actualDurationMinutes / 60);
-            totalCompletedClasses++;
-          } else if (hasCheckedIn && (rec.status === 'Present' || rec.status === 'Late')) {
-            // In session or single punch, credit scheduled duration
-            actualTaughtHours = schedDurationHours;
+          // Actual scan punch calculation mode
+          if (hasCheckedIn) {
+            if (rec.checkOutTime && rec.checkInTime) {
+              const inMins = timeToMinutes(rec.checkInTime);
+              const outMins = timeToMinutes(rec.checkOutTime);
+              const actualDurationMinutes = Math.max(0, outMins - inMins);
+              if (actualDurationMinutes > 0) {
+                actualTaughtHours = Math.max(
+                  schedDurationHours,
+                  Math.min(schedDurationHours + 0.5, actualDurationMinutes / 60)
+                );
+              } else {
+                actualTaughtHours = schedDurationHours;
+              }
+            } else {
+              // Checked in (in session or single punch): credit full scheduled duration
+              actualTaughtHours = schedDurationHours;
+            }
             totalCompletedClasses++;
           } else {
             actualTaughtHours = 0;
@@ -538,7 +676,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           totalOvertimeMinutes += rec.overtimeMinutes || 0;
         }
 
-        const sessionWage = actualTaughtHours * rateApplied;
+        const sessionWage = Number((actualTaughtHours * rateApplied).toFixed(2));
         grossWage += sessionWage;
 
         classSessions.push({
@@ -564,31 +702,30 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         });
       });
 
-      // If no recorded attendance records exist yet for this teacher in this cycle:
-      // Reflect timetable scheduled hours, but STRICTLY 0 hours and $0 wage because teacher has NOT checked in!
-      if (subjectRecords.length === 0) {
-        const assignedSubjects = subjectSchedules.filter(s => s.teacherId === teacher.id && s.isActive);
-        const estWeeklyHours = assignedSubjects.reduce((sum, s) => {
-          const sStart = timeToMinutes(s.startTime);
-          const sEnd = timeToMinutes(s.endTime);
-          const daysCount = s.daysOfWeek ? s.daysOfWeek.length : 1;
-          return sum + ((sEnd - sStart) / 60) * daysCount;
-        }, 0);
+      // Scheduled classes & hours baseline:
+      // If teacher has assigned timetable subjects, ensure totalScheduledClasses and scheduledHours reflect their assigned timetable workload
+      let totalScheduledClasses = subjectRecords.length;
+      if (assignedSubjects.length > 0) {
+        const timetableMonthClasses = assignedSubjects.length * 4;
+        totalScheduledClasses = Math.max(subjectRecords.length, timetableMonthClasses);
+        scheduledHours = Math.max(scheduledHours, Number(estMonthHours.toFixed(1)));
+        totalMissedClasses = Math.max(0, totalScheduledClasses - totalCompletedClasses);
+      } else if (subjectRecords.length === 0) {
+        totalScheduledClasses = 0;
+        scheduledHours = 0;
+        totalMissedClasses = 0;
+      }
 
-        // Baseline scheduled hours
-        const estMonthHours = estWeeklyHours * 4;
-        scheduledHours = Number(estMonthHours.toFixed(1));
-        totalScheduledClasses = assignedSubjects.length * 4;
-        // Strictly $0.00 wage and 0 completed hours if no verified check-in
+      // If no attendance records recorded at all, wages and completed hours are strictly 0
+      if (subjectRecords.length === 0) {
         completedHours = 0;
         totalCompletedClasses = 0;
-        totalMissedClasses = totalScheduledClasses;
         grossWage = 0;
       }
 
       const completionRate = totalScheduledClasses > 0
         ? Math.round((totalCompletedClasses / totalScheduledClasses) * 100)
-        : 0;
+        : (totalCompletedClasses > 0 ? 100 : 0);
 
       const punctualityRate = totalCompletedClasses > 0
         ? Math.round(((totalCompletedClasses - totalLateClasses) / totalCompletedClasses) * 100)
@@ -937,9 +1074,17 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
             >
               Custom Range
             </button>
+            <button
+              onClick={() => setDateFilterMode('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                dateFilterMode === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
+              }`}
+            >
+              All Records
+            </button>
           </div>
 
-          {dateFilterMode === 'month' ? (
+          {dateFilterMode === 'month' && (
             <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold">
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
               <input
@@ -949,7 +1094,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                 className="bg-transparent border-0 text-slate-800 text-xs font-bold focus:outline-hidden"
               />
             </div>
-          ) : (
+          )}
+          {dateFilterMode === 'custom' && (
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold">
               <input
                 type="date"

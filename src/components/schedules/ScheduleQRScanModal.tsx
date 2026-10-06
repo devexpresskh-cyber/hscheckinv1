@@ -594,6 +594,7 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
         r =>
           r.personId === teacher.id &&
           r.date === todayStr &&
+          Boolean(r.checkInTime && r.checkInTime.trim().length > 0) &&
           ((activeTarget?.id && r.subjectScheduleId === activeTarget.id) ||
             r.scheduleId === (activeTarget?.id || decodedData?.scheduleId))
       );
@@ -610,8 +611,22 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
         return;
       }
 
+      // Check if there is an existing record without checkInTime (e.g. marked absent earlier) to update
+      const existingUnattended = freshAttendance.find(
+        r =>
+          r.personId === teacher.id &&
+          r.date === todayStr &&
+          !r.checkInTime &&
+          ((activeTarget?.id && r.subjectScheduleId === activeTarget.id) ||
+            r.scheduleId === (activeTarget?.id || decodedData?.scheduleId))
+      );
+
+      const recordId = existingUnattended
+        ? existingUnattended.id
+        : `att-qr-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
       const newRecord: AttendanceRecord = {
-        id: `att-qr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: recordId,
         userId: result.user?.id,
         personId: teacher.id,
         personType: 'teacher',
@@ -637,11 +652,15 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
         overtimeMinutes: 0,
         locationVerified: true,
         deviceInfo: 'QR_SCHEDULE_PIN',
-        createdAt: new Date().toISOString()
+        createdAt: existingUnattended?.createdAt || new Date().toISOString()
       };
 
-      // Save attendance
-      StorageService.addAttendanceRecord(newRecord);
+      // Save attendance (update existing or add new)
+      if (existingUnattended) {
+        StorageService.updateAttendanceRecord(existingUnattended.id, newRecord);
+      } else {
+        StorageService.addAttendanceRecord(newRecord);
+      }
 
       // Audit Log
       StorageService.addAuditLog({
