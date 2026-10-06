@@ -938,7 +938,7 @@ export const SystemSettingsView: React.FC = () => {
                     <span className="font-mono text-emerald-700">08:00 – 09:00 (1.0 hr), Rate $5.50/hr</span>
                   </div>
                   <p className="text-slate-600 text-[10px]">
-                    If teacher scans late or overtime checkout, Gross Wage is charged for the exact full scheduled duration: <b>1.0 hr × $5.50 = $5.50</b>.
+                    If teacher scans late or overtime checkout, Gross Wage is charged for the exact full scheduled duration: <b>1.0 hr × $5.50 = $5.50</b>. Wages are credited only when checked in ($0.00 if unrecorded/absent).
                   </p>
                 </div>
               </div>

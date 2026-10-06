@@ -51,14 +51,14 @@ function buildPayslipHtml(
           <div style="font-size: 10px; color: #64748b; font-weight: 400;">${session.gradeClass || ''} ${session.room ? '• ' + session.room : ''}</div>
         </td>
         <td style="padding: 6px 8px; text-align: center; font-family: monospace;">
-          ${session.checkInTime ? `${session.checkInTime} - ${session.checkOutTime || 'Ongoing'}` : `<span style="color:#94a3b8;">${session.scheduledStart}</span>`}
+          ${session.checkInTime ? `${session.checkInTime} - ${session.checkOutTime || 'Ongoing'}` : `<span style="color:#ef4444; font-weight:700;">No Check-in ($0.00)</span>`}
         </td>
         <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: #2563eb; font-family: monospace;">${session.actualTaughtHours}h</td>
         <td style="padding: 6px 8px; text-align: center; font-family: monospace;">$${session.rateApplied.toFixed(2)}</td>
         <td style="padding: 6px 8px; text-align: right; font-weight: 800; color: #047857; font-family: monospace;">$${session.wageEarned.toFixed(2)}</td>
       </tr>
     `).join('')
-    : `<tr><td colspan="7" style="padding: 16px; text-align: center; color: #94a3b8; font-size: 11px;">No individual punch logs recorded. Baseline scheduled calculation applied.</td></tr>`;
+    : `<tr><td colspan="7" style="padding: 16px; text-align: center; color: #94a3b8; font-size: 11px;">No check-in punch logs recorded in this period ($0.00 Net Wage).</td></tr>`;
 
   return `
     <!DOCTYPE html>
@@ -253,7 +253,7 @@ function buildPayslipHtml(
         <div class="meta-strip">
           <div class="meta-item"><strong>Voucher No:</strong> <span style="font-family: monospace;">${voucherNo}</span></div>
           <div class="meta-item"><strong>Period:</strong> ${periodStr}</div>
-          <div class="meta-item"><strong>Wage Basis:</strong> ${wageDurationMode === 'full_schedule' ? 'Full Schedule (100% Charged)' : 'Actual Scan Punch'}</div>
+          <div class="meta-item"><strong>Wage Basis:</strong> ${wageDurationMode === 'full_schedule' ? 'Full Schedule (Only Checked-in Sessions Credited)' : 'Actual Scan Punch'}</div>
           <div class="meta-item"><strong>Academic Year:</strong> ${systemSettings?.academicYear || '2026-2027'}${systemSettings?.academicStartDate && systemSettings?.academicEndDate ? ` (${systemSettings.academicStartDate} to ${systemSettings.academicEndDate})` : ''}</div>
           <div class="meta-item"><strong>Date Issued:</strong> ${currentDate}</div>
         </div>
@@ -464,7 +464,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
       });
 
       // Filter subject periods (classes)
-      const subjectRecords = teacherRecords.filter(r => Boolean(r.subjectScheduleId || r.subject));
+      const subjectRecords = teacherRecords.filter(r => Boolean(r.subjectScheduleId || r.subject || r.personType === 'teacher'));
 
       let totalScheduledClasses = subjectRecords.length;
       let totalCompletedClasses = 0;
@@ -493,44 +493,50 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
 
         // Calculate actual / credited taught duration
         let actualTaughtHours = 0;
-        const isAttended = Boolean(rec.checkInTime) || rec.status === 'Present' || rec.status === 'Late' || rec.status === 'Missing Check-out';
+        // Teacher's Net Wage ($) Full Schedule is ONLY if they have checked in!
+        const hasCheckedIn = Boolean(rec.checkInTime && rec.checkInTime.trim().length > 0) && rec.status !== 'Absent';
 
         if (wageDurationMode === 'full_schedule') {
           // Full schedule duration charge wage policy:
-          // e.g. teacher's schedule 8:00 to 9:00 = 1h and Rate is 5.5
-          // even if teacher scans late or overtime checkout, charge Gross Wage = 1h * 5.5$
-          if (isAttended && rec.status !== 'Absent') {
+          // Teacher's Net Wage ($) Full Schedule is ONLY earned for sessions with verified check-in
+          // (e.g. teacher's schedule start 8:00 end 9:00 = 1h and Rate is 5.5
+          // but teacher scan late or overtime checkout just set Gross Wage = 1 h * 5.5$)
+          if (hasCheckedIn) {
             actualTaughtHours = schedDurationHours;
             totalCompletedClasses++;
-          } else if (rec.status === 'Absent') {
+          } else {
+            actualTaughtHours = 0;
             totalMissedClasses++;
           }
         } else {
-          // Actual scan punch calculation mode
-          if (rec.checkInTime && rec.checkOutTime) {
+          // Actual scan punch calculation mode (also requires verified check-in)
+          if (hasCheckedIn && rec.checkOutTime) {
             const inMins = timeToMinutes(rec.checkInTime);
             const outMins = timeToMinutes(rec.checkOutTime);
             const actualDurationMinutes = Math.max(0, outMins - inMins);
             // Credit up to scheduled duration plus minor overtime
             actualTaughtHours = Math.min(schedDurationHours + 0.5, actualDurationMinutes / 60);
             totalCompletedClasses++;
-          } else if (rec.checkInTime && (rec.status === 'Present' || rec.status === 'Late')) {
+          } else if (hasCheckedIn && (rec.status === 'Present' || rec.status === 'Late')) {
             // In session or single punch, credit scheduled duration
             actualTaughtHours = schedDurationHours;
             totalCompletedClasses++;
-          } else if (rec.status === 'Absent') {
+          } else {
+            actualTaughtHours = 0;
             totalMissedClasses++;
           }
         }
 
         completedHours += actualTaughtHours;
 
-        if (rec.status === 'Late' || (rec.lateMinutes && rec.lateMinutes > 0)) {
+        if (hasCheckedIn && (rec.status === 'Late' || (rec.lateMinutes && rec.lateMinutes > 0))) {
           totalLateClasses++;
           totalLateMinutes += rec.lateMinutes || 0;
         }
 
-        totalOvertimeMinutes += rec.overtimeMinutes || 0;
+        if (hasCheckedIn) {
+          totalOvertimeMinutes += rec.overtimeMinutes || 0;
+        }
 
         const sessionWage = actualTaughtHours * rateApplied;
         grossWage += sessionWage;
@@ -558,7 +564,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         });
       });
 
-      // If no recorded attendance records exist yet, simulate scheduled baseline from subject timetable
+      // If no recorded attendance records exist yet for this teacher in this cycle:
+      // Reflect timetable scheduled hours, but STRICTLY 0 hours and $0 wage because teacher has NOT checked in!
       if (subjectRecords.length === 0) {
         const assignedSubjects = subjectSchedules.filter(s => s.teacherId === teacher.id && s.isActive);
         const estWeeklyHours = assignedSubjects.reduce((sum, s) => {
@@ -568,18 +575,20 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           return sum + ((sEnd - sStart) / 60) * daysCount;
         }, 0);
 
-        // Assume ~4 weeks in a month
+        // Baseline scheduled hours
         const estMonthHours = estWeeklyHours * 4;
-        scheduledHours = estMonthHours;
-        completedHours = estMonthHours;
-        totalScheduledClasses = assignedSubjects.length * 4 * 5;
-        totalCompletedClasses = totalScheduledClasses;
-        grossWage = completedHours * baseHourlyRate;
+        scheduledHours = Number(estMonthHours.toFixed(1));
+        totalScheduledClasses = assignedSubjects.length * 4;
+        // Strictly $0.00 wage and 0 completed hours if no verified check-in
+        completedHours = 0;
+        totalCompletedClasses = 0;
+        totalMissedClasses = totalScheduledClasses;
+        grossWage = 0;
       }
 
       const completionRate = totalScheduledClasses > 0
         ? Math.round((totalCompletedClasses / totalScheduledClasses) * 100)
-        : 100;
+        : 0;
 
       const punctualityRate = totalCompletedClasses > 0
         ? Math.round(((totalCompletedClasses - totalLateClasses) / totalCompletedClasses) * 100)
@@ -1064,8 +1073,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
               </span>
               <span className="text-emerald-800 text-[11px]">
                 {isKhmer
-                  ? 'គ្រប់ម៉ោងបង្រៀនដែលបានចូលរួម ត្រូវបានគិតប្រាក់កម្រៃពេញតាមកាលវិភាគ (ឧ. ០៨:០០-០៩:០០ = ១.០ ម៉ោង × អត្រាកម្រៃ) ទោះបីជាគ្រូស្កេនយឺត ឬស្កេនចេញលើសម៉ោងក៏ដោយ។'
-                  : 'Delivered class sessions are charged for their full scheduled duration (e.g. 08:00–09:00 = 1.0 hr × Rate = Gross Wage) even if late scan or overtime checkout occurred.'}
+                  ? 'ប្រាក់កម្រៃ Net Wage ត្រូវបានគិតពេញតាមកាលវិភាគ សម្រាប់តែម៉ោងបង្រៀនណាដែលមានការស្កេនចូលប៉ុណ្ណោះ (ស្កេនយឺត ឬស្កេនចេញលើសម៉ោង ក៏គិតពេញ ១០០% កាលវិភាគ។ បើមិនស្កេនចូល មិនគិតប្រាក់កម្រៃឡើយ)។'
+                  : "Teacher's Net Wage is charged for the full scheduled duration only when checked in (wages credited 100% for checked-in classes even if late scan or overtime checkout; $0 for sessions without check-in)."}
               </span>
             </div>
           </div>
@@ -1636,8 +1645,15 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                 </h5>
 
                 {selectedTeacherForDetail.classSessions.length === 0 ? (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-400">
-                    No individual clock punch records found. Estimated wage is based on recurring schedule baseline.
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500 space-y-1">
+                    <p className="font-bold text-slate-700">
+                      {isKhmer ? 'មិនមានកំណត់ត្រាស្កេនចូលក្នុងកាលបរិច្ឆេទនេះទេ' : 'No attendance check-in records found for this period'}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {isKhmer
+                        ? 'ប្រាក់ឈ្នួល Net Wage គឺ $0.00 (គោលការណ៍ Full Schedule គិតប្រាក់កម្រៃជូនសម្រាប់តែកាលវិភាគណាដែលមានការស្កេនវត្តមានចូលប៉ុណ្ណោះ)'
+                        : "Teacher's Net Wage is $0.00. Under Full Schedule policy, wages are only earned for sessions with verified check-in."}
+                    </p>
                   </div>
                 ) : (
                   <div className="payslip-sessions-table-wrapper border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
@@ -1670,7 +1686,9 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                                   {session.checkInTime} - {session.checkOutTime || 'Ongoing'}
                                 </span>
                               ) : (
-                                <span className="text-slate-400">Scheduled {session.scheduledStart}</span>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                                  No Check-in ($0.00)
+                                </span>
                               )}
                             </td>
                             <td className="p-2.5 text-center font-bold text-blue-600 font-mono">
