@@ -6,6 +6,7 @@ import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { StorageService } from '../../services/storageService.ts';
 import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
 import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
+import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 import {
   Bell,
   Clock,
@@ -20,7 +21,8 @@ import {
   GraduationCap,
   Users2,
   ShieldCheck,
-  Calendar
+  Calendar,
+  UserCog
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -46,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
   const [telegramSettings, setTelegramSettings] = useState(() => StorageService.getTelegramSettings());
@@ -383,6 +386,21 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </div>
 
+                  {/* Edit Profile & Owned Info Button */}
+                  <div className="pb-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsProfileModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2 py-2 px-3 rounded-xl text-xs font-bold text-slate-800 hover:text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 transition-colors cursor-pointer"
+                    >
+                      <UserCog className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>{isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូប (Edit Profile)' : 'Edit Profile & Info'}</span>
+                    </button>
+                  </div>
+
                   {/* Quick User Manual Link */}
                   {onOpenManual && (
                     <div className="pb-1">
@@ -424,6 +442,14 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
+
+      {/* Teacher / Staff Profile & Owned Info Modal */}
+      {isProfileModalOpen && (
+        <TeacherProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
 
       {/* Quick Academic Dates Modal for Admins */}
       {isAcademicDatesModalOpen && (

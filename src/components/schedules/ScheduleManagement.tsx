@@ -38,7 +38,8 @@ import {
   RefreshCw,
   QrCode,
   Camera,
-  Download
+  Download,
+  UserCog
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
@@ -49,6 +50,7 @@ import { AcademicDatesModal } from './AcademicDatesModal.tsx';
 import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
 import { ScheduleQRCodeModal } from './ScheduleQRCodeModal.tsx';
 import { ScheduleQRScanModal } from './ScheduleQRScanModal.tsx';
+import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 

@@ -23,12 +23,14 @@ import {
   DollarSign,
   Filter,
   User,
+  UserCog,
   Coffee,
   Calendar,
   Layers,
   LogIn,
   LogOut
 } from 'lucide-react';
+import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
 interface TeacherMonthlyCalendarProps {
   initialTeacher?: Teacher | null;
@@ -97,6 +99,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     if (currentUser.personId) return currentUser.personId;
     return teachers[0]?.id || '';
   });
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Robustly resolve active teacher matching linked profile
   const activeTeacher = useMemo(() => {
@@ -478,11 +481,22 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
             </div>
           )}
 
-          {/* Teacher Badge if locked / role */}
+          {/* Teacher Badge & Profile Edit if locked / role */}
           {isTeacherRole && activeTeacher && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900">
-              <GraduationCap className="w-4 h-4 text-indigo-600" />
-              <span>{activeTeacher.fullName} ({activeTeacher.teacherId})</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900">
+                <GraduationCap className="w-4 h-4 text-indigo-600" />
+                <span>{activeTeacher.fullName} ({activeTeacher.teacherId})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(true)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs print:hidden"
+                title={isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូបផ្ទាល់ខ្លួន' : 'Edit My Profile & Owned Information'}
+              >
+                <UserCog className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{isKhmer ? 'កែប្រវត្តិរូប' : 'Edit Profile'}</span>
+              </button>
             </div>
           )}
 
@@ -928,35 +942,54 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
 
   if (isOpenModal) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-        <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden my-auto animate-in zoom-in-95 duration-150">
-          <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <CalendarDays className="w-5 h-5 text-indigo-400" />
-              <div>
-                <h3 className="font-bold text-base">
-                  {isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំខែ (Monthly Calendar Schedule)' : 'Faculty Monthly Calendar Schedule'}
-                </h3>
-                <p className="text-xs text-slate-300">
-                  {activeTeacher?.fullName} ({activeTeacher?.teacherId}) • {activeTeacher?.subject}
-                </p>
+      <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden my-auto animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <CalendarDays className="w-5 h-5 text-indigo-400" />
+                <div>
+                  <h3 className="font-bold text-base">
+                    {isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំខែ (Monthly Calendar Schedule)' : 'Faculty Monthly Calendar Schedule'}
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    {activeTeacher?.fullName} ({activeTeacher?.teacherId}) • {activeTeacher?.subject}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
 
-          <div className="p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
-            {content}
+            <div className="p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
+              {content}
+            </div>
           </div>
         </div>
-      </div>
+
+        {isProfileModalOpen && (
+          <TeacherProfileModal
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+          />
+        )}
+      </>
     );
   }
 
-  return content;
+  return (
+    <>
+      {content}
+      {isProfileModalOpen && (
+        <TeacherProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
+    </>
+  );
 };

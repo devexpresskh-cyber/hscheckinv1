@@ -25,6 +25,7 @@ import {
   History
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
+import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
 interface BottomNavigationProps {
   currentTab: NavTab;
@@ -42,6 +43,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   const { currentUser, currentRole, hasPermission, logout } = useAuth();
   const { isKhmer } = useLanguage();
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const isEmployee = currentUser.role === 'employee';
   const isTeacher = currentUser.role === 'teacher';
@@ -358,6 +360,33 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               </button>
             </div>
 
+            {/* Quick Profile Edit Action Button */}
+            <div className="px-4 pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreSheetOpen(false);
+                  setIsProfileModalOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
+                    <UserCog className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-xs font-bold block leading-tight">
+                      {isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូប (Edit Profile)' : 'Edit Profile & Info'}
+                    </span>
+                    <span className="text-[10px] text-indigo-700">
+                      {isKhmer ? 'ប្តូរលេខ PIN ស្កេន ព័ត៌មានទំនាក់ទំនង & តេឡេក្រាម' : 'Update Check-in PIN, Contacts & Telegram'}
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-indigo-500" />
+              </button>
+            </div>
+
             {/* Sheet Menu Grid */}
             <div className="overflow-y-auto p-4 space-y-4">
               {secondaryMenuItems.length > 0 && (
@@ -418,6 +447,14 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Teacher / Staff Profile Modal */}
+      {isProfileModalOpen && (
+        <TeacherProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
       )}
     </>
   );

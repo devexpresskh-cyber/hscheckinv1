@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
+import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { Teacher, AttendanceRecord, TeacherSubjectSchedule, TeacherWageSummary, TeacherClassSessionDetail } from '../../types/index.ts';
 import {
   GraduationCap,
@@ -23,11 +24,13 @@ import {
   Award,
   BookOpen,
   UserCheck,
+  UserCog,
   ShieldCheck,
   FileCheck,
   CalendarDays
 } from 'lucide-react';
 import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
+import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
 function buildPayslipHtml(
   summary: TeacherWageSummary,
@@ -379,19 +382,11 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const isTeacherRole = currentUser.role === 'teacher';
   const effectiveTeacherId = lockedTeacherId || (isTeacherRole ? (currentUser.personId || currentUser.id) : undefined);
 
-  // Dynamic current month or latest month with attendance records
-  const currentYm = new Date().toISOString().slice(0, 7);
+  // Dynamic current month is always default for live payroll & check-in monitoring
+  const todayYm = AttendanceEngine.getCurrentDateString().slice(0, 7);
+
   const getInitialMonth = () => {
-    const list = StorageService.getAttendance();
-    if (list.length > 0) {
-      const hasCurrentMonth = list.some(a => String(a.date || '').slice(0, 7) === currentYm);
-      if (hasCurrentMonth) return currentYm;
-      const dates = list.map(a => a.date).filter(Boolean).sort();
-      if (dates.length > 0) {
-        return dates[dates.length - 1].slice(0, 7);
-      }
-    }
-    return currentYm;
+    return todayYm;
   };
 
   const initialMonth = getInitialMonth();
@@ -399,7 +394,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   // Reactive state synchronized with StorageService
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
   const [teachers, setTeachers] = useState<Teacher[]>(() =>
-    StorageService.getTeachers().filter(t => t.status === 'Active')
+    StorageService.getTeachers().filter(t => t.status !== 'Inactive' && (t as any).status !== 'Archived')
   );
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>(() =>
     StorageService.getAttendance()
@@ -410,16 +405,29 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
 
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
-      setSystemSettings(StorageService.getSystemSettings());
-      setTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
+      const freshSettings = StorageService.getSystemSettings();
+      setSystemSettings(freshSettings);
+      if (freshSettings?.teachingWageDurationMode) {
+        setWageDurationMode(freshSettings.teachingWageDurationMode);
+      }
+      setTeachers(StorageService.getTeachers().filter(t => t.status !== 'Inactive' && (t as any).status !== 'Archived'));
       const freshAtt = StorageService.getAttendance();
       setAllAttendance(freshAtt);
       setSubjectSchedules(StorageService.getSubjectSchedules());
 
-      // If no month is selected or default is needed, keep current month active
+      // If fresh records arrive, ensure selectedMonth includes active records
       if (freshAtt.length > 0) {
+        const curYm = AttendanceEngine.getCurrentDateString().slice(0, 7);
         setSelectedMonth(prev => {
-          if (!prev) return getInitialMonth();
+          if (!prev) return curYm;
+          // If current month has records and previous selected month has 0 records, switch to current month
+          const hasPrevRecords = freshAtt.some(a => {
+            const d = String(a.date || a.createdAt || '').slice(0, 7);
+            return d === prev;
+          });
+          if (!hasPrevRecords && freshAtt.some(a => String(a.date || a.createdAt || '').slice(0, 7) === curYm)) {
+            return curYm;
+          }
           return prev;
         });
       }
@@ -441,6 +449,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const [selectedTeacherForDetail, setSelectedTeacherForDetail] = useState<TeacherWageSummary | null>(null);
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const canEditAcademicDates =
     currentUser.role === 'super_admin' ||
@@ -460,9 +469,19 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const filteredTeachers = useMemo(() => {
     if (effectiveTeacherId || isTeacherRole) {
       const match = teachers.find(t => 
-        (effectiveTeacherId && (t.id === effectiveTeacherId || t.teacherId.toLowerCase() === effectiveTeacherId.toLowerCase())) ||
-        (currentUser.personId && (t.id === currentUser.personId || t.teacherId.toLowerCase() === currentUser.personId.toLowerCase())) ||
-        t.fullName.toLowerCase() === currentUser.fullName.toLowerCase()
+        (effectiveTeacherId && (
+          t.id === effectiveTeacherId || 
+          t.teacherId.toLowerCase() === effectiveTeacherId.toLowerCase() ||
+          t.id.replace(/^usr-/, '') === effectiveTeacherId.replace(/^usr-/, '') ||
+          t.id.toLowerCase() === effectiveTeacherId.replace(/^usr-tch-/, 'tch-').toLowerCase()
+        )) ||
+        (currentUser.personId && (
+          t.id === currentUser.personId || 
+          t.teacherId.toLowerCase() === currentUser.personId.toLowerCase()
+        )) ||
+        (currentUser.email && t.email && t.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+        t.fullName.toLowerCase() === currentUser.fullName.toLowerCase() ||
+        (currentUser.khmerName && t.khmerName && t.khmerName.trim() === currentUser.khmerName.trim())
       );
       if (match) return [match];
       if (teachers.length > 0) return [teachers[0]];
@@ -484,6 +503,22 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
     });
   }, [teachers, selectedDept, searchQuery, canAccessDepartment, effectiveTeacherId, isTeacherRole, currentUser]);
 
+  // Helper: Normalize date string to YYYY-MM-DD
+  const normalizeDateToYmd = (val?: string): string => {
+    if (!val) return '';
+    const s = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+      const parts = s.split('-');
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
+      const parts = s.split('/');
+      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+    }
+    return s.slice(0, 10);
+  };
+
   // Calculate Teaching Wage Summaries
   const wageSummaries: TeacherWageSummary[] = useMemo(() => {
     return filteredTeachers.map(teacher => {
@@ -498,6 +533,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
       const isTeacherMatch = (att: AttendanceRecord) => {
         const pId = (att.personId || '').trim().toLowerCase();
         const uId = (att.userId || '').trim().toLowerCase();
+        const attTId = ((att as any).teacherId || '').trim().toLowerCase();
         const tId = (teacher.id || '').trim().toLowerCase();
         const tCode = (teacher.teacherId || '').trim().toLowerCase();
         const tEmpId = (teacher.employeeId || '').trim().toLowerCase();
@@ -516,21 +552,29 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           if (pId && tId.includes(pId)) return true;
         }
 
-        // 2. User ID match
+        // 2. Extra teacherId attribute
+        if (attTId) {
+          if (attTId === tId || attTId === tCode || (tEmpId && attTId === tEmpId)) return true;
+          if (attTId.replace(/^usr-/, '') === tId.replace(/^usr-/, '')) return true;
+        }
+
+        // 3. User ID match
         if (uId && (uId === tId || uId.includes(tId) || tId.includes(uId))) return true;
 
-        // 3. Subject schedule ownership confirmation
+        // 4. Subject schedule ownership confirmation
         if (att.subjectScheduleId || att.scheduleId) {
           const sched = subjectSchedules.find(s => s.id === (att.subjectScheduleId || att.scheduleId));
           if (sched) {
             const sTId = (sched.teacherId || '').trim().toLowerCase();
             const sTName = (sched.teacherName || '').trim().toLowerCase();
+            const sTKhmer = (sched.khmerTeacherName || '').trim();
             if (sTId === tId || sTId === tCode || (tEmpId && sTId === tEmpId)) return true;
-            if (sTName && (sTName === tName || sTName === tEng)) return true;
+            if (sTName && (sTName === tName || sTName === tEng || sTName.includes(tName) || tName.includes(sTName))) return true;
+            if (sTKhmer && tKhmer && (sTKhmer === tKhmer || sTKhmer.includes(tKhmer) || tKhmer.includes(sTKhmer))) return true;
           }
         }
 
-        // 4. Name matching
+        // 5. Name matching (flexible whitespace and contains)
         if (pName && tName) {
           if (pName === tName || pName.includes(tName) || tName.includes(pName)) return true;
         }
@@ -538,7 +582,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           if (pName === tEng || pName.includes(tEng) || tEng.includes(pName)) return true;
         }
 
-        // 5. Khmer Name matching
+        // 6. Khmer Name matching
         if (pKhmer && tKhmer) {
           if (pKhmer === tKhmer || pKhmer.includes(tKhmer) || tKhmer.includes(pKhmer)) return true;
         }
@@ -550,7 +594,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
       const teacherRecords = allAttendance.filter(att => {
         if (!isTeacherMatch(att)) return false;
         if (dateFilterMode === 'all') return true;
-        const recDate = String(att.date || att.createdAt || '').slice(0, 10);
+        const recDate = normalizeDateToYmd(att.date || att.createdAt);
         if (dateFilterMode === 'month') {
           return recDate.startsWith(selectedMonth);
         } else {
@@ -622,7 +666,14 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           String(rec.checkInTime).trim() !== '--:--' &&
           String(rec.checkInTime).trim() !== '-'
         );
-        const isAttendedStatus = rec.status === 'Present' || rec.status === 'Late' || rec.status === 'Missing Check-out' || rec.status === 'Early Leave';
+        const isAttendedStatus =
+          rec.status === 'Present' ||
+          rec.status === 'Late' ||
+          rec.status === 'Missing Check-out' ||
+          rec.status === 'Early Leave' ||
+          (rec.status as string) === 'Attended' ||
+          (rec.status as string) === 'Completed' ||
+          (rec.status as string) === 'In Progress';
         const hasCheckedIn = hasCheckInTime || (isAttendedStatus && rec.status !== 'Absent');
 
         let actualTaughtHours = 0;
@@ -1093,6 +1144,16 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                 onChange={e => setSelectedMonth(e.target.value)}
                 className="bg-transparent border-0 text-slate-800 text-xs font-bold focus:outline-hidden"
               />
+              {selectedMonth !== todayYm && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(todayYm)}
+                  className="px-2 py-0.5 rounded-md bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold cursor-pointer transition-colors"
+                  title="Switch to current month"
+                >
+                  {isKhmer ? 'ខែនេះ' : 'This Month'}
+                </button>
+              )}
             </div>
           )}
           {dateFilterMode === 'custom' && (
@@ -1227,6 +1288,45 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           <span className="px-2.5 py-1 rounded-xl bg-emerald-200 text-emerald-900 font-black text-[10px] uppercase tracking-wide shrink-0 self-start sm:self-auto">
             100% Scheduled Hours Charge
           </span>
+        </div>
+      )}
+
+      {/* Month Auto-Discovery Banner if current selectedMonth has 0 records but other records exist */}
+      {overallKPIs.totalWage === 0 && allAttendance.length > 0 && dateFilterMode === 'month' && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-950 px-4 py-3 rounded-2xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-extrabold text-amber-950">
+                {isKhmer ? `មិនទាន់ឃើញកំណត់ត្រាវត្តមានសម្រាប់ខែ ${selectedMonth} ទេ៖ ` : `No check-in records found for month ${selectedMonth}: `}
+              </span>
+              <span className="text-amber-800 text-[11px]">
+                {isKhmer
+                  ? `ប្រសិនបើគ្រូទើបតែបានស្កេនចូលរៀនថ្មីៗ សូមចុចប្តូរទៅខែបច្ចុប្បន្ន (${todayYm}) ឬជ្រើសរើស "All Records" ដើម្បីមើលប្រាក់ឈ្នួល Gross Wage ភ្លាមៗ។`
+                  : `If the teacher recently checked in, switch to current month (${todayYm}) or choose "All Records" to view Gross Wage.`}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {selectedMonth !== todayYm && (
+              <button
+                type="button"
+                onClick={() => setSelectedMonth(todayYm)}
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+              >
+                {isKhmer ? `មើលខែបច្ចុប្បន្ន (${todayYm})` : `View Current Month (${todayYm})`}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setDateFilterMode('all')}
+              className="px-3 py-1.5 rounded-xl bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold text-xs cursor-pointer transition-colors"
+            >
+              {isKhmer ? 'មើលគ្រប់កាលបរិច្ឆេទ (All Records)' : 'View All Records'}
+            </button>
+          </div>
         </div>
       )}
 

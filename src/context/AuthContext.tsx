@@ -22,6 +22,7 @@ interface AuthContextType {
   loginWithCredentials: (identifier: string, password?: string) => Promise<boolean>;
   loginWithPin: (identifier: string, pin: string) => Promise<boolean>;
   loginWithPhone: (phone: string, pin: string) => Promise<boolean>;
+  updateCurrentUserProfile: (updates: Partial<UserAccount>) => void;
   authError: string | null;
   setAuthError: (err: string | null) => void;
 }
@@ -1127,6 +1128,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   };
 
+  const updateCurrentUserProfile = (updates: Partial<UserAccount>) => {
+    const updated: UserAccount = {
+      ...currentUser,
+      ...updates
+    };
+    setCurrentUser(updated);
+    currentUserRef.current = updated;
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updated));
+    if (updated.id) {
+      StorageService.updateUser(updated.id, updates);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -1145,6 +1159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithCredentials,
         loginWithPin,
         loginWithPhone,
+        updateCurrentUserProfile,
         authError,
         setAuthError
       }}

@@ -25,6 +25,7 @@ import {
   Languages
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
+import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
 export type NavTab =
   | 'dashboard'
@@ -61,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { currentUser, currentRole, hasPermission, logout } = useAuth();
   const { t, isKhmer, language, setLanguage } = useLanguage();
+  const [isProfileModalOpen, setIsProfileModalOpen] = React.useState(false);
 
   interface NavItem {
     id: NavTab;
@@ -487,20 +489,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Current User Session Bar at bottom of sidebar */}
       <div className="p-3 bg-slate-950/80 border-t border-slate-800 shrink-0">
-        <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-900 border border-slate-800/80">
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+        <div className="flex items-center justify-between gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+          <button
+            type="button"
+            onClick={() => setIsProfileModalOpen(true)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left p-1 rounded-lg hover:bg-slate-800/80 transition-colors cursor-pointer group"
+            title={isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូប (Edit Profile)' : 'Edit My Profile & Owned Info'}
+          >
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:ring-2 group-hover:ring-indigo-400">
               {currentUser.fullName.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-white truncate leading-tight">
+              <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-indigo-300">
                 {isKhmer && currentUser.khmerName ? currentUser.khmerName : currentUser.fullName}
               </p>
-              <p className="text-[10px] text-indigo-400 font-medium truncate">
-                {currentRole.name} • {currentUser.department}
+              <p className="text-[10px] text-indigo-400 font-medium truncate flex items-center gap-1">
+                <span>{currentRole.name}</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400 truncate">{currentUser.department}</span>
               </p>
             </div>
-          </div>
+            <UserCog className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-300 shrink-0" />
+          </button>
           <button
             onClick={() => logout()}
             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
@@ -516,6 +526,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
+      {/* Teacher Profile Modal */}
+      {isProfileModalOpen && (
+        <TeacherProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
       {/* Desktop Sidebar: in-flow flex child, fills remaining viewport height, always fixed in view */}
       <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 bg-slate-900 border-r border-slate-800 h-full overflow-hidden select-none z-20 print:hidden">
         {renderNavContent()}
