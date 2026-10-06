@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
@@ -300,9 +301,15 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 md:p-6 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[88vh] my-auto animate-in zoom-in-95 duration-150"
+        onClick={e => e.stopPropagation()}
+      >
         
         {/* Header Banner */}
         <div className="px-5 py-4 bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white flex items-center justify-between shrink-0">
@@ -375,7 +382,11 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto p-5 sm:p-6 space-y-5 flex-1">
+        <form
+          id="teacher-profile-form"
+          onSubmit={handleSubmit}
+          className="overflow-y-auto p-5 sm:p-6 space-y-5 flex-1 min-h-0"
+        >
           
           {/* TAB 1: GENERAL PROFILE INFO */}
           {activeTab === 'profile' && (
@@ -725,39 +736,44 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* Form Footer */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
-            <div className="text-[11px] text-slate-500">
-              {linkedTeacher ? (
-                <span className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 font-bold">
-                  {linkedTeacher.teacherId}
-                </span>
-              ) : (
-                <span>{currentUser.email}</span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-              >
-                {isKhmer ? 'បោះបង់' : 'Cancel'}
-              </button>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-              >
-                <Save className="w-4 h-4" />
-                <span>{isSaving ? (isKhmer ? 'កំពុងរក្សាទុក...' : 'Saving...') : (isKhmer ? 'រក្សាទុកការកែប្រែ' : 'Save Changes')}</span>
-              </button>
-            </div>
-          </div>
         </form>
+
+        {/* Pinned Modal Footer */}
+        <div className="px-5 py-3.5 bg-slate-50/95 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+          <div className="text-[11px] text-slate-500">
+            {linkedTeacher ? (
+              <span className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 font-bold">
+                {linkedTeacher.teacherId}
+              </span>
+            ) : (
+              <span>{currentUser.email}</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+            >
+              {isKhmer ? 'បោះបង់' : 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              form="teacher-profile-form"
+              disabled={isSaving}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSaving ? (isKhmer ? 'កំពុងរក្សាទុក...' : 'Saving...') : (isKhmer ? 'រក្សាទុកការកែប្រែ' : 'Save Changes')}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 };

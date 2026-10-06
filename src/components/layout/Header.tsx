@@ -116,7 +116,8 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="shrink-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs print:hidden">
+    <>
+      <header className="shrink-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs print:hidden">
       <div className="flex items-center justify-between px-3 sm:px-6 h-16 max-w-full gap-2 sm:gap-4 overflow-visible">
         
         {/* Left: Mobile Menu Button & Organization Branding */}
@@ -442,22 +443,23 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
-
-      {/* Teacher / Staff Profile & Owned Info Modal */}
-      {isProfileModalOpen && (
-        <TeacherProfileModal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-        />
-      )}
-
-      {/* Quick Academic Dates Modal for Admins */}
-      {isAcademicDatesModalOpen && (
-        <AcademicDatesModal
-          isOpen={isAcademicDatesModalOpen}
-          onClose={() => setIsAcademicDatesModalOpen(false)}
-        />
-      )}
     </header>
+
+    {/* Teacher / Staff Profile & Owned Info Modal */}
+    {isProfileModalOpen && (
+      <TeacherProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
+    )}
+
+    {/* Quick Academic Dates Modal for Admins */}
+    {isAcademicDatesModalOpen && (
+      <AcademicDatesModal
+        isOpen={isAcademicDatesModalOpen}
+        onClose={() => setIsAcademicDatesModalOpen(false)}
+      />
+    )}
+  </>
   );
 };

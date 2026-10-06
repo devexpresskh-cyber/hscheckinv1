@@ -492,7 +492,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800/80">
           <button
             type="button"
-            onClick={() => setIsProfileModalOpen(true)}
+            onClick={() => {
+              setIsProfileModalOpen(true);
+              if (onClose) onClose();
+            }}
             className="flex items-center gap-2.5 min-w-0 flex-1 text-left p-1 rounded-lg hover:bg-slate-800/80 transition-colors cursor-pointer group"
             title={isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូប (Edit Profile)' : 'Edit My Profile & Owned Info'}
           >
