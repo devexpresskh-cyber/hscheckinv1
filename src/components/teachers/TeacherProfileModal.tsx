@@ -112,7 +112,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
         phone: source?.phone || currentUser.phone || '',
         email: source?.email || currentUser.email || '',
         subject: (source as any)?.subject || (source as any)?.position || 'General Education',
-        telegramUsername: source?.telegramUsername || '',
+        telegramUsername: (source as any)?.telegramUsername || '',
         telegramChatId: source?.telegramChatId || '',
         pinCode: source?.pinCode || currentUser.pinCode || '1234',
         photoUrl: source?.photoUrl || currentUser.avatarUrl || AVATAR_PRESETS[0],
@@ -144,7 +144,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
     const res = await TelegramService.dispatchMessage({
       chatId,
       text: testText,
-      type: 'Test'
+      type: 'custom'
     });
     setIsTestingTelegram(false);
 
@@ -202,7 +202,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           pinCode: formData.pinCode.trim(),
           photoUrl: formData.photoUrl.trim(),
           hourlyRate: parsedRate,
-          currency: formData.currency || 'USD'
+          currency: (formData.currency as 'USD' | 'KHR') || 'USD'
         });
       } else if (currentUser.role === 'teacher') {
         // Create teacher profile if missing
@@ -210,6 +210,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
         StorageService.addTeacher({
           id: newTeacherId,
           teacherId: `TCH-2026-${String(Math.floor(Math.random() * 900) + 100)}`,
+          employeeId: `EMP-${String(Math.floor(Math.random() * 900) + 100)}`,
           fullName: formData.fullName.trim(),
           khmerName: formData.khmerName.trim(),
           englishName: formData.englishName.trim() || formData.fullName.trim(),
@@ -222,12 +223,14 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           position: 'Teacher',
           employmentType: 'Full-time',
           joinDate: new Date().toISOString().slice(0, 10),
+          assignedLocation: 'Main Campus',
+          assignedScheduleId: 'sch-teacher-morning',
           telegramUsername: formData.telegramUsername.trim(),
           telegramChatId: formData.telegramChatId.trim(),
           pinCode: formData.pinCode.trim(),
           photoUrl: formData.photoUrl.trim(),
           hourlyRate: parsedRate,
-          currency: formData.currency || 'USD',
+          currency: (formData.currency as 'USD' | 'KHR') || 'USD',
           status: 'Active'
         });
       } else if (linkedEmployee) {
@@ -236,7 +239,6 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           khmerName: formData.khmerName.trim(),
           phone: formData.phone.trim(),
           email: formData.email.trim(),
-          telegramUsername: formData.telegramUsername.trim(),
           telegramChatId: formData.telegramChatId.trim(),
           pinCode: formData.pinCode.trim(),
           photoUrl: formData.photoUrl.trim()

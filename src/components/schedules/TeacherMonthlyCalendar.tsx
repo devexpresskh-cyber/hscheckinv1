@@ -337,10 +337,21 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
         })
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-      // Match attendance record for teacher on this date
-      const att = attendance.find(
-        a => a.personId === activeTeacher?.id && a.date === dateStr
-      );
+      // Match attendance record for teacher on this date (by scheduled class or teacher ID/name)
+      const att = matchingClasses.length > 0
+        ? matchingClasses
+            .map(cls => AttendanceEngine.findRecordForSubjectSchedule(cls, attendance, dateStr, activeTeacher ? [activeTeacher] : undefined))
+            .find(Boolean)
+        : attendance.find(a => {
+            if (a.date !== dateStr) return false;
+            if (!activeTeacher) return false;
+            const pId = (a.personId || '').trim().toLowerCase();
+            const tId = (activeTeacher.id || '').trim().toLowerCase();
+            const tCode = (activeTeacher.teacherId || '').trim().toLowerCase();
+            const pName = (a.personName || '').trim().toLowerCase();
+            const tName = (activeTeacher.fullName || '').trim().toLowerCase();
+            return pId === tId || pId === tCode || pId.replace(/^usr-/, '') === tId.replace(/^usr-/, '') || (pName && pName === tName);
+          });
 
       cells.push({
         dayNumber: day,
