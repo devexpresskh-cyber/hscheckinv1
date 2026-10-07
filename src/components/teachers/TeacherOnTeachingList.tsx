@@ -1126,9 +1126,11 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                               <span>{currentSchedule.startTime} – {currentSchedule.endTime}</span>
                             </span>
                           </div>
-                          <span className="font-mono font-bold text-xs text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200 shadow-2xs">
-                            {currentSchedule.currency === 'KHR' ? '៛' : '$'}{(currentSchedule.hourlyRate ?? teacher.hourlyRate ?? 20).toFixed(0)}/hr
-                          </span>
+                          {currentUser.role !== 'teacher' && (
+                            <span className="font-mono font-bold text-xs text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200 shadow-2xs">
+                              {currentSchedule.currency === 'KHR' ? '៛' : '$'}{(currentSchedule.hourlyRate ?? teacher.hourlyRate ?? 20).toFixed(0)}/hr
+                            </span>
+                          )}
                         </div>
 
                         {/* Progress Bar */}

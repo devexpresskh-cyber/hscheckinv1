@@ -1181,6 +1181,24 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
     setIsPayslipModalOpen(true);
   };
 
+  if (isTeacherRole) {
+    return (
+      <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-xs text-center max-w-lg mx-auto my-8">
+        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3 border border-amber-200">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-black text-slate-900 mb-1">
+          {isKhmer ? 'របាយការណ៍ប្រាក់ឈ្នួលត្រូវបានគ្រប់គ្រងដោយរដ្ឋបាល' : 'Wage & Payroll Access Restricted'}
+        </h3>
+        <p className="text-xs text-slate-500 font-khmer leading-relaxed">
+          {isKhmer
+            ? 'គណនីគ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យចូលមើលអត្រាកម្រៃបង្រៀន ឬរបាយការណ៍ប្រាក់ឈ្នួលឡើយ។ ព័ត៌មាននេះត្រូវបានគ្រប់គ្រងដោយផ្ទាល់ដោយផ្នែករដ្ឋបាល និងធនធានមនុស្ស (HR)។'
+            : 'Teaching rates and wage reports are restricted to Administrative and HR accounts. Please contact School Administration for compensation inquiries.'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 print:space-y-0 main-report-container">
       

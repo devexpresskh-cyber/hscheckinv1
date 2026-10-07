@@ -41,7 +41,8 @@ import {
   Download,
   UserCog,
   UserPlus,
-  UserCheck
+  UserCheck,
+  AlertTriangle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
@@ -1085,6 +1086,30 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               )}
             </div>
           )}
+
+          {/* Absence / Leave notice for original teacher */}
+          {(() => {
+            const absentRec = AttendanceEngine.findAbsentRecordForSchedule(sub, attendanceList, todayStr);
+            if (!absentRec) return null;
+            const isOnLeave = absentRec.status === 'Leave';
+            return (
+              <div className="mt-2 px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold flex items-center justify-between gap-1">
+                <span className="flex items-center gap-1 shrink-0">
+                  <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
+                  <span>
+                    {isOnLeave
+                      ? (isKhmer ? 'គ្រូដើមសុំច្បាប់ (អវត្តមាន)' : 'On Leave (Absent)')
+                      : (isKhmer ? 'គ្រូដើមអវត្តមាន' : 'Teacher Absent')}
+                  </span>
+                </span>
+                {absentRec.correctionNote && (
+                  <span className="text-[10px] text-rose-600 font-normal truncate max-w-[120px]" title={absentRec.correctionNote}>
+                    {absentRec.correctionNote}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Active Substitution Display in Card */}
           {(() => {

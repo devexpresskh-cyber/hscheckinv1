@@ -338,7 +338,7 @@ export const AttendanceEngine = {
       const recDate = String(a.date || '').slice(0, 10);
       return recDate === dateStr &&
         (a.subjectScheduleId === sub.id || a.scheduleId === sub.id) &&
-        a.status === 'Absent' &&
+        (a.status === 'Absent' || a.status === 'Leave') &&
         !a.isSubstitute;
     });
   },

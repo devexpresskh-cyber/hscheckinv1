@@ -98,7 +98,10 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
     const substitution = StorageService.findSubstitution(sub.id, todayStr);
     const subRecord = AttendanceEngine.findSubstituteRecordForSchedule(sub, attendanceList, todayStr);
     const absentRecord = AttendanceEngine.findAbsentRecordForSchedule(sub, attendanceList, todayStr);
-    const isTeacherAbsent = Boolean(absentRecord || (todayRec?.status === 'Absent' && !todayRec?.isSubstitute));
+    const isTeacherAbsent = Boolean(
+      absentRecord ||
+      ((todayRec?.status === 'Absent' || todayRec?.status === 'Leave') && !todayRec?.isSubstitute)
+    );
 
     // Active attendance to consider for session state: prefer substitute record if substituted
     const activeAtt = substitution ? (subRecord || todayRec) : todayRec;
@@ -470,7 +473,9 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                     <span>{teacherObj?.department || 'Academic'}</span>
                     {info.isTeacherAbsent && (
                       <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1 rounded border border-rose-200">
-                        {isKhmer ? 'អវត្តមាន' : 'Absent'}
+                        {info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave'
+                          ? (isKhmer ? 'សុំច្បាប់ (Leave)' : 'On Leave (Absent)')
+                          : (isKhmer ? 'អវត្តមាន' : 'Absent')}
                       </span>
                     )}
                   </div>

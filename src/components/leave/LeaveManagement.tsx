@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
+import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
+import { TelegramService } from '../../services/telegramService.ts';
 import { LeaveRequest } from '../../types/index.ts';
 import {
   CalendarCheck,
@@ -17,6 +19,7 @@ import {
 export const LeaveManagement: React.FC = () => {
   const { currentUser, canAccessDepartment, hasPermission } = useAuth();
   const { showToast } = useNotification();
+  const { isKhmer } = useLanguage();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
@@ -80,26 +83,53 @@ export const LeaveManagement: React.FC = () => {
   });
 
   const handleApprove = (leave: LeaveRequest) => {
+    const approverName = `${currentUser.fullName} (${currentUser.role})`;
     StorageService.updateLeaveRequest(leave.id, {
       status: 'Approved',
-      approvedBy: `${currentUser.fullName} (${currentUser.role})`
+      approvedBy: approverName
     });
+
+    // Auto-generate absent log records for all scheduled dates/classes in the approved leave range
+    const createdRecords = StorageService.generateAttendanceForApprovedLeave(
+      { ...leave, status: 'Approved', approvedBy: approverName },
+      approverName
+    );
+
     StorageService.addAuditLog({
       userId: currentUser.id,
       userName: currentUser.fullName,
       userRole: currentUser.role,
-      action: 'Approved Leave Request',
-      target: `${leave.personName} (${leave.startDate} to ${leave.endDate})`,
+      action: 'Approved Leave Request & Auto-Logged Absence',
+      target: `${leave.personName} (${leave.startDate} to ${leave.endDate}) - ${createdRecords.length} sessions logged`,
       ipAddress: '127.0.0.1'
     });
-    showToast(`Approved leave for ${leave.personName}`, 'success');
+
+    TelegramService.sendLeaveApprovedAlert({
+      name: leave.personName,
+      department: leave.department,
+      leaveType: leave.leaveType,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+      reason: leave.reason,
+      approvedBy: approverName,
+      scheduleCount: createdRecords.length
+    });
+
+    showToast(
+      isKhmer
+        ? `បានអនុម័តច្បាប់ឈប់សម្រាកសម្រាប់ ${leave.personName} និងបានកត់ត្រាអវត្តមានស្វ័យប្រវត្ត (${createdRecords.length} វេន/ម៉ោងបង្រៀន)`
+        : `Approved leave for ${leave.personName} & auto-logged absence (${createdRecords.length} schedule session${createdRecords.length === 1 ? '' : 's'})`,
+      'success'
+    );
   };
 
   const handleReject = (leave: LeaveRequest) => {
+    const reviewerName = `${currentUser.fullName} (${currentUser.role})`;
     StorageService.updateLeaveRequest(leave.id, {
       status: 'Rejected',
-      approvedBy: `${currentUser.fullName} (${currentUser.role})`
+      approvedBy: reviewerName
     });
+    StorageService.removeAttendanceForCancelledLeave(leave);
     StorageService.addAuditLog({
       userId: currentUser.id,
       userName: currentUser.fullName,
@@ -108,7 +138,10 @@ export const LeaveManagement: React.FC = () => {
       target: `${leave.personName} (${leave.startDate} to ${leave.endDate})`,
       ipAddress: '127.0.0.1'
     });
-    showToast(`Rejected leave for ${leave.personName}`, 'info');
+    showToast(
+      isKhmer ? `បានបដិសេធសំណើសុំច្បាប់សម្រាប់ ${leave.personName}` : `Rejected leave for ${leave.personName}`,
+      'info'
+    );
   };
 
   const handleSubmit = (e: React.FormEvent) => {

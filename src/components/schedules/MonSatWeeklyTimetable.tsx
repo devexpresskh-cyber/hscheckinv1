@@ -4,6 +4,7 @@ import { StorageService } from '../../services/storageService.ts';
 import { PeriodModal } from './PeriodModal.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
 import {
   Clock,
@@ -92,6 +93,8 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   isTeacherRole = false
 }) => {
   const { isKhmer } = useLanguage();
+  const { currentUser } = useAuth();
+  const isTeacherAccount = isTeacherRole || currentUser?.role === 'teacher';
   const systemSettings = StorageService.getSystemSettings();
 
   const [selectedTeacher, setSelectedTeacher] = useState<string>(lockedTeacherId || initialTeacherFilter);
@@ -772,7 +775,7 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                         </span>
 
                                         <div className="flex items-center gap-1">
-                                          {cls.hourlyRate && (
+                                          {!isTeacherAccount && cls.hourlyRate && (
                                             <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 print:bg-slate-100 print:text-black print:border-slate-300">
                                               ${cls.hourlyRate.toFixed(0)}/h
                                             </span>

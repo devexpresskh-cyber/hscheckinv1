@@ -1761,6 +1761,287 @@ export const StorageService = {
       setDoc(doc(db, 'leave_requests', id), sanitizeForFirestore(updated), { merge: true }).catch(err =>
         handleFirestoreError(err, OperationType.WRITE, `leave_requests/${id}`)
       );
+      if (updates.status === 'Approved') {
+        this.generateAttendanceForApprovedLeave(updated, updates.approvedBy);
+      } else if (updates.status === 'Rejected') {
+        this.removeAttendanceForCancelledLeave(updated);
+      }
+    }
+  },
+
+  generateAttendanceForApprovedLeave(leave: LeaveRequest, _approvedBy?: string): AttendanceRecord[] {
+    if (!leave.startDate || !leave.endDate) return [];
+
+    // Helper to calculate all date strings between startDate and endDate
+    const dates: string[] = [];
+    const [sYear, sMonth, sDay] = leave.startDate.split('-').map(Number);
+    const [eYear, eMonth, eDay] = leave.endDate.split('-').map(Number);
+    if (!sYear || !sMonth || !sDay || !eYear || !eMonth || !eDay) {
+      dates.push(leave.startDate);
+    } else {
+      const current = new Date(sYear, sMonth - 1, sDay);
+      const end = new Date(eYear, eMonth - 1, eDay);
+      let guard = 0;
+      while (current <= end && guard < 90) {
+        guard++;
+        const y = current.getFullYear();
+        const m = String(current.getMonth() + 1).padStart(2, '0');
+        const d = String(current.getDate()).padStart(2, '0');
+        dates.push(`${y}-${m}-${d}`);
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    if (dates.length === 0) return [];
+
+    const teachers = this.getTeachers();
+    const employees = this.getEmployees();
+    const subjectSchedules = this.getSubjectSchedules();
+    const dutySchedules = this.getSchedules();
+
+    // Match teacher or employee
+    const matchedTeacher = teachers.find(
+      t => t.id === leave.personId ||
+           t.fullName?.trim().toLowerCase() === leave.personName?.trim().toLowerCase() ||
+           (t.khmerName && t.khmerName.trim() === leave.personName?.trim())
+    );
+    const matchedEmployee = !matchedTeacher ? employees.find(
+      e => e.id === leave.personId ||
+           e.fullName?.trim().toLowerCase() === leave.personName?.trim().toLowerCase() ||
+           (e.khmerName && e.khmerName.trim() === leave.personName?.trim())
+    ) : undefined;
+
+    const generatedRecords: AttendanceRecord[] = [];
+
+    dates.forEach(dateStr => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      const dayOfWeek = dateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+
+      if (matchedTeacher) {
+        // Find teacher subject classes scheduled on this day of week
+        const matchingSchedules = subjectSchedules.filter(s => {
+          const isTeacher = s.teacherId === matchedTeacher.id ||
+            s.teacherName?.trim().toLowerCase() === matchedTeacher.fullName?.trim().toLowerCase();
+          if (!isTeacher) return false;
+          if (s.daysOfWeek && Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
+            return s.daysOfWeek.includes(dayOfWeek);
+          }
+          return s.dayOfWeek === dayOfWeek;
+        });
+
+        if (matchingSchedules.length > 0) {
+          matchingSchedules.forEach(sub => {
+            const existing = cache.attendance.find(
+              a => a.personId === matchedTeacher.id &&
+                   a.date === dateStr &&
+                   (a.subjectScheduleId === sub.id || a.scheduleId === sub.id) &&
+                   !a.isSubstitute
+            );
+
+            if (existing) {
+              if (existing.status !== 'Present' && !existing.checkInTime) {
+                this.updateAttendanceRecord(existing.id, {
+                  status: 'Leave',
+                  correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
+                  reassignReason: `On approved ${leave.leaveType}`
+                });
+                generatedRecords.push(existing);
+              }
+            } else {
+              const newRec: AttendanceRecord = {
+                id: `att-${dateStr}-${matchedTeacher.id}-${sub.id}-leave`,
+                personId: matchedTeacher.id,
+                personType: 'teacher',
+                personName: matchedTeacher.fullName,
+                khmerName: matchedTeacher.khmerName,
+                department: matchedTeacher.department || leave.department,
+                date: dateStr,
+                scheduleId: matchedTeacher.assignedScheduleId || 'sch-standard-fulltime',
+                scheduleName: `${sub.subject} Class Schedule`,
+                subjectScheduleId: sub.id,
+                subject: sub.subject,
+                khmerSubject: sub.khmerSubject,
+                subjectCode: sub.subjectCode,
+                gradeClass: sub.gradeClass,
+                room: sub.room,
+                periodName: sub.periodName,
+                session: parseInt(sub.startTime.split(':')[0], 10) < 12 ? 'morning' : 'afternoon',
+                scheduledStart: sub.startTime,
+                scheduledEnd: sub.endTime,
+                status: 'Leave',
+                lateMinutes: 0,
+                earlyLeaveMinutes: 0,
+                overtimeMinutes: 0,
+                locationVerified: false,
+                correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
+                reassignReason: `On approved ${leave.leaveType}`,
+                createdAt: `${dateStr}T${sub.startTime}:00`
+              };
+              this.addAttendanceRecord(newRec);
+              generatedRecords.push(newRec);
+            }
+          });
+        } else if (dayOfWeek >= 1 && dayOfWeek <= 6) {
+          // If no specific class schedule on this day of week, log daily duty leave
+          const existing = cache.attendance.find(
+            a => a.personId === matchedTeacher.id && a.date === dateStr && !a.isSubstitute
+          );
+          if (!existing) {
+            const generalSched = dutySchedules.find(s => s.id === matchedTeacher.assignedScheduleId) || dutySchedules[0];
+            const newRec: AttendanceRecord = {
+              id: `att-${dateStr}-${matchedTeacher.id}-leave`,
+              personId: matchedTeacher.id,
+              personType: 'teacher',
+              personName: matchedTeacher.fullName,
+              khmerName: matchedTeacher.khmerName,
+              department: matchedTeacher.department || leave.department,
+              date: dateStr,
+              scheduleId: generalSched?.id || 'sch-standard-fulltime',
+              scheduleName: generalSched?.name || 'General Teaching Duty',
+              scheduledStart: generalSched?.startTime || '07:30',
+              scheduledEnd: generalSched?.endTime || '16:30',
+              status: 'Leave',
+              lateMinutes: 0,
+              earlyLeaveMinutes: 0,
+              overtimeMinutes: 0,
+              locationVerified: false,
+              correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
+              reassignReason: `On approved ${leave.leaveType}`,
+              createdAt: `${dateStr}T07:30:00`
+            };
+            this.addAttendanceRecord(newRec);
+            generatedRecords.push(newRec);
+          }
+        }
+      } else if (matchedEmployee) {
+        // Employee / Staff: Look up assigned duty schedule
+        const empSchedule = dutySchedules.find(s => s.id === matchedEmployee.assignedScheduleId) ||
+          dutySchedules.find(s => s.department === matchedEmployee.department) ||
+          dutySchedules[0];
+
+        const isWorkingDay = empSchedule ? empSchedule.daysOfWeek.includes(dayOfWeek) : (dayOfWeek >= 1 && dayOfWeek <= 5);
+
+        if (isWorkingDay) {
+          const existing = cache.attendance.find(
+            a => a.personId === matchedEmployee.id && a.date === dateStr && !a.subjectScheduleId && !a.isSubstitute
+          );
+
+          if (existing) {
+            if (existing.status !== 'Present' && !existing.checkInTime) {
+              this.updateAttendanceRecord(existing.id, {
+                status: 'Leave',
+                correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
+                reassignReason: `On approved ${leave.leaveType}`
+              });
+              generatedRecords.push(existing);
+            }
+          } else {
+            const newRec: AttendanceRecord = {
+              id: `att-${dateStr}-${matchedEmployee.id}-leave`,
+              personId: matchedEmployee.id,
+              personType: 'employee',
+              personName: matchedEmployee.fullName,
+              khmerName: matchedEmployee.khmerName,
+              department: matchedEmployee.department || leave.department,
+              date: dateStr,
+              scheduleId: empSchedule?.id || 'sch-office-fulltime',
+              scheduleName: empSchedule?.name || 'Office Duty Schedule',
+              scheduledStart: empSchedule?.startTime || '07:30',
+              scheduledEnd: empSchedule?.endTime || '17:00',
+              status: 'Leave',
+              lateMinutes: 0,
+              earlyLeaveMinutes: 0,
+              overtimeMinutes: 0,
+              locationVerified: false,
+              correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
+              reassignReason: `On approved ${leave.leaveType}`,
+              createdAt: `${dateStr}T${empSchedule?.startTime || '07:30'}:00`
+            };
+            this.addAttendanceRecord(newRec);
+            generatedRecords.push(newRec);
+          }
+        }
+      } else {
+        // General staff fallback without explicit teacher/employee profile
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          const existing = cache.attendance.find(
+            a => a.personId === leave.personId && a.date === dateStr && !a.isSubstitute
+          );
+          if (!existing) {
+            const newRec: AttendanceRecord = {
+              id: `att-${dateStr}-${leave.personId}-leave`,
+              personId: leave.personId,
+              personType: 'employee',
+              personName: leave.personName,
+              department: leave.department,
+              date: dateStr,
+              scheduleId: 'sch-general-leave',
+              scheduleName: 'General Duty Schedule',
+              scheduledStart: '07:30',
+              scheduledEnd: '17:00',
+              status: 'Leave',
+              lateMinutes: 0,
+              earlyLeaveMinutes: 0,
+              overtimeMinutes: 0,
+              locationVerified: false,
+              correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
+              reassignReason: `On approved ${leave.leaveType}`,
+              createdAt: `${dateStr}T07:30:00`
+            };
+            this.addAttendanceRecord(newRec);
+            generatedRecords.push(newRec);
+          }
+        }
+      }
+    });
+
+    return generatedRecords;
+  },
+
+  removeAttendanceForCancelledLeave(leave: LeaveRequest) {
+    if (!leave.startDate || !leave.endDate) return;
+
+    const dates: string[] = [];
+    const [sYear, sMonth, sDay] = leave.startDate.split('-').map(Number);
+    const [eYear, eMonth, eDay] = leave.endDate.split('-').map(Number);
+    if (!sYear || !sMonth || !sDay || !eYear || !eMonth || !eDay) {
+      dates.push(leave.startDate);
+    } else {
+      const current = new Date(sYear, sMonth - 1, sDay);
+      const end = new Date(eYear, eMonth - 1, eDay);
+      let guard = 0;
+      while (current <= end && guard < 90) {
+        guard++;
+        const y = current.getFullYear();
+        const m = String(current.getMonth() + 1).padStart(2, '0');
+        const d = String(current.getDate()).padStart(2, '0');
+        dates.push(`${y}-${m}-${d}`);
+        current.setDate(current.getDate() + 1);
+      }
+    }
+
+    if (dates.length === 0) return;
+
+    const toRemove = cache.attendance.filter(a => {
+      const isPerson = a.personId === leave.personId ||
+        a.personName?.trim().toLowerCase() === leave.personName?.trim().toLowerCase();
+      if (!isPerson) return false;
+      if (!dates.includes(a.date)) return false;
+      // Only remove if it was an auto-logged leave record that hasn't been scanned/checked-in
+      return a.status === 'Leave' && !a.checkInTime;
+    });
+
+    if (toRemove.length > 0) {
+      const remaining = cache.attendance.filter(a => !toRemove.some(r => r.id === a.id));
+      cache.attendance = remaining;
+      setStored(STORAGE_KEYS.ATTENDANCE, remaining);
+      notifyListeners();
+      toRemove.forEach(r => {
+        deleteDoc(doc(db, 'attendance', r.id)).catch(err =>
+          handleFirestoreError(err, OperationType.DELETE, `attendance/${r.id}`)
+        );
+      });
     }
   },
 
@@ -2005,5 +2286,210 @@ export const StorageService = {
     syncHistory = [];
     saveSyncHistory();
     notifySyncListeners();
+  },
+
+  // Full Database Backup Engine
+  createFullDatabaseBackup() {
+    const sys = this.getSystemSettings();
+    const teachers = this.getTeachers();
+    const employees = this.getEmployees();
+    const departments = this.getDepartments();
+    const schedules = this.getSchedules();
+    const subjectSchedules = this.getSubjectSchedules();
+    const periods = this.getPeriods();
+    const attendance = this.getAttendance();
+    const leaveRequests = this.getLeaveRequests();
+    const holidays = this.getHolidays();
+    const substitutions = this.getSubstitutions();
+    const users = this.getUsers().map(u => ({ ...u, password: '[PROTECTED]' }));
+    const roles = this.getRoles();
+    const auditLogs = this.getAuditLogs();
+    const now = new Date().toISOString();
+
+    const stats = {
+      teachers: teachers.length,
+      employees: employees.length,
+      departments: departments.length,
+      dutySchedules: schedules.length,
+      subjectSchedules: subjectSchedules.length,
+      timetablePeriods: periods.length,
+      attendanceRecords: attendance.length,
+      leaveRequests: leaveRequests.length,
+      holidays: holidays.length,
+      substitutions: substitutions.length,
+      userAccounts: users.length,
+      auditLogs: auditLogs.length,
+      totalEntities:
+        teachers.length +
+        employees.length +
+        departments.length +
+        schedules.length +
+        subjectSchedules.length +
+        attendance.length +
+        leaveRequests.length +
+        holidays.length
+    };
+
+    return {
+      version: '2.0.0',
+      exportedAt: now,
+      organizationName: sys.organizationName || 'Heart School Siem Reap',
+      khmerOrgName: sys.khmerOrgName || 'សាលា Heart School',
+      academicYear: sys.academicYear || '2026-2027',
+      backupType: 'Full System Snapshot Archive',
+      stats,
+      data: {
+        systemSettings: sys,
+        teachers,
+        employees,
+        departments,
+        schedules,
+        subjectSchedules,
+        periods,
+        attendance,
+        leaveRequests,
+        holidays,
+        substitutions,
+        roles,
+        users,
+        auditLogs: auditLogs.slice(0, 200)
+      }
+    };
+  },
+
+  // Restore Full Database from Backup Object
+  restoreFullDatabaseBackup(backup: any): { success: boolean; message: string; restoredCount: number } {
+    if (!backup || typeof backup !== 'object') {
+      throw new Error('Invalid backup data format');
+    }
+
+    const payload = backup.data || backup;
+    let restoredCount = 0;
+
+    if (Array.isArray(payload.teachers) && payload.teachers.length > 0) {
+      cache.teachers = payload.teachers;
+      setStored(STORAGE_KEYS.TEACHERS, cache.teachers);
+      payload.teachers.forEach((t: any) => {
+        setDoc(doc(db, 'teachers', t.id), sanitizeForFirestore(t), { merge: true }).catch(err =>
+          console.warn('Restore teacher notice:', err)
+        );
+      });
+      restoredCount += payload.teachers.length;
+    }
+
+    if (Array.isArray(payload.employees) && payload.employees.length > 0) {
+      cache.employees = payload.employees;
+      setStored(STORAGE_KEYS.EMPLOYEES, cache.employees);
+      payload.employees.forEach((e: any) => {
+        setDoc(doc(db, 'employees', e.id), sanitizeForFirestore(e), { merge: true }).catch(err =>
+          console.warn('Restore employee notice:', err)
+        );
+      });
+      restoredCount += payload.employees.length;
+    }
+
+    if (Array.isArray(payload.departments) && payload.departments.length > 0) {
+      cache.departments = payload.departments;
+      setStored(STORAGE_KEYS.DEPARTMENTS, cache.departments);
+      payload.departments.forEach((d: any) => {
+        setDoc(doc(db, 'departments', d.id), sanitizeForFirestore(d), { merge: true }).catch(err =>
+          console.warn('Restore department notice:', err)
+        );
+      });
+      restoredCount += payload.departments.length;
+    }
+
+    if (Array.isArray(payload.schedules) && payload.schedules.length > 0) {
+      cache.schedules = payload.schedules;
+      setStored(STORAGE_KEYS.SCHEDULES, cache.schedules);
+      payload.schedules.forEach((s: any) => {
+        setDoc(doc(db, 'schedules', s.id), sanitizeForFirestore(s), { merge: true }).catch(err =>
+          console.warn('Restore schedule notice:', err)
+        );
+      });
+      restoredCount += payload.schedules.length;
+    }
+
+    if (Array.isArray(payload.subjectSchedules) && payload.subjectSchedules.length > 0) {
+      cache.subjectSchedules = payload.subjectSchedules;
+      setStored(STORAGE_KEYS.SUBJECT_SCHEDULES, cache.subjectSchedules);
+      payload.subjectSchedules.forEach((s: any) => {
+        setDoc(doc(db, 'subject_schedules', s.id), sanitizeForFirestore(s), { merge: true }).catch(err =>
+          console.warn('Restore subject schedule notice:', err)
+        );
+      });
+      restoredCount += payload.subjectSchedules.length;
+    }
+
+    if (Array.isArray(payload.periods) && payload.periods.length > 0) {
+      cache.periods = payload.periods;
+      setStored(STORAGE_KEYS.PERIODS, cache.periods);
+      payload.periods.forEach((p: any) => {
+        setDoc(doc(db, 'timetable_periods', p.id), sanitizeForFirestore(p), { merge: true }).catch(err =>
+          console.warn('Restore period notice:', err)
+        );
+      });
+      restoredCount += payload.periods.length;
+    }
+
+    if (Array.isArray(payload.attendance) && payload.attendance.length > 0) {
+      cache.attendance = payload.attendance;
+      setStored(STORAGE_KEYS.ATTENDANCE, cache.attendance);
+      payload.attendance.forEach((a: any) => {
+        setDoc(doc(db, 'attendance', a.id), sanitizeForFirestore(a), { merge: true }).catch(err =>
+          console.warn('Restore attendance notice:', err)
+        );
+      });
+      restoredCount += payload.attendance.length;
+    }
+
+    if (Array.isArray(payload.leaveRequests) && payload.leaveRequests.length > 0) {
+      cache.leaveRequests = payload.leaveRequests;
+      setStored(STORAGE_KEYS.LEAVE_REQUESTS, cache.leaveRequests);
+      payload.leaveRequests.forEach((l: any) => {
+        setDoc(doc(db, 'leave_requests', l.id), sanitizeForFirestore(l), { merge: true }).catch(err =>
+          console.warn('Restore leave request notice:', err)
+        );
+      });
+      restoredCount += payload.leaveRequests.length;
+    }
+
+    if (Array.isArray(payload.holidays) && payload.holidays.length > 0) {
+      cache.holidays = payload.holidays;
+      setStored(STORAGE_KEYS.HOLIDAYS, cache.holidays);
+      payload.holidays.forEach((h: any) => {
+        setDoc(doc(db, 'holidays', h.id), sanitizeForFirestore(h), { merge: true }).catch(err =>
+          console.warn('Restore holiday notice:', err)
+        );
+      });
+      restoredCount += payload.holidays.length;
+    }
+
+    if (Array.isArray(payload.substitutions) && payload.substitutions.length > 0) {
+      cache.substitutions = payload.substitutions;
+      setStored(STORAGE_KEYS.SUBSTITUTIONS, cache.substitutions);
+      payload.substitutions.forEach((sub: any) => {
+        setDoc(doc(db, 'schedule_substitutions', sub.id), sanitizeForFirestore(sub), { merge: true }).catch(err =>
+          console.warn('Restore substitution notice:', err)
+        );
+      });
+      restoredCount += payload.substitutions.length;
+    }
+
+    if (payload.systemSettings && typeof payload.systemSettings === 'object') {
+      cache.systemSettings = payload.systemSettings;
+      setStored(STORAGE_KEYS.SYSTEM_SETTINGS, cache.systemSettings);
+      setDoc(doc(db, 'system_settings', 'config'), sanitizeForFirestore(payload.systemSettings), { merge: true }).catch(err =>
+        console.warn('Restore system settings notice:', err)
+      );
+    }
+
+    notifyListeners();
+
+    return {
+      success: true,
+      message: `Successfully restored ${restoredCount} database records from backup archive.`,
+      restoredCount
+    };
   }
 };

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
+import { TelegramService } from '../../services/telegramService.ts';
 import { ScheduleAlertService } from '../../services/scheduleAlertService.ts';
 import { SystemSettings } from '../../types/index.ts';
 import {
@@ -29,7 +30,8 @@ import {
   Zap,
   Check,
   RotateCw,
-  ShieldCheck
+  ShieldCheck,
+  Upload
 } from 'lucide-react';
 
 export const SystemSettingsView: React.FC = () => {
@@ -98,18 +100,7 @@ export const SystemSettingsView: React.FC = () => {
   };
 
   const handleExportBackup = () => {
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      settings: StorageService.getSystemSettings(),
-      teachers: StorageService.getTeachers(),
-      employees: StorageService.getEmployees(),
-      schedules: StorageService.getSchedules(),
-      attendance: StorageService.getAttendance(),
-      leaveRequests: StorageService.getLeaveRequests(),
-      corrections: StorageService.getCorrections(),
-      holidays: StorageService.getHolidays()
-    };
-
+    const backup = StorageService.createFullDatabaseBackup();
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backup, null, 2));
     const link = document.createElement('a');
     link.setAttribute('href', dataStr);
@@ -117,7 +108,55 @@ export const SystemSettingsView: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Downloaded full system backup JSON', 'info');
+    showToast('Downloaded full system backup JSON archive', 'info');
+  };
+
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const restoreFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleRestoreFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const json = JSON.parse(text);
+        if (!confirm(`Are you sure you want to restore database from "${file.name}"? This will overwrite/merge records.`)) {
+          if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+          return;
+        }
+
+        setIsRestoringBackup(true);
+        const res = StorageService.restoreFullDatabaseBackup(json);
+        setIsRestoringBackup(false);
+        showToast(res.message, 'success');
+      } catch (err) {
+        setIsRestoringBackup(false);
+        showToast('Failed to parse backup JSON file: ' + (err instanceof Error ? err.message : 'Invalid JSON file'), 'error');
+      } finally {
+        if (restoreFileInputRef.current) restoreFileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const [isSendingTelegramBackup, setIsSendingTelegramBackup] = useState(false);
+  const handleSendTelegramBackup = async () => {
+    setIsSendingTelegramBackup(true);
+    const res = await TelegramService.sendDataBackupToTelegram({ trigger: 'manual' });
+    setIsSendingTelegramBackup(false);
+    if (res.success) {
+      showToast(
+        res.statusText === 'Sent'
+          ? 'បានបម្រុងទុកទិន្នន័យ និងផ្ញើទៅ Telegram Group ដោយជោគជ័យ!'
+          : 'Database backup snapshot generated & logged (Simulated mode)',
+        'success'
+      );
+    } else {
+      showToast(`Telegram backup error: ${res.error || res.statusText}`, 'error');
+    }
   };
 
   const [isClearAttendanceModalOpen, setIsClearAttendanceModalOpen] = useState(false);
@@ -1141,20 +1180,75 @@ export const SystemSettingsView: React.FC = () => {
           Data Backup & Database Maintenance
         </h3>
 
+        {/* Auto Data Backup Info Banner */}
+        {(() => {
+          const tgSettings = StorageService.getTelegramSettings();
+          return (
+            <div className="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${tgSettings.autoBackupEnabled !== false ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  <span className="font-bold text-indigo-950">
+                    {tgSettings.autoBackupEnabled !== false ? 'Auto-Backup to Telegram Group Active' : 'Auto-Backup Paused'}
+                  </span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-700 font-mono font-bold px-1.5 py-0.5 rounded">
+                    {tgSettings.autoBackupFrequency || 'daily'} @ {tgSettings.autoBackupTime || '20:00'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-indigo-900/80 font-khmer">
+                  គោលដៅ៖ <b>{tgSettings.groupChatId ? `Telegram Group (${tgSettings.groupChatId})` : 'Telegram Admin'}</b>
+                  {tgSettings.lastBackupAt ? ` • បម្រុងទុកចុងក្រោយ៖ ${new Date(tgSettings.lastBackupAt).toLocaleString()}` : ''}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <button
             type="button"
             onClick={handleExportBackup}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>Download Full Backup (JSON)</span>
+            <span>Download Backup (JSON)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => restoreFileInputRef.current?.click()}
+            disabled={isRestoringBackup}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {isRestoringBackup ? <RotateCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            <span>{isRestoringBackup ? 'Restoring...' : 'Restore Backup (JSON)'}</span>
+          </button>
+          <input
+            ref={restoreFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleRestoreFileSelected}
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={handleSendTelegramBackup}
+            disabled={isSendingTelegramBackup}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-md shadow-sky-600/30 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+          >
+            {isSendingTelegramBackup ? (
+              <RotateCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            <span>{isSendingTelegramBackup ? 'Sending to Telegram...' : 'Send Backup to Telegram Group'}</span>
           </button>
 
           <button
             type="button"
             onClick={handleRefreshFromCloud}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Sync & Refresh from Cloud Firestore</span>

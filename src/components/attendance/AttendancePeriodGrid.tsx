@@ -930,7 +930,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                       const isPresent = cell.status === 'Present';
                       const isLate = cell.status === 'Late';
                       const isInProgress = cell.status === 'In Progress';
-                      const isAbsent = cell.status === 'Absent';
+                      const isAbsent = cell.status === 'Absent' || cell.status === 'Leave';
                       const isUpcoming = cell.status === 'Upcoming';
 
                       return (
@@ -988,7 +988,13 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                                 <div className="flex flex-col gap-0.5">
                                   <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-rose-800 bg-rose-100/90 px-1.5 py-0.5 rounded border border-rose-300">
                                     <XCircle className="w-2.5 h-2.5 text-rose-600" />
-                                    <span>{cell.substitution ? (isKhmer ? 'មានគ្រូជំនួស' : 'Sub Assigned') : (isKhmer ? 'អវត្តមាន' : 'Absent')}</span>
+                                    <span>
+                                      {cell.substitution
+                                        ? (isKhmer ? 'មានគ្រូជំនួស' : 'Sub Assigned')
+                                        : cell.status === 'Leave'
+                                        ? (isKhmer ? 'សុំច្បាប់' : 'On Leave')
+                                        : (isKhmer ? 'អវត្តមាន' : 'Absent')}
+                                    </span>
                                   </span>
                                   {cell.substitution && (
                                     <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold text-purple-800 bg-purple-100 px-1 py-0.5 rounded border border-purple-200 truncate max-w-[90px]" title={`Covered by ${cell.substitution.substituteName}`}>

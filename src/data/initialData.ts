@@ -633,7 +633,11 @@ export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettings = {
   notifyDailySummary: true,
   notifyReminder: true,
   reminderMinutesBefore: 15,
-  summaryTime: '17:30'
+  summaryTime: '17:30',
+  autoBackupEnabled: true,
+  autoBackupTime: '20:00',
+  autoBackupFrequency: 'daily',
+  autoBackupTarget: 'group'
 };
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {

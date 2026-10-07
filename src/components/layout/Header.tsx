@@ -22,7 +22,8 @@ import {
   Users2,
   ShieldCheck,
   Calendar,
-  UserCog
+  UserCog,
+  Camera
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -367,11 +368,23 @@ export const Header: React.FC<HeaderProps> = ({
                   {/* Active User Card */}
                   <div className="p-3 bg-gradient-to-br from-indigo-50/80 to-slate-50 rounded-xl border border-indigo-100/60 mb-2">
                     <div className="flex items-center gap-2.5">
-                      <img
-                        src={currentUser.avatarUrl?.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'}
-                        alt=""
-                        className="w-10 h-10 rounded-xl object-cover ring-2 ring-indigo-200 shrink-0"
-                      />
+                      <div
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setIsProfileModalOpen(true);
+                        }}
+                        className="relative group cursor-pointer shrink-0"
+                        title={isKhmer ? 'ចុចដើម្បីប្តូររូបថតប្រវត្តិរូប' : 'Click to change profile picture'}
+                      >
+                        <img
+                          src={currentUser.avatarUrl?.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop'}
+                          alt=""
+                          className="w-10 h-10 rounded-xl object-cover ring-2 ring-indigo-200 transition-all group-hover:ring-indigo-400"
+                        />
+                        <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                          <Camera className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-slate-900 truncate">
                           {isKhmer && currentUser.khmerName ? currentUser.khmerName : currentUser.fullName}
@@ -387,7 +400,7 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </div>
 
-                  {/* Edit Profile & Owned Info Button */}
+                  {/* Edit Profile & Upload Photo Button */}
                   <div className="pb-1.5">
                     <button
                       type="button"
@@ -395,10 +408,13 @@ export const Header: React.FC<HeaderProps> = ({
                         setIsUserMenuOpen(false);
                         setIsProfileModalOpen(true);
                       }}
-                      className="w-full flex items-center gap-2 py-2 px-3 rounded-xl text-xs font-bold text-slate-800 hover:text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 transition-colors cursor-pointer"
+                      className="w-full flex items-center justify-between py-2 px-3 rounded-xl text-xs font-bold text-slate-800 hover:text-indigo-600 bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 transition-colors cursor-pointer"
                     >
-                      <UserCog className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>{isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូប (Edit Profile)' : 'Edit Profile & Info'}</span>
+                      <div className="flex items-center gap-2">
+                        <UserCog className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <span>{isKhmer ? 'កែប្រវត្តិរូប & រូបថត (Edit Profile)' : 'Edit Profile & Photo'}</span>
+                      </div>
+                      <Camera className="w-3.5 h-3.5 text-indigo-500" />
                     </button>
                   </div>
 

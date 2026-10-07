@@ -97,7 +97,7 @@ const MainLayout: React.FC = () => {
     }
 
     if (isTeacher) {
-      const allowedTeacherTabs: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'reports', 'holidays', 'leave', 'manual'];
+      const allowedTeacherTabs: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'holidays', 'leave', 'manual'];
       if (!allowedTeacherTabs.includes(currentTab)) {
         setCurrentTab('schedules');
       }
@@ -127,7 +127,7 @@ const MainLayout: React.FC = () => {
       return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
     }
 
-    // If logged in as Teacher, show Daily Teacher Schedule by default, and allow Monthly Schedule Calendar, Attendance History, Wage & Payroll, Holidays, and Leave
+    // If logged in as Teacher, show Daily Teacher Schedule by default, and allow Monthly Schedule Calendar, Attendance History, Holidays, and Leave
     if (isTeacher) {
       if (currentTab === 'monthly_calendar') {
         return <ScheduleManagement initialView="monthly_calendar" />;
@@ -137,9 +137,6 @@ const MainLayout: React.FC = () => {
       }
       if (currentTab === 'schedules') {
         return <ScheduleManagement initialView="daily_schedule" />;
-      }
-      if (currentTab === 'reports') {
-        return <TeachingWageReport />;
       }
       if (currentTab === 'holidays') {
         return <HolidayManagement />;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
@@ -26,7 +26,10 @@ import {
   BookOpen,
   ShieldCheck,
   Building2,
-  KeyRound
+  KeyRound,
+  Upload,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
 interface TeacherProfileModalProps {
@@ -99,6 +102,76 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'telegram'>('profile');
+
+  // Photo upload ref & state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Teaching rate visibility permissions: NEVER show rate to teacher account
+  const canManageRate = ['super_admin', 'admin_hr', 'admin'].includes(currentUser.role);
+  const isTeacherAccount = currentUser.role === 'teacher';
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast(isKhmer ? 'សូមជ្រើសរើសឯកសារជារូបភាព (PNG, JPG, WebP)' : 'Please select an image file (PNG, JPG, WebP)', 'error');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 400;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_DIM) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            }
+          } else {
+            if (height > MAX_DIM) {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            setFormData(prev => ({ ...prev, photoUrl: compressedDataUrl }));
+            setIsUploadingPhoto(false);
+            showToast(isKhmer ? 'បានផ្ទុកឡើងរូបថតប្រវត្តិរូបជោគជ័យ' : 'Profile picture loaded successfully', 'success');
+          } else {
+            setIsUploadingPhoto(false);
+          }
+        } catch {
+          setIsUploadingPhoto(false);
+          showToast(isKhmer ? 'មិនអាចបង្រួមរូបភាពបានទេ' : 'Failed to process image', 'error');
+        }
+      };
+      img.onerror = () => {
+        setIsUploadingPhoto(false);
+        showToast(isKhmer ? 'មិនអាចអានរូបភាពបានទេ' : 'Failed to load image file', 'error');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setIsUploadingPhoto(false);
+      showToast(isKhmer ? 'បរាជ័យក្នុងការអានឯកសារ' : 'Failed to read file', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Populate form with current data
   useEffect(() => {
@@ -202,8 +275,8 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           telegramChatId: formData.telegramChatId.trim(),
           pinCode: formData.pinCode.trim(),
           photoUrl: formData.photoUrl.trim(),
-          hourlyRate: parsedRate,
-          currency: (formData.currency as 'USD' | 'KHR') || 'USD'
+          hourlyRate: (!isTeacherAccount && canManageRate) ? parsedRate : (linkedTeacher.hourlyRate ?? 20),
+          currency: (!isTeacherAccount && canManageRate) ? ((formData.currency as 'USD' | 'KHR') || 'USD') : (linkedTeacher.currency || 'USD')
         });
       } else if (currentUser.role === 'teacher') {
         // Create teacher profile if missing
@@ -230,8 +303,8 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           telegramChatId: formData.telegramChatId.trim(),
           pinCode: formData.pinCode.trim(),
           photoUrl: formData.photoUrl.trim(),
-          hourlyRate: parsedRate,
-          currency: (formData.currency as 'USD' | 'KHR') || 'USD',
+          hourlyRate: (!isTeacherAccount && canManageRate) ? parsedRate : 20,
+          currency: (!isTeacherAccount && canManageRate) ? ((formData.currency as 'USD' | 'KHR') || 'USD') : 'USD',
           status: 'Active'
         });
       } else if (linkedEmployee) {
@@ -392,38 +465,99 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           {activeTab === 'profile' && (
             <div className="space-y-5 animate-in fade-in duration-150">
               
-              {/* Photo & Avatar Selection */}
-              <div className="bg-indigo-50/40 p-4 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center gap-4">
+              {/* Photo & Avatar Selection with Direct File Upload */}
+              <div className="bg-indigo-50/40 p-4 sm:p-5 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center sm:items-start gap-4">
                 <div className="relative group shrink-0">
                   <img
                     src={formData.photoUrl || AVATAR_PRESETS[0]}
-                    alt="Preview"
-                    className="w-20 h-20 rounded-2xl object-cover ring-4 ring-indigo-200/80 shadow-md"
+                    alt="Profile Preview"
+                    className="w-24 h-24 rounded-2xl object-cover ring-4 ring-indigo-200/80 shadow-md transition-all group-hover:ring-indigo-400"
                     onError={e => {
                       (e.target as HTMLImageElement).src = AVATAR_PRESETS[0];
                     }}
                   />
-                  <div className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                    <Camera className="w-5 h-5" />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="absolute inset-0 bg-black/50 rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white cursor-pointer text-[10px] font-bold p-1 text-center"
+                    title={isKhmer ? 'ចុចដើម្បីផ្ទុកឡើងរូបថតថ្មី' : 'Click to upload new photo'}
+                  >
+                    {isUploadingPhoto ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-white" />
+                    ) : (
+                      <>
+                        <Camera className="w-5 h-5 mb-0.5" />
+                        <span>{isKhmer ? 'ប្តូររូបថត' : 'Change'}</span>
+                      </>
+                    )}
+                  </button>
+                  {formData.photoUrl && formData.photoUrl !== AVATAR_PRESETS[0] && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, photoUrl: AVATAR_PRESETS[0] })}
+                      className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                      title={isKhmer ? 'លុបរូបថតនេះចេញ' : 'Remove uploaded photo'}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex-1 min-w-0 w-full space-y-2">
-                  <label className="text-xs font-bold text-slate-700 block">
-                    {isKhmer ? 'រូបថតប្រវត្តិរូប (Photo URL)' : 'Profile Photo URL'}
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.photoUrl}
-                    onChange={e => setFormData({ ...formData, photoUrl: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                  />
-                  
+                <div className="flex-1 min-w-0 w-full space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-800 block">
+                        {isKhmer ? 'រូបថតប្រវត្តិរូបផ្ទាល់ខ្លួន (Profile Picture)' : 'Teacher Profile Picture'}
+                      </label>
+                      <span className="text-[11px] text-slate-500 font-medium block">
+                        {isKhmer
+                          ? 'ផ្ទុកឡើងរូបថតពីទូរស័ព្ទ ឬកុំព្យូទ័រ (JPG, PNG, WebP) - ប្រព័ន្ធនឹងបង្រួមទំហំដោយស្វ័យប្រវត្ត'
+                          : 'Upload directly from camera or device (JPG, PNG, WebP) - auto-optimized'}
+                      </span>
+                    </div>
+
+                    {/* Hidden file input triggered by button and avatar click */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingPhoto}
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs hover:shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isUploadingPhoto ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isKhmer ? 'ផ្ទុកឡើងរូបថត' : 'Upload Photo'}</span>
+                      </button>
+
+                      {formData.photoUrl && formData.photoUrl !== AVATAR_PRESETS[0] && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, photoUrl: AVATAR_PRESETS[0] })}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-colors cursor-pointer"
+                          title={isKhmer ? 'កំណត់ឡើងវិញ' : 'Reset to default'}
+                        >
+                          {isKhmer ? 'កំណត់ឡើងវិញ' : 'Reset'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Quick Avatar Presets */}
-                  <div className="pt-1">
-                    <span className="text-[10px] font-bold text-slate-400 block mb-1">
-                      {isKhmer ? 'ជ្រើសរើសរូបតំណាងគំរូ (Quick Presets):' : 'Or pick an avatar preset:'}
+                  <div className="pt-1 border-t border-indigo-100/70">
+                    <span className="text-[10px] font-bold text-slate-500 block mb-1.5">
+                      {isKhmer ? 'ឬជ្រើសរើសរូបតំណាងគំរូ (Quick Presets):' : 'Or choose an avatar preset:'}
                     </span>
                     <div className="flex items-center gap-2 overflow-x-auto pb-1">
                       {AVATAR_PRESETS.map((preset, idx) => (
@@ -431,8 +565,8 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                           key={idx}
                           type="button"
                           onClick={() => setFormData({ ...formData, photoUrl: preset })}
-                          className={`w-7 h-7 rounded-lg overflow-hidden shrink-0 ring-2 transition-all cursor-pointer ${
-                            formData.photoUrl === preset ? 'ring-indigo-600 scale-110 shadow-xs' : 'ring-transparent opacity-70 hover:opacity-100'
+                          className={`w-8 h-8 rounded-xl overflow-hidden shrink-0 ring-2 transition-all cursor-pointer ${
+                            formData.photoUrl === preset ? 'ring-indigo-600 scale-110 shadow-xs' : 'ring-transparent opacity-75 hover:opacity-100'
                           }`}
                         >
                           <img src={preset} alt="" className="w-full h-full object-cover" />
@@ -558,8 +692,8 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                 </div>
               </div>
 
-              {/* Hourly Teaching Rate & Currency (For Teachers) */}
-              {(linkedTeacher || currentUser.role === 'teacher') && (
+              {/* Hourly Teaching Rate & Currency (Restricted: NEVER show on teacher accounts) */}
+              {!isTeacherAccount && canManageRate && Boolean(linkedTeacher) && (
                 <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">

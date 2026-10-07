@@ -394,7 +394,13 @@ export const AttendanceList: React.FC = () => {
       }
 
       // Status
-      if (selectedStatus !== 'All' && record.status !== selectedStatus) return false;
+      if (selectedStatus !== 'All') {
+        if (selectedStatus === 'Absent') {
+          if (record.status !== 'Absent' && record.status !== 'Leave') return false;
+        } else if (record.status !== selectedStatus) {
+          return false;
+        }
+      }
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();

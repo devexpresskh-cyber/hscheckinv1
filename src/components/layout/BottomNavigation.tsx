@@ -135,7 +135,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       return item.id === 'leave' || item.id === 'holidays' || item.id === 'manual';
     }
     if (isTeacher) {
-      return item.id === 'reports' || item.id === 'leave' || item.id === 'holidays' || item.id === 'manual';
+      return item.id === 'leave' || item.id === 'holidays' || item.id === 'manual';
     }
     if (item.restricted) return false;
     if (!item.permission) return true;

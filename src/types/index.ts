@@ -418,16 +418,25 @@ export interface TelegramSettings {
   notifyReminder: boolean;
   reminderMinutesBefore: number;
   summaryTime: string;
+  // Automated Data Backup Settings
+  autoBackupEnabled?: boolean;
+  autoBackupTime?: string; // e.g. "20:00"
+  autoBackupFrequency?: 'daily' | 'twice_daily' | 'hourly' | 'every_6_hours';
+  autoBackupTarget?: 'group' | 'admin' | 'both';
+  lastBackupAt?: string;
+  lastBackupStatus?: 'Sent' | 'Failed' | 'Simulated';
+  lastBackupRecordsCount?: number;
 }
 
 export interface TelegramMessageLog {
   id: string;
   chatId: string;
-  type: 'checkin' | 'late' | 'absence' | 'checkout' | 'summary' | 'reminder' | 'custom';
+  type: 'checkin' | 'late' | 'absence' | 'checkout' | 'summary' | 'reminder' | 'custom' | 'backup';
   message: string;
   status: 'Sent' | 'Failed' | 'Simulated';
   error?: string;
   sentAt: string;
+  documentName?: string;
 }
 
 export interface AppNotification {

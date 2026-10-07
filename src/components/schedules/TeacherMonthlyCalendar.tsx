@@ -554,16 +554,18 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
           </div>
         </div>
 
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[11px] text-slate-500 font-medium block">
-            {isKhmer ? 'ប្រាក់ឈ្នួលប៉ាន់ស្មាន' : 'Projected Wage'}
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-xl font-black text-emerald-800">
-              {activeTeacher?.currency === 'KHR' ? '៛' : '$'}{monthlyStats.projectedWage}
+        {currentUser.role !== 'teacher' && (
+          <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+            <span className="text-[11px] text-slate-500 font-medium block">
+              {isKhmer ? 'ប្រាក់ឈ្នួលប៉ាន់ស្មាន' : 'Projected Wage'}
             </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="text-xl font-black text-emerald-800">
+                {activeTeacher?.currency === 'KHR' ? '៛' : '$'}{monthlyStats.projectedWage}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
           <span className="text-[11px] text-slate-500 font-medium block">
@@ -823,9 +825,11 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           )}
                         </div>
 
-                        <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
-                          {cls.currency === 'KHR' ? '៛' : '$'}{(cls.hourlyRate ?? activeTeacher?.hourlyRate ?? 20).toFixed(0)}/hr
-                        </span>
+                        {currentUser.role !== 'teacher' && (
+                          <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                            {cls.currency === 'KHR' ? '៛' : '$'}{(cls.hourlyRate ?? activeTeacher?.hourlyRate ?? 20).toFixed(0)}/hr
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pt-2 border-t border-slate-200/60">

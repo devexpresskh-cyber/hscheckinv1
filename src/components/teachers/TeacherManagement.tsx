@@ -440,9 +440,11 @@ export const TeacherManagement: React.FC = () => {
                           {teacher.subject}
                         </span>
                         <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                          <span className="inline-block text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
-                            {teacher.currency === 'KHR' ? '៛' : '$'}{(teacher.hourlyRate ?? 20).toFixed(2)}/hr
-                          </span>
+                          {currentUser.role !== 'teacher' && (
+                            <span className="inline-block text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
+                              {teacher.currency === 'KHR' ? '៛' : '$'}{(teacher.hourlyRate ?? 20).toFixed(2)}/hr
+                            </span>
+                          )}
                           <span
                             className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200"
                             title="Teacher Personal PIN for Fast PIN Login"
@@ -730,7 +732,9 @@ export const TeacherManagement: React.FC = () => {
 
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
               <div className="text-xs text-slate-500">
-                Rate: <span className="font-bold text-slate-800">${selectedTeacherForSchedule.hourlyRate || 25}/hr</span>
+                {currentUser.role !== 'teacher' && (
+                  <>Rate: <span className="font-bold text-slate-800">${selectedTeacherForSchedule.hourlyRate || 25}/hr</span></>
+                )}
               </div>
               <button
                 onClick={() => setSelectedTeacherForSchedule(null)}

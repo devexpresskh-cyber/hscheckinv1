@@ -337,9 +337,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'leave' || item.id === 'holidays';
     }
 
-    // If logged in as a Teacher, show Daily Teacher Schedule first, then Monthly Calendar, Attendance History, Wage History, Holidays, and Leave
+    // If logged in as a Teacher, show Daily Teacher Schedule first, then Monthly Calendar, Attendance History, Holidays, and Leave
     if (currentUser.role === 'teacher') {
-      return item.id === 'schedules' || item.id === 'monthly_calendar' || item.id === 'attendance' || item.id === 'reports' || item.id === 'holidays' || item.id === 'leave';
+      return item.id === 'schedules' || item.id === 'monthly_calendar' || item.id === 'attendance' || item.id === 'holidays' || item.id === 'leave';
     }
 
     // Explicitly disallow teachers and employees from accessing telegram setting and system setting
@@ -350,7 +350,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return hasPermission(item.permission as any);
   }).sort((a, b) => {
     if (currentUser.role === 'teacher') {
-      const order: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'reports', 'holidays', 'leave'];
+      const order: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'holidays', 'leave'];
       const idxA = order.indexOf(a.id);
       const idxB = order.indexOf(b.id);
       return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
