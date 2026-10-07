@@ -4,7 +4,7 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
-import { Teacher, AttendanceRecord, TeacherSubjectSchedule, TeacherWageSummary, TeacherClassSessionDetail } from '../../types/index.ts';
+import { Teacher, Employee, AttendanceRecord, TeacherSubjectSchedule, TeacherWageSummary, TeacherClassSessionDetail } from '../../types/index.ts';
 import {
   GraduationCap,
   Clock,
@@ -446,6 +446,9 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
   const [teachers, setTeachers] = useState<Teacher[]>(() =>
     StorageService.getTeachers().filter(t => t.status !== 'Inactive' && (t as any).status !== 'Archived')
   );
+  const [employees, setEmployees] = useState<Employee[]>(() =>
+    StorageService.getEmployees().filter(e => e.status !== 'Inactive')
+  );
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>(() =>
     StorageService.getAttendance()
   );
@@ -461,6 +464,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         setWageDurationMode(freshSettings.teachingWageDurationMode);
       }
       setTeachers(StorageService.getTeachers().filter(t => t.status !== 'Inactive' && (t as any).status !== 'Archived'));
+      setEmployees(StorageService.getEmployees().filter(e => e.status !== 'Inactive'));
       const freshAtt = StorageService.getAttendance();
       setAllAttendance(freshAtt);
       setSubjectSchedules(StorageService.getSubjectSchedules());
@@ -611,8 +615,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         // 3. User ID match or linked user match
         if (uId && (uId === tId || uId.includes(tId) || tId.includes(uId) || uId.replace(/^usr-/, '') === tId.replace(/^usr-/, ''))) return true;
 
-        // 4. Subject schedule ownership confirmation
-        if (att.subjectScheduleId || att.scheduleId) {
+        // 4. Subject schedule ownership confirmation (strictly for non-substitute direct rosters)
+        if (!att.isSubstitute && (att.subjectScheduleId || att.scheduleId)) {
           const schedId = att.subjectScheduleId || att.scheduleId;
           const sched = subjectSchedules.find(s => s.id === schedId);
           if (sched) {
@@ -797,7 +801,16 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           totalOvertimeMinutes += rec.overtimeMinutes || 0;
         }
 
-        const sessionWage = Number((actualTaughtHours * rateApplied).toFixed(2));
+        let sessionWage = 0;
+        if (hasCheckedIn) {
+          if (rec.manualGrossWage !== undefined && rec.manualGrossWage !== null) {
+            sessionWage = Number(rec.manualGrossWage);
+          } else {
+            sessionWage = Number((actualTaughtHours * rateApplied).toFixed(2));
+          }
+        } else {
+          sessionWage = 0;
+        }
         grossWage += sessionWage;
 
         classSessions.push({
@@ -817,9 +830,13 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           actualTaughtHours: Number(actualTaughtHours.toFixed(2)),
           status: rec.status,
           lateMinutes: rec.lateMinutes || 0,
-          rateApplied,
+          rateApplied: (rec.manualGrossWage !== undefined && rec.manualGrossWage !== null) ? 0 : rateApplied,
           wageEarned: Number(sessionWage.toFixed(2)),
-          wageCalculationBasis: wageDurationMode
+          wageCalculationBasis: wageDurationMode,
+          isSubstitute: rec.isSubstitute,
+          originalTeacherName: rec.originalTeacherName,
+          isStaffSubstitute: rec.personType === 'employee',
+          manualGrossWage: rec.manualGrossWage
         });
       });
 
@@ -869,6 +886,8 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         employmentType: teacher.employmentType,
         hourlyRate: baseHourlyRate,
         currency,
+        isStaff: false,
+        personType: 'teacher',
         totalScheduledClasses,
         totalCompletedClasses,
         totalMissedClasses,
@@ -886,7 +905,128 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         classSessions
       };
     });
-  }, [filteredTeachers, allAttendance, subjectSchedules, selectedMonth, dateFilterMode, startDate, endDate, lateDeductionMode, wageDurationMode]);
+
+    // Staff Substitutes (regular employees who were assigned to cover absent teacher schedules)
+    // Requirement: for staff gross wage is manual, default is 0
+    const staffSubSummaries: TeacherWageSummary[] = [];
+
+    if (!effectiveTeacherId && !isTeacherRole) {
+      employees.forEach(emp => {
+        if (!canAccessDepartment(emp.department)) return;
+        if (selectedDept !== 'All' && emp.department !== selectedDept) return;
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const match = emp.fullName.toLowerCase().includes(q) ||
+            (emp.khmerName || '').toLowerCase().includes(q) ||
+            emp.employeeId.toLowerCase().includes(q);
+          if (!match) return;
+        }
+
+        // Find all attendance records for this employee that are teaching sessions
+        const empTeachingRecords = allAttendance.filter(att => {
+          const isEmp = (
+            att.personId === emp.id ||
+            att.personId === emp.employeeId ||
+            (att.personName && att.personName.toLowerCase() === emp.fullName.toLowerCase())
+          ) && Boolean(att.isSubstitute || att.subjectScheduleId);
+
+          if (!isEmp) return false;
+          if (dateFilterMode === 'all') return true;
+          const recDate = normalizeDateToYmd(att.date || att.createdAt);
+          if (dateFilterMode === 'month') {
+            return recDate.startsWith(selectedMonth);
+          } else {
+            return recDate >= startDate && recDate <= endDate;
+          }
+        });
+
+        if (empTeachingRecords.length === 0) return;
+
+        let empCompletedClasses = 0;
+        let empCompletedHours = 0;
+        let empGrossWage = 0;
+        const empSessions: TeacherClassSessionDetail[] = [];
+
+        empTeachingRecords.forEach(rec => {
+          const schedRef = subjectSchedules.find(s => s.id === rec.subjectScheduleId || s.id === rec.scheduleId);
+          const sStart = rec.scheduledStart || schedRef?.startTime || '07:30';
+          const sEnd = rec.scheduledEnd || schedRef?.endTime || '09:00';
+          const startM = timeToMinutes(sStart);
+          const endM = timeToMinutes(sEnd);
+          const schedDuration = Math.max(0.5, (endM - startM) / 60);
+
+          const hasCheckedIn = Boolean(rec.checkInTime) || rec.status === 'Present' || rec.status === 'Late';
+          const actualHours = hasCheckedIn ? schedDuration : 0;
+          if (hasCheckedIn) {
+            empCompletedClasses++;
+            empCompletedHours += actualHours;
+          }
+
+          // For staff, gross wage is manual (default is 0)
+          const manualWage = hasCheckedIn ? Number(rec.manualGrossWage ?? 0) : 0;
+          empGrossWage += manualWage;
+
+          empSessions.push({
+            attendanceId: rec.id,
+            date: rec.date,
+            subject: rec.subject || schedRef?.subject || 'Substitute Cover Session',
+            khmerSubject: rec.khmerSubject || schedRef?.khmerSubject,
+            subjectCode: rec.subjectCode || schedRef?.subjectCode || '',
+            gradeClass: rec.gradeClass || schedRef?.gradeClass || 'General',
+            room: rec.room || schedRef?.room || 'Main Room',
+            periodName: rec.periodName || schedRef?.periodName || 'Class Session',
+            scheduledStart: sStart,
+            scheduledEnd: sEnd,
+            scheduledDurationHours: Number(schedDuration.toFixed(2)),
+            checkInTime: rec.checkInTime,
+            checkOutTime: rec.checkOutTime,
+            actualTaughtHours: Number(actualHours.toFixed(2)),
+            status: rec.status,
+            lateMinutes: rec.lateMinutes || 0,
+            rateApplied: 0,
+            wageEarned: Number(manualWage.toFixed(2)),
+            wageCalculationBasis: 'full_schedule',
+            isSubstitute: true,
+            originalTeacherName: rec.originalTeacherName,
+            isStaffSubstitute: true,
+            manualGrossWage: Number(rec.manualGrossWage ?? 0)
+          });
+        });
+
+        staffSubSummaries.push({
+          teacherId: emp.id,
+          teacherCode: emp.employeeId || emp.id,
+          teacherName: emp.fullName,
+          khmerName: emp.khmerName,
+          photoUrl: emp.photoUrl,
+          department: emp.department,
+          position: `${emp.position || 'Staff'} (Staff Substitute)`,
+          employmentType: emp.employmentType || 'Staff',
+          hourlyRate: 0,
+          currency: 'USD',
+          isStaff: true,
+          personType: 'employee',
+          totalScheduledClasses: empSessions.length,
+          totalCompletedClasses: empCompletedClasses,
+          totalMissedClasses: Math.max(0, empSessions.length - empCompletedClasses),
+          totalLateClasses: 0,
+          totalLateMinutes: 0,
+          totalOvertimeMinutes: 0,
+          scheduledHours: Number(empCompletedHours.toFixed(1)),
+          completedHours: Number(empCompletedHours.toFixed(1)),
+          completionRate: empSessions.length > 0 ? Math.round((empCompletedClasses / empSessions.length) * 100) : 100,
+          punctualityRate: 100,
+          grossWage: Number(empGrossWage.toFixed(2)),
+          lateDeductions: 0,
+          netWage: Number(empGrossWage.toFixed(2)),
+          wageDurationMode: 'full_schedule',
+          classSessions: empSessions
+        });
+      });
+    }
+
+    return [...teacherSummaries, ...staffSubSummaries];
+  }, [filteredTeachers, employees, allAttendance, subjectSchedules, selectedMonth, dateFilterMode, startDate, endDate, lateDeductionMode, wageDurationMode, effectiveTeacherId, isTeacherRole, canAccessDepartment, selectedDept, searchQuery]);
 
   // Overall Aggregate KPIs
   const overallKPIs = useMemo(() => {

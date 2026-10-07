@@ -15,10 +15,12 @@ import {
   Sparkles,
   Building,
   User,
+  UserPlus,
   AlertCircle
 } from 'lucide-react';
 import { TeacherSubjectSchedule, TimetablePeriod, Teacher, UserAccount } from '../../types/index.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
+import { StorageService } from '../../services/storageService.ts';
 
 export type DailySortColumn = 'period' | 'time' | 'subject' | 'grade' | 'room' | 'teacher' | 'status';
 export type DailyGroupMode = 'period' | 'teacher' | 'flat';
@@ -42,6 +44,8 @@ interface DailyScheduleTableViewProps {
   onCheckOut: (sub: TeacherSubjectSchedule, forceAdminOverride?: boolean) => void;
   onEdit?: (sub: TeacherSubjectSchedule) => void;
   onDelete?: (id: string, name: string) => void;
+  onAssignSubstitute?: (sub: TeacherSubjectSchedule) => void;
+  canAssignSubstitute?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   isKhmer: boolean;
@@ -66,6 +70,8 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
   onCheckOut,
   onEdit,
   onDelete,
+  onAssignSubstitute,
+  canAssignSubstitute = false,
   canEdit = false,
   canDelete = false,
   isKhmer
@@ -89,21 +95,33 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
   // Helper to extract attendance info for a class
   const getClassAttendanceInfo = (sub: TeacherSubjectSchedule) => {
     const todayRec = AttendanceEngine.findRecordForSubjectSchedule(sub, attendanceList, todayStr, teachers);
+    const substitution = StorageService.findSubstitution(sub.id, todayStr);
+    const subRecord = AttendanceEngine.findSubstituteRecordForSchedule(sub, attendanceList, todayStr);
+    const absentRecord = AttendanceEngine.findAbsentRecordForSchedule(sub, attendanceList, todayStr);
+    const isTeacherAbsent = Boolean(absentRecord || (todayRec?.status === 'Absent' && !todayRec?.isSubstitute));
 
-    const isCheckedIn = Boolean(todayRec?.checkInTime);
-    const isCheckedOut = Boolean(todayRec?.checkOutTime);
-    const isLate = todayRec?.status === 'Late';
+    // Active attendance to consider for session state: prefer substitute record if substituted
+    const activeAtt = substitution ? (subRecord || todayRec) : todayRec;
+
+    const isCheckedIn = Boolean(activeAtt?.checkInTime);
+    const isCheckedOut = Boolean(activeAtt?.checkOutTime);
+    const isLate = activeAtt?.status === 'Late';
 
     const sStart = AttendanceEngine.timeToMinutes(sub.startTime);
     const sEnd = AttendanceEngine.timeToMinutes(sub.endTime);
 
     const isCurrentActive =
-      isClassToday && ((isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut));
-    const isUpcoming = isClassToday && curMins < sStart && !isCheckedIn;
+      isClassToday && ((isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut && !isTeacherAbsent));
+    const isUpcoming = isClassToday && curMins < sStart && !isCheckedIn && !isTeacherAbsent;
     const isPassed = isClassToday && curMins >= sEnd && !isCheckedIn;
 
     return {
-      todayRec,
+      todayRec: activeAtt,
+      originalTeacherRec: todayRec,
+      substitution,
+      subRecord,
+      absentRecord,
+      isTeacherAbsent,
       isCheckedIn,
       isCheckedOut,
       isLate,
@@ -422,35 +440,61 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
         {/* Teacher & Department */}
         {showTeacher && (
           <td className="py-3 px-3.5">
-            <div className="flex items-center gap-2.5">
-              {teacherObj?.photoUrl ? (
-                <img
-                  src={teacherObj.photoUrl}
-                  alt={sub.teacherName}
-                  className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 shadow-2xs"
-                />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                  {sub.teacherName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="font-bold text-xs text-slate-900 truncate">
-                  {sub.khmerTeacherName ? (
-                    <>
-                      <span>{sub.khmerTeacherName}</span>
-                      <span className="text-slate-500 text-[11px] font-normal ml-1 hidden lg:inline">
-                        ({sub.teacherName})
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                {teacherObj?.photoUrl ? (
+                  <img
+                    src={teacherObj.photoUrl}
+                    alt={sub.teacherName}
+                    className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 shadow-2xs"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                    {sub.teacherName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-slate-900 truncate">
+                    {sub.khmerTeacherName ? (
+                      <>
+                        <span>{sub.khmerTeacherName}</span>
+                        <span className="text-slate-500 text-[11px] font-normal ml-1 hidden lg:inline">
+                          ({sub.teacherName})
+                        </span>
+                      </>
+                    ) : (
+                      sub.teacherName
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5">
+                    <span>{teacherObj?.department || 'Academic'}</span>
+                    {info.isTeacherAbsent && (
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1 rounded border border-rose-200">
+                        {isKhmer ? 'អវត្តមាន' : 'Absent'}
                       </span>
-                    </>
-                  ) : (
-                    sub.teacherName
-                  )}
-                </div>
-                <div className="text-[10px] text-slate-500 truncate">
-                  {teacherObj?.department || 'Academic'}
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Substitution Indicator Badge */}
+              {info.substitution && (
+                <div className="pl-9 flex items-center gap-1.5 flex-wrap">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow-2xs ${
+                    info.substitution.substituteType === 'employee'
+                      ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                      : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                  }`}>
+                    <span>{isKhmer ? 'ជំនួសដោយ៖' : 'Covered by:'} {info.substitution.substituteName}</span>
+                    <span className="opacity-75 text-[9px]">({info.substitution.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')})</span>
+                  </span>
+                  {info.substitution.substituteType === 'employee' && (
+                    <span className="text-[10px] font-mono font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200" title="Manual gross wage for staff substitute">
+                      {isKhmer ? 'ឈ្នួល៖' : 'Wage:'} ${Number(info.substitution.manualGrossWage ?? 0).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </td>
         )}
@@ -462,6 +506,16 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
               <Clock className="w-3 h-3 text-slate-400" />
               <span>{isKhmer ? 'កាលវិភាគទៀងទាត់' : 'Scheduled'}</span>
             </span>
+          ) : info.isTeacherAbsent && !info.substitution ? (
+            <div className="space-y-0.5">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                <span>{isKhmer ? 'អវត្តមាន (Absent)' : 'Absent ($0.00)'}</span>
+              </span>
+              <div className="text-[10px] text-rose-600 font-semibold pl-1">
+                {isKhmer ? 'ត្រូវការចាត់តាំងគ្រូជំនួស' : 'Needs substitute'}
+              </div>
+            </div>
           ) : info.isCheckedOut ? (
             <div className="space-y-0.5">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
@@ -494,7 +548,7 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
               </span>
               {info.isCurrentActive && (
                 <div className="text-[10px] text-emerald-700 font-bold pl-1 animate-pulse">
-                  {isKhmer ? 'កំពុងបង្រៀន...' : 'In Session Now'}
+                  {info.substitution ? (isKhmer ? `គ្រូជំនួសកំពុងបង្រៀន...` : `Substitute teaching now...`) : (isKhmer ? 'កំពុងបង្រៀន...' : 'In Session Now')}
                 </div>
               )}
             </div>
@@ -561,8 +615,8 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                           ? 'ស្កេនចូលយឺត'
                           : 'Late Check In'
                         : isKhmer
-                        ? 'ស្កេនចូល'
-                        : 'Check In'}
+                          ? 'ស្កេនចូល'
+                          : 'Check In'}
                     </span>
                   </button>
                 ) : !info.isCheckedOut ? (
@@ -581,6 +635,32 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                   </span>
                 )}
               </>
+            )}
+
+            {/* Admin Assign Substitute Button */}
+            {canAssignSubstitute && onAssignSubstitute && (
+              <button
+                type="button"
+                onClick={() => onAssignSubstitute(sub)}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  info.substitution
+                    ? 'text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200'
+                    : info.isTeacherAbsent
+                    ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 animate-pulse'
+                    : 'text-slate-500 hover:text-purple-600 hover:bg-purple-50'
+                }`}
+                title={
+                  info.substitution
+                    ? isKhmer
+                      ? `កែប្រែការចាត់តាំងជំនួស (${info.substitution.substituteName})`
+                      : `Edit Substitute (${info.substitution.substituteName})`
+                    : isKhmer
+                    ? 'ចាត់តាំងគ្រូ ឬបុគ្គលិកជំនួស (អវត្តមាន)'
+                    : 'Assign Teacher/Staff Substitute'
+                }
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+              </button>
             )}
 
             {/* Admin Edit & Delete buttons */}

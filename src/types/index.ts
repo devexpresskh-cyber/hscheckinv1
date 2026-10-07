@@ -161,6 +161,8 @@ export interface TeacherWageSummary {
   employmentType: string;
   hourlyRate: number;
   currency: 'USD' | 'KHR';
+  isStaff?: boolean;
+  personType?: 'teacher' | 'employee';
   totalScheduledClasses: number;
   totalCompletedClasses: number;
   totalMissedClasses: number;
@@ -171,7 +173,7 @@ export interface TeacherWageSummary {
   completedHours: number; // Actual hours taught
   completionRate: number; // %
   punctualityRate: number; // %
-  grossWage: number; // completedHours * hourlyRate
+  grossWage: number; // completedHours * hourlyRate or manual wage for staff
   lateDeductions: number; // e.g. prorated or policy penalty
   netWage: number;
   wageDurationMode?: 'full_schedule' | 'actual_scan';
@@ -198,6 +200,10 @@ export interface TeacherClassSessionDetail {
   rateApplied: number;
   wageEarned: number;
   wageCalculationBasis?: 'full_schedule' | 'actual_scan';
+  isSubstitute?: boolean;
+  originalTeacherName?: string;
+  isStaffSubstitute?: boolean;
+  manualGrossWage?: number;
 }
 
 export interface Schedule {
@@ -273,8 +279,46 @@ export interface AttendanceRecord {
   locationVerified: boolean;
   isCorrected?: boolean;
   correctionNote?: string;
+  // Substitute teaching assignment fields
+  isSubstitute?: boolean;
+  originalTeacherId?: string;
+  originalTeacherName?: string;
+  originalTeacherKhmer?: string;
+  substituteType?: 'teacher' | 'employee';
+  manualGrossWage?: number; // For staff substitute (gross wage is manual, default 0)
+  reassignedBy?: string;
+  reassignedAt?: string;
+  reassignReason?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ScheduleSubstitution {
+  id: string;
+  date: string; // 'YYYY-MM-DD'
+  subjectScheduleId: string;
+  subject: string;
+  khmerSubject?: string;
+  gradeClass: string;
+  room: string;
+  periodName?: string;
+  startTime: string;
+  endTime: string;
+  originalTeacherId: string;
+  originalTeacherName: string;
+  originalTeacherKhmer?: string;
+  substituteType: 'teacher' | 'employee';
+  substituteId: string;
+  substituteName: string;
+  substituteKhmerName?: string;
+  substituteDepartment?: string;
+  manualGrossWage: number; // For staff substitute (manual gross wage, default 0)
+  status: 'assigned' | 'completed' | 'cancelled';
+  note?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  assignedBy?: string;
+  assignedAt: string;
 }
 
 export interface AttendanceCorrectionRequest {

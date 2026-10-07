@@ -314,6 +314,35 @@ export const AttendanceEngine = {
     return undefined;
   },
 
+  findSubstituteRecordForSchedule(
+    sub: TeacherSubjectSchedule,
+    records: AttendanceRecord[],
+    dateStr: string
+  ): AttendanceRecord | undefined {
+    if (!sub || !records) return undefined;
+    return records.find(a => {
+      const recDate = String(a.date || '').slice(0, 10);
+      return recDate === dateStr &&
+        (a.subjectScheduleId === sub.id || a.scheduleId === sub.id) &&
+        Boolean(a.isSubstitute);
+    });
+  },
+
+  findAbsentRecordForSchedule(
+    sub: TeacherSubjectSchedule,
+    records: AttendanceRecord[],
+    dateStr: string
+  ): AttendanceRecord | undefined {
+    if (!sub || !records) return undefined;
+    return records.find(a => {
+      const recDate = String(a.date || '').slice(0, 10);
+      return recDate === dateStr &&
+        (a.subjectScheduleId === sub.id || a.scheduleId === sub.id) &&
+        a.status === 'Absent' &&
+        !a.isSubstitute;
+    });
+  },
+
   // Process Check-in
   processCheckIn(params: {
     personId: string;
@@ -333,6 +362,10 @@ export const AttendanceEngine = {
     allowEarlyCheckInMinutes?: number;
     shiftType?: 'morning' | 'evening';
     session?: 'morning' | 'afternoon' | 'evening';
+    isSubstitute?: boolean;
+    originalTeacherId?: string;
+    originalTeacherName?: string;
+    manualGrossWage?: number;
   }): CheckInResult {
     const today = this.getCurrentDateString();
     const currentTime = params.customTime || this.getCurrentTimeString();
@@ -362,6 +395,7 @@ export const AttendanceEngine = {
         );
 
         const isOwner =
+          params.isSubstitute ||
           subjectSchedule.teacherId === params.personId ||
           subjectSchedule.teacherId.toLowerCase() === params.personId.toLowerCase() ||
           subjectSchedule.teacherName.toLowerCase() === params.personName.toLowerCase() ||
@@ -597,6 +631,10 @@ export const AttendanceEngine = {
       locationLatitude: params.latitude ?? null,
       locationLongitude: params.longitude ?? null,
       locationVerified: locationVerified,
+      isSubstitute: params.isSubstitute || existing?.isSubstitute,
+      originalTeacherId: params.originalTeacherId || existing?.originalTeacherId,
+      originalTeacherName: params.originalTeacherName || existing?.originalTeacherName,
+      manualGrossWage: params.manualGrossWage !== undefined ? params.manualGrossWage : existing?.manualGrossWage,
       createdAt: `${today}T${currentTime}:00`
     };
 

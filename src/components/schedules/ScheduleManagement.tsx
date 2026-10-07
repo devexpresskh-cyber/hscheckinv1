@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
-import { Schedule, ScheduleTargetType, TeacherSubjectSchedule, TimetablePeriod, Department, WorkLocation, Teacher } from '../../types/index.ts';
+import { Schedule, ScheduleTargetType, TeacherSubjectSchedule, TimetablePeriod, Department, WorkLocation, Teacher, Employee, ScheduleSubstitution } from '../../types/index.ts';
 import {
   CalendarDays,
   Plus,
@@ -39,7 +39,8 @@ import {
   QrCode,
   Camera,
   Download,
-  UserCog
+  UserCog,
+  UserPlus
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
@@ -50,6 +51,7 @@ import { AcademicDatesModal } from './AcademicDatesModal.tsx';
 import { TeacherMonthlyCalendar } from './TeacherMonthlyCalendar.tsx';
 import { ScheduleQRCodeModal } from './ScheduleQRCodeModal.tsx';
 import { ScheduleQRScanModal } from './ScheduleQRScanModal.tsx';
+import { ScheduleSubstituteModal } from './ScheduleSubstituteModal.tsx';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
@@ -97,6 +99,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() => StorageService.getSubjectSchedules());
   const [periods, setPeriods] = useState<TimetablePeriod[]>(() => StorageService.getPeriods());
   const [teachers, setTeachers] = useState<Teacher[]>(() => StorageService.getTeachers().filter(t => t.status === 'Active'));
+  const [employees, setEmployees] = useState<Employee[]>(() => StorageService.getEmployees().filter(e => e.status === 'Active'));
   const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
   const [locations, setLocations] = useState<WorkLocation[]>(() => StorageService.getLocations());
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSettings());
@@ -106,6 +109,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [selectedScheduleForQR, setSelectedScheduleForQR] = useState<TeacherSubjectSchedule | null>(null);
   const [selectedTeacherForQR, setSelectedTeacherForQR] = useState<Teacher | null>(null);
   const [isQRScanModalOpen, setIsQRScanModalOpen] = useState(false);
+
+  // Substitute assignment state
+  const [isSubstituteModalOpen, setIsSubstituteModalOpen] = useState(false);
+  const [substituteTargetSchedule, setSubstituteTargetSchedule] = useState<TeacherSubjectSchedule | null>(null);
+  const [substituteTargetExisting, setSubstituteTargetExisting] = useState<ScheduleSubstitution | null>(null);
+
+  const handleOpenAssignSubstitute = (sched: TeacherSubjectSchedule) => {
+    setSubstituteTargetSchedule(sched);
+    const existing = StorageService.findSubstitution(sched.id, todayStr);
+    setSubstituteTargetExisting(existing || null);
+    setIsSubstituteModalOpen(true);
+  };
 
   const systemGraceMinutes = useMemo(() => {
     return systemSettings?.defaultGracePeriodMinutes ?? systemSettings?.defaultGracePeriod ?? 15;
@@ -1646,6 +1661,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 onCheckOut={handleTeacherClassCheckOut}
                 onEdit={hasPermission('schedules.edit') && !isTeacher ? handleOpenEditSubject : undefined}
                 onDelete={hasPermission('schedules.delete') && !isTeacher ? handleDeleteSubject : undefined}
+                onAssignSubstitute={handleOpenAssignSubstitute}
+                canAssignSubstitute={canAdminManageAttendance}
                 canEdit={hasPermission('schedules.edit') && !isTeacher}
                 canDelete={hasPermission('schedules.delete') && !isTeacher}
                 isKhmer={isKhmer}
@@ -2952,6 +2969,27 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         <ScheduleQRScanModal
           isOpen={isQRScanModalOpen}
           onClose={() => setIsQRScanModalOpen(false)}
+        />
+      )}
+
+      {/* Schedule Substitute Assignment Modal */}
+      {isSubstituteModalOpen && (
+        <ScheduleSubstituteModal
+          isOpen={isSubstituteModalOpen}
+          onClose={() => {
+            setIsSubstituteModalOpen(false);
+            setSubstituteTargetSchedule(null);
+            setSubstituteTargetExisting(null);
+          }}
+          schedule={substituteTargetSchedule}
+          selectedDate={todayStr}
+          teachers={teachers}
+          employees={employees}
+          currentUser={currentUser}
+          existingSubstitution={substituteTargetExisting}
+          onSuccess={() => {
+            setAttendanceList(StorageService.getAttendance());
+          }}
         />
       )}
 

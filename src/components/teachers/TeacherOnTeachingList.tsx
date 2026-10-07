@@ -3,10 +3,12 @@ import { StorageService } from '../../services/storageService.ts';
 import { TeacherTeachingService, TeacherLiveTeachingInfo, TeachingFacultySummary } from '../../services/teacherTeachingStatus.ts';
 import { TelegramService } from '../../services/telegramService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
-import { Teacher, TeacherSubjectSchedule, Department } from '../../types/index.ts';
+import { Teacher, TeacherSubjectSchedule, Department, Employee, ScheduleSubstitution } from '../../types/index.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
+import { ScheduleSubstituteModal } from '../schedules/ScheduleSubstituteModal.tsx';
 import {
   GraduationCap,
   Clock,
@@ -30,7 +32,8 @@ import {
   Table,
   List,
   LayoutGrid,
-  LogIn
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 
 interface TeacherOnTeachingListProps {
@@ -44,13 +47,28 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
 }) => {
   const { isKhmer } = useLanguage();
   const { showToast } = useNotification();
+  const { currentUser } = useAuth();
 
   const [teachers, setTeachers] = useState<Teacher[]>(() => StorageService.getTeachers());
+  const [employees, setEmployees] = useState<Employee[]>(() => StorageService.getEmployees().filter(e => e.status === 'Active'));
   const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() =>
     StorageService.getSubjectSchedules()
   );
   const [attendance, setAttendance] = useState(() => StorageService.getAttendance());
   const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
+
+  // Substitute modal states
+  const [isSubstituteModalOpen, setIsSubstituteModalOpen] = useState(false);
+  const [substituteTargetSchedule, setSubstituteTargetSchedule] = useState<TeacherSubjectSchedule | null>(null);
+  const [substituteTargetExisting, setSubstituteTargetExisting] = useState<ScheduleSubstitution | null>(null);
+
+  const handleOpenAssignSubstitute = (sched: TeacherSubjectSchedule) => {
+    setSubstituteTargetSchedule(sched);
+    const todayDateStr = AttendanceEngine.getCurrentDateString();
+    const existing = StorageService.findSubstitution(sched.id, todayDateStr);
+    setSubstituteTargetExisting(existing || null);
+    setIsSubstituteModalOpen(true);
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
@@ -1218,6 +1236,18 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                       <Layers className="w-3.5 h-3.5 text-slate-500" />
                       <span>{isKhmer ? 'សប្តាហ៍' : 'Weekly'}</span>
                     </button>
+
+                    {/* Admin Assign Substitute Button */}
+                    {currentUser && currentUser.role !== 'teacher' && (currentSchedule || upcomingSchedules[0] || allTodaySchedules[0]) && (
+                      <button
+                        onClick={() => handleOpenAssignSubstitute((currentSchedule || upcomingSchedules[0] || allTodaySchedules[0])!)}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
+                        title={isKhmer ? 'ចាត់តាំងគ្រូ ឬបុគ្គលិកបង្រៀនជំនួស (អវត្តមាន)' : 'Assign Teacher or Staff Substitute'}
+                      >
+                        <UserPlus className="w-3.5 h-3.5 text-purple-600" />
+                        <span>{isKhmer ? 'ជំនួស' : 'Substitute'}</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Telegram Reminder */}
@@ -1233,6 +1263,27 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Schedule Substitute Assignment Modal */}
+      {isSubstituteModalOpen && (
+        <ScheduleSubstituteModal
+          isOpen={isSubstituteModalOpen}
+          onClose={() => {
+            setIsSubstituteModalOpen(false);
+            setSubstituteTargetSchedule(null);
+            setSubstituteTargetExisting(null);
+          }}
+          schedule={substituteTargetSchedule}
+          selectedDate={AttendanceEngine.getCurrentDateString()}
+          teachers={teachers}
+          employees={employees}
+          currentUser={currentUser || { id: 'admin', role: 'super_admin', fullName: 'Administrator', email: 'admin@school.edu', department: 'Administration', status: 'Active', createdAt: '' }}
+          existingSubstitution={substituteTargetExisting}
+          onSuccess={() => {
+            setAttendance(StorageService.getAttendance());
+          }}
+        />
       )}
     </div>
   );
