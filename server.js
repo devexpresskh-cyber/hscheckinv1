@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +30,12 @@ app.use(express.static(path.join(__dirname, 'dist'), {
 
 // SPA fallback: send index.html for all non-static routes
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send('<!DOCTYPE html><html><head><title>EduTrack</title></head><body><div id="root">Loading EduTrack...</div></body></html>');
+  }
 });
 
 const server = app.listen(port, '0.0.0.0', () => {
