@@ -40,7 +40,8 @@ import {
   Camera,
   Download,
   UserCog,
-  UserPlus
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
@@ -1063,14 +1064,84 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
           {/* Attribution for Admin / HR */}
           {!isTeacher && (
-            <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 text-xs text-slate-800">
-              <GraduationCap className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span className="font-bold">{sub.teacherName}</span>
-              {sub.khmerTeacherName && (
-                <span className="text-slate-500 font-medium">({sub.khmerTeacherName})</span>
+            <div className="flex items-center justify-between gap-1.5 mt-2.5 pt-2 border-t border-slate-100 text-xs text-slate-800">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="font-bold truncate">{sub.teacherName}</span>
+                {sub.khmerTeacherName && (
+                  <span className="text-slate-500 font-medium truncate">({sub.khmerTeacherName})</span>
+                )}
+              </div>
+              {canAdminManageAttendance && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAssignSubstitute(sub)}
+                  className="px-2 py-1 rounded-lg text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  title={isKhmer ? 'ចាត់តាំងគ្រូ ឬបុគ្គលិកជំនួស (គ្រូដើមអវត្តមាន)' : 'Assign Teacher or Staff Substitute'}
+                >
+                  <UserPlus className="w-3 h-3 text-purple-600" />
+                  <span>{isKhmer ? 'ជំនួស' : 'Substitute'}</span>
+                </button>
               )}
             </div>
           )}
+
+          {/* Active Substitution Display in Card */}
+          {(() => {
+            const cardSubst = StorageService.findSubstitution(sub.id, todayStr);
+            if (!cardSubst) return null;
+            return (
+              <div className="mt-2.5 p-2 rounded-xl bg-purple-50/70 border border-purple-200 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-1 text-[11px] font-bold text-purple-900">
+                  <span className="flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+                    <span>{isKhmer ? 'អ្នកបង្រៀនជំនួស៖' : 'Covered by Substitute(s):'}</span>
+                  </span>
+                  {canAdminManageAttendance && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAssignSubstitute(sub)}
+                      className="text-[10px] font-extrabold text-purple-700 hover:text-purple-900 underline cursor-pointer"
+                    >
+                      {isKhmer ? 'កែប្រែ' : 'Edit'}
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {cardSubst.assignees && cardSubst.assignees.length > 0 ? (
+                    cardSubst.assignees.map((a, i) => (
+                      <span
+                        key={a.id || i}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-white text-purple-900 border border-purple-200 shadow-2xs"
+                      >
+                        <span>{a.substituteName}</span>
+                        <span className="opacity-75 text-[9px]">
+                          ({a.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')}, {a.allocatedHours}h)
+                        </span>
+                        {a.substituteType === 'employee' && (
+                          <span className="font-mono text-purple-700 bg-purple-100 px-1 rounded" title="Manual gross wage (default $0)">
+                            ${Number(a.manualGrossWage ?? 0).toFixed(2)}
+                          </span>
+                        )}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-white text-purple-900 border border-purple-200">
+                      <span>{cardSubst.substituteName}</span>
+                      <span className="opacity-75 text-[9px]">
+                        ({cardSubst.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')})
+                      </span>
+                      {cardSubst.substituteType === 'employee' && (
+                        <span className="font-mono text-purple-700 bg-purple-100 px-1 rounded">
+                          ${Number(cardSubst.manualGrossWage ?? 0).toFixed(2)}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Quick Attendance Action Buttons for Today (Teachers for their own classes, or Admin/HR with override permission) */}

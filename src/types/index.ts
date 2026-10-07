@@ -293,6 +293,24 @@ export interface AttendanceRecord {
   updatedAt?: string;
 }
 
+export interface ScheduleSubstitutionAssignee {
+  id: string;
+  substituteType: 'teacher' | 'employee';
+  substituteId: string;
+  substituteName: string;
+  substituteKhmerName?: string;
+  substituteDepartment?: string;
+  startTime: string;
+  endTime: string;
+  allocatedHours: number; // Duration in hours allocated to this assignee
+  manualGrossWage: number; // For staff: manual gross wage, default 0
+  hourlyRate?: number; // For teacher: hourly rate applied
+  calculatedWage?: number; // Estimated total wage
+  checkInTime?: string;
+  checkOutTime?: string;
+  attendanceRecordId?: string;
+}
+
 export interface ScheduleSubstitution {
   id: string;
   date: string; // 'YYYY-MM-DD'
@@ -304,9 +322,12 @@ export interface ScheduleSubstitution {
   periodName?: string;
   startTime: string;
   endTime: string;
+  totalScheduleHours?: number;
   originalTeacherId: string;
   originalTeacherName: string;
   originalTeacherKhmer?: string;
+  // Multi-assignee support: more than 1 teacher or staff up to schedule hours
+  assignees?: ScheduleSubstitutionAssignee[];
   substituteType: 'teacher' | 'employee';
   substituteId: string;
   substituteName: string;

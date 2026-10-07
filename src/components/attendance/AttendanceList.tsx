@@ -4,10 +4,11 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
-import { AttendanceRecord, AttendanceCorrectionRequest, AttendanceStatus } from '../../types/index.ts';
+import { AttendanceRecord, AttendanceCorrectionRequest, AttendanceStatus, TeacherSubjectSchedule, ScheduleSubstitution } from '../../types/index.ts';
 import { AttendanceCorrectionModal } from './AttendanceCorrectionModal.tsx';
 import { Attendance31DaysSheet } from './Attendance31DaysSheet.tsx';
 import { AttendancePeriodGrid } from './AttendancePeriodGrid.tsx';
+import { ScheduleSubstituteModal } from '../schedules/ScheduleSubstituteModal.tsx';
 import {
   CheckCircle2,
   Search,
@@ -30,7 +31,9 @@ import {
   GraduationCap,
   Users2,
   Sparkles,
-  Zap
+  Zap,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
 
 // Split E/L badge icon matching the uploaded screenshot
@@ -299,6 +302,47 @@ export const AttendanceList: React.FC = () => {
   const [isDeleteSelectedModalOpen, setIsDeleteSelectedModalOpen] = useState(false);
   const [recordToDeleteSingle, setRecordToDeleteSingle] = useState<AttendanceRecord | null>(null);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+
+  // Substitute modal state
+  const [isSubstituteModalOpen, setIsSubstituteModalOpen] = useState(false);
+  const [substituteTargetSchedule, setSubstituteTargetSchedule] = useState<TeacherSubjectSchedule | null>(null);
+  const [substituteTargetExisting, setSubstituteTargetExisting] = useState<ScheduleSubstitution | null>(null);
+  const [substituteTargetDate, setSubstituteTargetDate] = useState<string>(AttendanceEngine.getCurrentDateString());
+
+  const handleOpenSubstituteForRecord = (record: AttendanceRecord) => {
+    const schedId = record.subjectScheduleId || record.scheduleId;
+    let targetSched = subjectSchedules.find(s => s.id === schedId);
+    if (!targetSched) {
+      targetSched = subjectSchedules.find(
+        s => (s.teacherId === record.personId || s.teacherName?.toLowerCase() === record.personName?.toLowerCase()) &&
+             (!record.subject || s.subject.toLowerCase() === record.subject.toLowerCase())
+      );
+    }
+    const finalSched: TeacherSubjectSchedule = targetSched || {
+      id: schedId || `sched-${record.personId}-${Date.now()}`,
+      teacherId: record.personId,
+      teacherName: record.personName,
+      khmerTeacherName: record.khmerName,
+      subject: record.subject || 'Class Session',
+      khmerSubject: record.khmerSubject || '',
+      subjectCode: getSubjectCode(record) || 'SUB-01',
+      gradeClass: record.gradeClass || 'General',
+      room: record.room || 'Main Room',
+      periodNumber: 1,
+      periodName: record.periodName || 'Session',
+      dayOfWeek: new Date(record.date).getDay(),
+      startTime: record.scheduledStart || record.checkInTime || '07:30',
+      endTime: record.scheduledEnd || record.checkOutTime || '09:00',
+      gracePeriodMinutes: 15,
+      hourlyRate: 20,
+      isActive: true
+    };
+    setSubstituteTargetSchedule(finalSched);
+    setSubstituteTargetDate(record.date);
+    const existing = StorageService.findSubstitution(finalSched.id, record.date);
+    setSubstituteTargetExisting(existing || null);
+    setIsSubstituteModalOpen(true);
+  };
 
   const handleClearAllAttendance = async () => {
     try {
@@ -1087,6 +1131,19 @@ export const AttendanceList: React.FC = () => {
                               <span className={`text-xs sm:text-sm font-semibold tracking-tight ${config.durationColor}`}>
                                 {config.duration}
                               </span>
+                              {/* Admin Assign Substitute Button for absent teacher */}
+                              {isAdmin && isTeacher && (record.status === 'Absent' || record.status === 'Leave') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSubstituteForRecord(record)}
+                                  className="px-2 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 hover:text-purple-800 text-[11px] font-bold border border-purple-200 transition-all shrink-0 flex items-center gap-1 cursor-pointer"
+                                  title={isKhmer ? 'ចាត់តាំងគ្រូ ឬបុគ្គលិកជំនួស (គ្រូដើមអវត្តមាន)' : 'Assign Teacher or Staff Substitute'}
+                                >
+                                  <UserPlus className="w-3 h-3 text-purple-600" />
+                                  <span className="hidden sm:inline">{isKhmer ? 'ជំនួស' : 'Sub'}</span>
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1586,6 +1643,27 @@ export const AttendanceList: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Schedule Substitute Assignment Modal */}
+      {isSubstituteModalOpen && (
+        <ScheduleSubstituteModal
+          isOpen={isSubstituteModalOpen}
+          onClose={() => {
+            setIsSubstituteModalOpen(false);
+            setSubstituteTargetSchedule(null);
+            setSubstituteTargetExisting(null);
+          }}
+          schedule={substituteTargetSchedule}
+          selectedDate={substituteTargetDate}
+          teachers={teachers}
+          employees={employees}
+          currentUser={currentUser}
+          existingSubstitution={substituteTargetExisting}
+          onSuccess={() => {
+            setAttendanceList(StorageService.getAttendance());
+          }}
+        />
       )}
 
     </div>

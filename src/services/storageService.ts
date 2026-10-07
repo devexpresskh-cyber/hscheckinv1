@@ -20,7 +20,8 @@ import {
   OfflineSyncItem,
   SyncHistoryLog,
   SyncStatusState,
-  ScheduleSubstitution
+  ScheduleSubstitution,
+  ScheduleSubstitutionAssignee
 } from '../types/index.ts';
 import {
   DEFAULT_ROLES,
@@ -1404,9 +1405,11 @@ export const StorageService = {
   assignScheduleSubstitute(params: {
     schedule: TeacherSubjectSchedule;
     date: string;
-    substituteType: 'teacher' | 'employee';
-    substituteId: string;
-    substituteName: string;
+    assignees?: ScheduleSubstitutionAssignee[];
+    // Single assignee backwards compatibility:
+    substituteType?: 'teacher' | 'employee';
+    substituteId?: string;
+    substituteName?: string;
     substituteKhmerName?: string;
     substituteDepartment?: string;
     manualGrossWage?: number; // for staff: manual gross wage, default 0
@@ -1416,9 +1419,74 @@ export const StorageService = {
     note?: string;
     assignedBy?: string;
   }): { success: boolean; message: string; substitution: ScheduleSubstitution } {
-    const { schedule, date, substituteType, substituteId, substituteName } = params;
+    const { schedule, date } = params;
 
-    // 1. Mark original teacher as Absent for this class session if not already absent
+    // Helper: calculate schedule duration
+    const parseMins = (t?: string) => {
+      if (!t) return 0;
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const sStartM = parseMins(schedule.startTime);
+    const sEndM = parseMins(schedule.endTime);
+    const schedDurationHours = Math.max(0.5, Math.round(((sEndM - sStartM) / 60) * 100) / 100);
+
+    // 1. Normalize assignees list: support 1 or more teachers / staff
+    let normalizedAssignees: ScheduleSubstitutionAssignee[] = [];
+    if (params.assignees && params.assignees.length > 0) {
+      normalizedAssignees = params.assignees.map((a, idx) => ({
+        id: a.id || `assignee-${Date.now()}-${idx}`,
+        substituteType: a.substituteType,
+        substituteId: a.substituteId,
+        substituteName: a.substituteName,
+        substituteKhmerName: a.substituteKhmerName,
+        substituteDepartment: a.substituteDepartment,
+        startTime: a.startTime || schedule.startTime,
+        endTime: a.endTime || schedule.endTime,
+        allocatedHours: a.allocatedHours || schedDurationHours,
+        // For staff gross wage is manual, default is 0
+        manualGrossWage: a.substituteType === 'employee'
+          ? (a.manualGrossWage !== undefined && !isNaN(Number(a.manualGrossWage)) ? Number(a.manualGrossWage) : 0)
+          : 0,
+        hourlyRate: a.hourlyRate,
+        calculatedWage: a.calculatedWage,
+        checkInTime: a.checkInTime || (params.markCheckedIn !== false ? (a.startTime || schedule.startTime) : undefined),
+        checkOutTime: a.checkOutTime || (params.markCheckedIn !== false ? (a.endTime || schedule.endTime) : undefined)
+      }));
+    } else if (params.substituteId && params.substituteName) {
+      const subType = params.substituteType || 'teacher';
+      const staffWage = subType === 'employee'
+        ? (params.manualGrossWage !== undefined && !isNaN(Number(params.manualGrossWage)) ? Number(params.manualGrossWage) : 0)
+        : 0;
+      normalizedAssignees = [
+        {
+          id: `assignee-${Date.now()}-0`,
+          substituteType: subType,
+          substituteId: params.substituteId,
+          substituteName: params.substituteName,
+          substituteKhmerName: params.substituteKhmerName,
+          substituteDepartment: params.substituteDepartment,
+          startTime: params.checkInTime || schedule.startTime,
+          endTime: params.checkOutTime || schedule.endTime,
+          allocatedHours: schedDurationHours,
+          manualGrossWage: staffWage,
+          checkInTime: params.markCheckedIn !== false ? (params.checkInTime || schedule.startTime) : undefined,
+          checkOutTime: params.markCheckedIn !== false ? (params.checkOutTime || schedule.endTime) : undefined
+        }
+      ];
+    } else {
+      throw new Error('No substitute assignees specified.');
+    }
+
+    // 2. Clean up any previous substitute attendance records for this schedule & date
+    const prevSubRecords = cache.attendance.filter(
+      r => r.date === date &&
+           (r.subjectScheduleId === schedule.id || r.scheduleId === schedule.id) &&
+           r.isSubstitute
+    );
+    prevSubRecords.forEach(r => this.deleteAttendanceRecord(r.id));
+
+    // 3. Mark original teacher as Absent ($0 wage) for this class session if not already absent
     const origTeacherId = schedule.teacherId;
     const existingAbsent = cache.attendance.find(
       r => r.date === date &&
@@ -1426,7 +1494,11 @@ export const StorageService = {
            (r.personId === origTeacherId || r.personName?.toLowerCase() === schedule.teacherName?.toLowerCase())
     );
 
-    const absentNote = `Absent - Reassigned to ${substituteName} (${substituteType === 'employee' ? 'Staff' : 'Teacher'})`;
+    const summaryAssigneeNames = normalizedAssignees.map(a =>
+      `${a.substituteName} (${a.substituteType === 'employee' ? 'Staff' : 'Teacher'}, ${a.allocatedHours}h${a.substituteType === 'employee' ? `, $${(a.manualGrossWage ?? 0).toFixed(2)}` : ''})`
+    ).join(' + ');
+
+    const absentNote = `Absent - Reassigned to: ${summaryAssigneeNames}`;
 
     if (existingAbsent) {
       this.updateAttendanceRecord(existingAbsent.id, {
@@ -1466,60 +1538,63 @@ export const StorageService = {
       this.addAttendanceRecord(absentRecord);
     }
 
-    // 2. Prepare substitute manualGrossWage: For staff, default is 0. Manual gross wage is entered.
-    const resolvedManualWage = substituteType === 'employee'
-      ? (params.manualGrossWage !== undefined && !isNaN(Number(params.manualGrossWage)) ? Number(params.manualGrossWage) : 0)
-      : (params.manualGrossWage !== undefined ? Number(params.manualGrossWage) : undefined);
+    // 4. Create attendance records for each assigned substitute (teacher or staff)
+    normalizedAssignees.forEach((assignee, idx) => {
+      const subAttendanceId = `att-${date}-${assignee.substituteId}-${schedule.id}-sub-${idx}`;
+      const resolvedStaffWage = assignee.substituteType === 'employee'
+        ? (assignee.manualGrossWage !== undefined && !isNaN(Number(assignee.manualGrossWage)) ? Number(assignee.manualGrossWage) : 0)
+        : undefined;
 
-    const checkIn = params.markCheckedIn !== false
-      ? (params.checkInTime || schedule.startTime)
-      : undefined;
-    const checkOut = params.checkOutTime || (params.markCheckedIn !== false ? schedule.endTime : undefined);
+      const subRecord: AttendanceRecord = {
+        id: subAttendanceId,
+        personId: assignee.substituteId,
+        personType: assignee.substituteType,
+        personName: assignee.substituteName,
+        khmerName: assignee.substituteKhmerName,
+        department: assignee.substituteDepartment || 'Academic',
+        date,
+        scheduleId: schedule.id,
+        subjectScheduleId: schedule.id,
+        subject: schedule.subject,
+        khmerSubject: schedule.khmerSubject,
+        gradeClass: schedule.gradeClass,
+        room: schedule.room,
+        periodName: schedule.periodName,
+        session: parseInt((assignee.startTime || schedule.startTime).split(':')[0], 10) < 12 ? 'morning' : 'afternoon',
+        scheduledStart: assignee.startTime || schedule.startTime,
+        scheduledEnd: assignee.endTime || schedule.endTime,
+        checkInTime: assignee.checkInTime || (params.markCheckedIn !== false ? (assignee.startTime || schedule.startTime) : undefined),
+        checkOutTime: assignee.checkOutTime || (params.markCheckedIn !== false ? (assignee.endTime || schedule.endTime) : undefined),
+        status: 'Present',
+        lateMinutes: 0,
+        earlyLeaveMinutes: 0,
+        overtimeMinutes: 0,
+        locationVerified: true,
+        isSubstitute: true,
+        originalTeacherId: origTeacherId,
+        originalTeacherName: schedule.teacherName,
+        originalTeacherKhmer: schedule.khmerTeacherName,
+        substituteType: assignee.substituteType,
+        manualGrossWage: resolvedStaffWage,
+        reassignedBy: params.assignedBy || 'Admin',
+        reassignedAt: new Date().toISOString(),
+        reassignReason: params.note,
+        correctionNote: `Substitute covering for absent teacher ${schedule.teacherName} (${assignee.allocatedHours} hr${assignee.substituteType === 'employee' ? `, Staff Gross Wage: $${(resolvedStaffWage ?? 0).toFixed(2)}` : ''})`,
+        createdAt: `${date}T${assignee.startTime || schedule.startTime}:00`,
+        updatedAt: new Date().toISOString()
+      };
 
-    // 3. Create or update attendance record for the substitute
-    const subAttendanceId = `att-${date}-${substituteId}-${schedule.id}-sub`;
-    const substituteRecord: AttendanceRecord = {
-      id: subAttendanceId,
-      personId: substituteId,
-      personType: substituteType,
-      personName: substituteName,
-      khmerName: params.substituteKhmerName,
-      department: params.substituteDepartment || 'Academic',
-      date,
-      scheduleId: schedule.id,
-      subjectScheduleId: schedule.id,
-      subject: schedule.subject,
-      khmerSubject: schedule.khmerSubject,
-      gradeClass: schedule.gradeClass,
-      room: schedule.room,
-      periodName: schedule.periodName,
-      session: parseInt(schedule.startTime.split(':')[0], 10) < 12 ? 'morning' : 'afternoon',
-      scheduledStart: schedule.startTime,
-      scheduledEnd: schedule.endTime,
-      checkInTime: checkIn,
-      checkOutTime: checkOut,
-      status: 'Present',
-      lateMinutes: 0,
-      earlyLeaveMinutes: 0,
-      overtimeMinutes: 0,
-      locationVerified: true,
-      isSubstitute: true,
-      originalTeacherId: origTeacherId,
-      originalTeacherName: schedule.teacherName,
-      originalTeacherKhmer: schedule.khmerTeacherName,
-      substituteType,
-      manualGrossWage: substituteType === 'employee' ? resolvedManualWage : undefined,
-      reassignedBy: params.assignedBy || 'Admin',
-      reassignedAt: new Date().toISOString(),
-      reassignReason: params.note,
-      correctionNote: `Substitute covering for absent teacher ${schedule.teacherName}${substituteType === 'employee' ? ` (Staff - Manual Gross Wage: $${(resolvedManualWage ?? 0).toFixed(2)})` : ''}`,
-      createdAt: `${date}T${schedule.startTime}:00`,
-      updatedAt: new Date().toISOString()
-    };
-    this.addAttendanceRecord(substituteRecord);
+      this.addAttendanceRecord(subRecord);
+      assignee.attendanceRecordId = subAttendanceId;
+    });
 
-    // 4. Save the substitution record
+    // 5. Save the substitution record
     const subRecordId = `subst-${date}-${schedule.id}`;
+    const primaryAssignee = normalizedAssignees[0];
+    const totalStaffManualWage = normalizedAssignees
+      .filter(a => a.substituteType === 'employee')
+      .reduce((sum, a) => sum + (Number(a.manualGrossWage) || 0), 0);
+
     const substitution: ScheduleSubstitution = {
       id: subRecordId,
       date,
@@ -1531,38 +1606,43 @@ export const StorageService = {
       periodName: schedule.periodName,
       startTime: schedule.startTime,
       endTime: schedule.endTime,
+      totalScheduleHours: schedDurationHours,
       originalTeacherId: origTeacherId,
       originalTeacherName: schedule.teacherName,
       originalTeacherKhmer: schedule.khmerTeacherName,
-      substituteType,
-      substituteId,
-      substituteName,
-      substituteKhmerName: params.substituteKhmerName,
-      substituteDepartment: params.substituteDepartment,
-      manualGrossWage: substituteType === 'employee' ? (resolvedManualWage ?? 0) : 0,
+      assignees: normalizedAssignees,
+      // Backwards-compatible fields for components reading single substitute properties:
+      substituteType: primaryAssignee.substituteType,
+      substituteId: primaryAssignee.substituteId,
+      substituteName: normalizedAssignees.length === 1
+        ? primaryAssignee.substituteName
+        : normalizedAssignees.map(a => a.substituteName).join(', '),
+      substituteKhmerName: primaryAssignee.substituteKhmerName,
+      substituteDepartment: primaryAssignee.substituteDepartment,
+      manualGrossWage: totalStaffManualWage,
       status: 'assigned',
       note: params.note,
-      checkInTime: checkIn,
-      checkOutTime: checkOut,
+      checkInTime: primaryAssignee.checkInTime,
+      checkOutTime: primaryAssignee.checkOutTime,
       assignedBy: params.assignedBy || 'Admin',
       assignedAt: new Date().toISOString()
     };
     this.saveSubstitution(substitution);
 
-    // 5. Add Audit Log
+    // 6. Add Audit Log
     this.addAuditLog({
       userId: params.assignedBy || 'admin',
       userName: params.assignedBy || 'Administrator',
       userRole: 'admin',
       action: 'SCHEDULE_SUBSTITUTE_ASSIGNED',
       target: `${schedule.subject} (${schedule.gradeClass}) - ${schedule.periodName}`,
-      details: `Teacher ${schedule.teacherName} absent. Reassigned to ${substituteName} (${substituteType === 'employee' ? 'Staff' : 'Teacher'}). ${substituteType === 'employee' ? `Manual Gross Wage: $${(resolvedManualWage ?? 0).toFixed(2)}` : 'Teacher Standard Rate'}`,
+      details: `Teacher ${schedule.teacherName} absent. Reassigned to ${normalizedAssignees.length} substitute(s): ${summaryAssigneeNames}. Total schedule hours: ${schedDurationHours}h.`,
       ipAddress: '127.0.0.1'
     });
 
     return {
       success: true,
-      message: `Successfully assigned ${substituteName} to cover ${schedule.subject} for absent teacher ${schedule.teacherName}.`,
+      message: `Successfully assigned ${normalizedAssignees.length} substitute(s) to cover ${schedule.subject} for absent teacher ${schedule.teacherName}.`,
       substitution
     };
   },
@@ -1575,16 +1655,15 @@ export const StorageService = {
     // 1. Delete the substitution entry
     this.deleteSubstitution(existing.id);
 
-    // 2. Remove the substitute attendance record
-    const subAtt = cache.attendance.find(
+    // 2. Remove all substitute attendance records for this schedule & date
+    const subAtts = cache.attendance.filter(
       r => r.date === dateStr &&
            (r.subjectScheduleId === scheduleId || r.scheduleId === scheduleId) &&
-           r.isSubstitute &&
-           r.personId === existing.substituteId
+           r.isSubstitute
     );
-    if (subAtt) {
-      this.deleteAttendanceRecord(subAtt.id);
-    }
+    subAtts.forEach(att => {
+      this.deleteAttendanceRecord(att.id);
+    });
 
     // 3. Remove absent record or revert note on original teacher's record if requested
     const origAtt = cache.attendance.find(

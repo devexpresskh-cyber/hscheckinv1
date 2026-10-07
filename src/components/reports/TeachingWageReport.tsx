@@ -563,7 +563,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
 
   // Calculate Teaching Wage Summaries
   const wageSummaries: TeacherWageSummary[] = useMemo(() => {
-    return filteredTeachers.map(teacher => {
+    const teacherSummaries = filteredTeachers.map(teacher => {
       const baseHourlyRate = Number(
         (teacher.hourlyRate && Number(teacher.hourlyRate) > 0)
           ? teacher.hourlyRate
@@ -887,7 +887,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
         hourlyRate: baseHourlyRate,
         currency,
         isStaff: false,
-        personType: 'teacher',
+        personType: 'teacher' as const,
         totalScheduledClasses,
         totalCompletedClasses,
         totalMissedClasses,
@@ -910,8 +910,9 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
     // Requirement: for staff gross wage is manual, default is 0
     const staffSubSummaries: TeacherWageSummary[] = [];
 
-    if (!effectiveTeacherId && !isTeacherRole) {
+    if (!isTeacherRole) {
       employees.forEach(emp => {
+        if (effectiveTeacherId && emp.id !== effectiveTeacherId && emp.employeeId !== effectiveTeacherId) return;
         if (!canAccessDepartment(emp.department)) return;
         if (selectedDept !== 'All' && emp.department !== selectedDept) return;
         if (searchQuery.trim()) {
@@ -1005,7 +1006,7 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
           hourlyRate: 0,
           currency: 'USD',
           isStaff: true,
-          personType: 'employee',
+          personType: 'employee' as const,
           totalScheduledClasses: empSessions.length,
           totalCompletedClasses: empCompletedClasses,
           totalMissedClasses: Math.max(0, empSessions.length - empCompletedClasses),

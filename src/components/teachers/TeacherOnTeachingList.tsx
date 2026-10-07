@@ -33,7 +33,8 @@ import {
   List,
   LayoutGrid,
   LogIn,
-  UserPlus
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
 
 interface TeacherOnTeachingListProps {
@@ -1178,6 +1179,55 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                         <span>{isKhmer ? 'មិនមានម៉ោងបង្រៀនដែលបានកំណត់សម្រាប់ថ្ងៃនេះទេ' : 'No academic sessions scheduled for today.'}</span>
                       </div>
                     )}
+
+                    {/* Active Substitution Banner if any schedule today is substituted */}
+                    {(() => {
+                      const todayStr = AttendanceEngine.getCurrentDateString();
+                      const todaySubst = allTodaySchedules
+                        .map(s => StorageService.findSubstitution(s.id, todayStr))
+                        .find(Boolean);
+                      if (!todaySubst) return null;
+                      return (
+                        <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl text-xs space-y-1">
+                          <div className="flex items-center justify-between text-purple-900 font-bold text-[11px]">
+                            <span className="flex items-center gap-1">
+                              <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+                              <span>{isKhmer ? 'មានអ្នកបង្រៀនជំនួសថ្ងៃនេះ៖' : 'Active Substitute Today:'}</span>
+                            </span>
+                            <span className="text-[10px] text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-semibold">
+                              {todaySubst.subject}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {todaySubst.assignees && todaySubst.assignees.length > 0 ? (
+                              todaySubst.assignees.map((a, i) => (
+                                <span
+                                  key={a.id || i}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-white text-purple-900 border border-purple-200 shadow-2xs"
+                                >
+                                  <span>{a.substituteName}</span>
+                                  <span className="opacity-75 text-[9px]">
+                                    ({a.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')}, {a.allocatedHours}h)
+                                  </span>
+                                  {a.substituteType === 'employee' && (
+                                    <span className="font-mono text-purple-700 bg-purple-100 px-1 rounded">
+                                      ${Number(a.manualGrossWage ?? 0).toFixed(2)}
+                                    </span>
+                                  )}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-white text-purple-900 border border-purple-200">
+                                <span>{todaySubst.substituteName}</span>
+                                <span className="opacity-75 text-[9px]">
+                                  ({todaySubst.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')})
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Teacher Contacts & Stats Row */}
                     <div className="flex items-center justify-between text-xs text-slate-600 pt-1">

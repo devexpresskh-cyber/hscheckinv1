@@ -9,8 +9,11 @@ import {
   TeacherSubjectSchedule,
   TimetablePeriod,
   AttendanceRecord,
-  AttendanceStatus
+  AttendanceStatus,
+  Employee,
+  ScheduleSubstitution
 } from '../../types/index.ts';
+import { ScheduleSubstituteModal } from '../schedules/ScheduleSubstituteModal.tsx';
 import {
   Clock,
   Calendar,
@@ -33,7 +36,9 @@ import {
   Users2,
   Sparkles,
   Layers,
-  Building
+  Building,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
 
 interface AttendancePeriodGridProps {
@@ -49,6 +54,7 @@ interface PeriodCellData {
   checkOutTime?: string;
   lateMinutes?: number;
   isCurrentActivePeriod: boolean;
+  substitution?: ScheduleSubstitution;
 }
 
 interface TeacherPeriodRow {
@@ -81,8 +87,14 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
     cell: PeriodCellData;
   } | null>(null);
 
+  // Substitute modal state
+  const [isSubstituteModalOpen, setIsSubstituteModalOpen] = useState(false);
+  const [substituteTargetSchedule, setSubstituteTargetSchedule] = useState<TeacherSubjectSchedule | null>(null);
+  const [substituteTargetExisting, setSubstituteTargetExisting] = useState<ScheduleSubstitution | null>(null);
+
   // Storage subscriptions
   const [teachers, setTeachers] = useState(() => StorageService.getTeachers().filter(t => t.status === 'Active'));
+  const [employees, setEmployees] = useState(() => StorageService.getEmployees().filter(e => e.status === 'Active'));
   const [subjectSchedules, setSubjectSchedules] = useState(() => StorageService.getSubjectSchedules().filter(s => s.isActive));
   const [periods, setPeriods] = useState(() => StorageService.getPeriods().sort((a, b) => a.periodNumber - b.periodNumber));
   const [attendance, setAttendance] = useState(() => StorageService.getAttendance());
@@ -92,6 +104,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
+      setEmployees(StorageService.getEmployees().filter(e => e.status === 'Active'));
       setSubjectSchedules(StorageService.getSubjectSchedules().filter(s => s.isActive));
       setPeriods(StorageService.getPeriods().sort((a, b) => a.periodNumber - b.periodNumber));
       setAttendance(StorageService.getAttendance());
@@ -281,6 +294,8 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           }
         }
 
+        const subst = StorageService.findSubstitution(sched.id, selectedDate);
+
         return {
           period,
           schedule: sched,
@@ -289,7 +304,8 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           checkInTime: attRec?.checkInTime,
           checkOutTime: attRec?.checkOutTime,
           lateMinutes: attRec?.lateMinutes,
-          isCurrentActivePeriod: isCurrentActive
+          isCurrentActivePeriod: isCurrentActive,
+          substitution: subst || undefined
         };
       });
 
@@ -969,10 +985,18 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                                   <span>Active</span>
                                 </span>
                               ) : isAbsent ? (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-rose-800 bg-rose-100/90 px-1.5 py-0.5 rounded border border-rose-300">
-                                  <XCircle className="w-2.5 h-2.5 text-rose-600" />
-                                  <span>Missed</span>
-                                </span>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-rose-800 bg-rose-100/90 px-1.5 py-0.5 rounded border border-rose-300">
+                                    <XCircle className="w-2.5 h-2.5 text-rose-600" />
+                                    <span>{cell.substitution ? (isKhmer ? 'មានគ្រូជំនួស' : 'Sub Assigned') : (isKhmer ? 'អវត្តមាន' : 'Absent')}</span>
+                                  </span>
+                                  {cell.substitution && (
+                                    <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold text-purple-800 bg-purple-100 px-1 py-0.5 rounded border border-purple-200 truncate max-w-[90px]" title={`Covered by ${cell.substitution.substituteName}`}>
+                                      <UserCheck className="w-2.5 h-2.5 text-purple-600 shrink-0" />
+                                      <span className="truncate">{cell.substitution.substituteName}</span>
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                                   <Clock className="w-2.5 h-2.5 text-slate-400" />
@@ -1145,8 +1169,71 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                 </div>
               </div>
 
+              {/* Substitution Details if active */}
+              {selectedCellModal.cell.substitution && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl text-xs space-y-2">
+                  <div className="flex items-center justify-between text-purple-900 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <UserCheck className="w-4 h-4 text-purple-600" />
+                      <span>{isKhmer ? 'ការចាត់តាំងបង្រៀនជំនួស (គ្រូដើមអវត្តមាន)' : 'Substitute Coverage (Absent Teacher)'}</span>
+                    </span>
+                    <span className="text-[10px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-semibold">
+                      {selectedCellModal.cell.substitution.assignees?.length || 1} {isKhmer ? 'នាក់' : 'assignee(s)'}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedCellModal.cell.substitution.assignees && selectedCellModal.cell.substitution.assignees.length > 0 ? (
+                      selectedCellModal.cell.substitution.assignees.map((a, i) => (
+                        <div key={a.id || i} className="p-2 bg-white rounded-xl border border-purple-100 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-bold text-slate-800 block">{a.substituteName}</span>
+                            <span className="text-[10px] text-slate-500">
+                              {a.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក (Staff)' : 'Staff Member') : (isKhmer ? 'គ្រូបង្រៀន' : 'Teacher')} • {a.startTime} – {a.endTime} ({a.allocatedHours} hrs)
+                            </span>
+                          </div>
+                          <span className="font-mono font-bold text-purple-800 text-xs">
+                            {a.substituteType === 'employee'
+                              ? `${isKhmer ? 'ឈ្នួលកំណត់៖' : 'Wage:'} $${Number(a.manualGrossWage ?? 0).toFixed(2)}`
+                              : `${isKhmer ? 'ឈ្នួល៖' : 'Wage:'} $${Number(a.calculatedWage ?? 0).toFixed(2)}`}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-2 bg-white rounded-xl border border-purple-100 flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-800">{selectedCellModal.cell.substitution.substituteName}</span>
+                        <span className="text-purple-700 font-bold text-[11px]">
+                          {selectedCellModal.cell.substitution.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Quick Check-In / Check-Out Actions for this class */}
               <div className="pt-2 flex flex-col gap-2">
+                {/* Admin Assign Substitute Button */}
+                {currentUser && currentUser.role !== 'teacher' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const s = selectedCellModal.cell.schedule!;
+                      setSubstituteTargetSchedule(s);
+                      setSubstituteTargetExisting(selectedCellModal.cell.substitution || StorageService.findSubstitution(s.id, selectedDate) || null);
+                      setSelectedCellModal(null);
+                      setIsSubstituteModalOpen(true);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs border border-purple-200 transition-all cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4 text-purple-600" />
+                    <span>
+                      {selectedCellModal.cell.substitution
+                        ? (isKhmer ? 'កែប្រែការចាត់តាំងជំនួស (Edit Substitutes)' : 'Edit Substitute Assignment')
+                        : (isKhmer ? 'ចាត់តាំងគ្រូ ឬបុគ្គលិកជំនួស (អវត្តមាន)' : 'Assign Teacher or Staff Substitute')}
+                    </span>
+                  </button>
+                )}
+
                 {!selectedCellModal.cell.checkInTime ? (
                   <button
                     onClick={() => handlePerformCheckIn(selectedCellModal.teacher, selectedCellModal.cell.schedule!)}
@@ -1200,6 +1287,27 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
 
           </div>
         </div>
+      )}
+
+      {/* Schedule Substitute Assignment Modal */}
+      {isSubstituteModalOpen && (
+        <ScheduleSubstituteModal
+          isOpen={isSubstituteModalOpen}
+          onClose={() => {
+            setIsSubstituteModalOpen(false);
+            setSubstituteTargetSchedule(null);
+            setSubstituteTargetExisting(null);
+          }}
+          schedule={substituteTargetSchedule}
+          selectedDate={selectedDate}
+          teachers={teachers}
+          employees={employees}
+          currentUser={currentUser}
+          existingSubstitution={substituteTargetExisting}
+          onSuccess={() => {
+            setAttendance(StorageService.getAttendance());
+          }}
+        />
       )}
 
     </div>
