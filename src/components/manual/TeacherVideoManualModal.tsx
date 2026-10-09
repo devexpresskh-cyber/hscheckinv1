@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import {
   Download,
@@ -18,9 +18,10 @@ import {
   Sparkles,
   MousePointer,
   Film,
-  ExternalLink,
   RotateCcw,
-  Volume2
+  Volume2,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { RealInterfaceActionWalkthrough } from './RealInterfaceActionWalkthrough.tsx';
 
@@ -49,9 +50,36 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
   const { isKhmer } = useLanguage();
   const [activeTab, setActiveTab] = useState<'live_action' | 'video_player' | 'syllabus'>('live_action');
   const [downloadStarted, setDownloadStarted] = useState<boolean>(false);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Esc key listener to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
+
+  const toggleBrowserFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          setIsBrowserFullscreen(true);
+        }).catch(() => {});
+      } else {
+        document.exitFullscreen().then(() => {
+          setIsBrowserFullscreen(false);
+        }).catch(() => {});
+      }
+    } catch {}
+  };
 
   const chapters: VideoChapter[] = [
     {
@@ -97,21 +125,20 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
     {
       number: '03',
       titleEn: 'Module 3: Weekly Schedule & Mobile Timeline Calendar',
-      titleKm: 'ផ្នែកទី ៣៖ កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍ និងប្រតិទិន Timeline',
+      titleKm: 'ផ្នែកទី ៣៖ កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍ និងខែ (តាមរូបភាពថ្មី)',
       timeRange: '00:19 - 00:29',
       duration: '10s',
       icon: Calendar,
       keyPointsEn: [
-        'Interactive Month header dropdown (e.g., January ∨) to expand mini monthly picker',
-        'Horizontal 7-day strip (Mon-Sat); active day highlighted in vibrant blue pill',
-        'Timeline event cards with period badges, subject names, rooms & bell times',
-        'Tap "..." on any class card for quick room and schedule options'
+        'Midnight Navy Calendar with Month Capsule (< March 2026 >)',
+        'Connected capsule date range (14 to 18) with circular endpoints',
+        'Colored status circles: Emerald green (verified) & warm orange (ongoing)',
+        'Curved white bottom sheet with List View & Timeline hourly slots'
       ],
       keyPointsKm: [
-        'ចុចលើឈ្មោះខែ (January ∨) ដើម្បីពន្លាតប្រតិទិនប្រចាំខែតូច និងជ្រើសថ្ងៃ',
-        'របារថ្ងៃប្រចាំសប្តាហ៍ ៧ថ្ងៃ ជាមួយប៊ូតុងរំលេចពណ៌ខៀវលើថ្ងៃដែលបានជ្រើស',
-        'តារាង Timeline បង្ហាញម៉ោងច្បាស់លាស់ កាតព័ត៌មានមុខវិជ្ជា និងបន្ទប់សិក្សា',
-        'ចុចសញ្ញាចុចបី "..." លើកាតនីមួយៗដើម្បីមើលព័ត៌មានលម្អិតបន្ថែម'
+        'ប្រតិទិនខៀវចាស់ Midnight Navy ជាមួយរបារជ្រើសខែ (< March 2026 >)',
+        'របារកាលវិភាគភ្ជាប់គ្នា (១៤ ដល់ ១៨) ជាមួយរង្វង់ពណ៌បៃតង និងទឹកក្រូច',
+        'ផ្ទាំងសខាងក្រោមបង្ហាញកាតម៉ោងបង្រៀន និងតារាងម៉ោង Timeline'
       ]
     },
     {
@@ -137,7 +164,7 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
     {
       number: '05',
       titleEn: 'Module 5: Personal QR Code Badge & Printable Door Sign',
-      titleKm: 'ផ្នែកទី ៥៖ កូដ QR ផ្ទាល់ខ្លួន និងស្លាកបិទទ្វារថ្នាក់រៀន',
+      titleKm: 'ផ្នែកទី ៥៖ កូដ QR ផ្ទាល់ខ្លួន និងស្លាកបិទទ្វារថ្នាក់រៀន A4',
       timeRange: '00:40 - 00:49',
       duration: '9s',
       icon: QrCode,
@@ -218,248 +245,222 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[96vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 font-sans">
+    <div className="fixed inset-0 z-50 w-screen h-screen flex flex-col bg-slate-950 text-white font-sans overflow-hidden select-none animate-in fade-in duration-200">
+      
+      {/* ======================================================== */}
+      {/* TOP SLIM FULLSCREEN CONTROL BAR */}
+      {/* ======================================================== */}
+      <div className="bg-gradient-to-r from-[#071b38] via-[#0b2a5e] to-[#041329] border-b border-blue-900/60 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4 text-xs shrink-0 z-50">
         
-        {/* Top Gradient Banner Header */}
-        <div className="bg-gradient-to-r from-[#071b38] via-[#0b2a5e] to-[#041329] text-white p-4 sm:p-5 relative shrink-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
-                <Video className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/30 text-blue-200 border border-blue-400/30">
-                    Official Video Manual
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                    Real Interface Action
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
-                    Full HD 1080p
-                  </span>
-                </div>
-                <h2 className="text-base sm:text-lg font-black text-white mt-1 leading-tight">
-                  {isKhmer
-                    ? 'វីដេអូណែនាំការប្រើប្រាស់សម្រាប់គ្រូបង្រៀន (សកម្មភាពលើផ្ទាំងកម្មវិធីពិត)'
-                    : 'Teacher Video Manual: Real Actions on Authentic EduTrack Interface'}
-                </h2>
-                <p className="text-xs text-blue-200/90 mt-0.5">
-                  {isKhmer
-                    ? 'ទស្សនាសកម្មភាពចុចប៊ូតុង ស្កេន GPS និងបញ្ចូលកូដ PIN លើផ្ទាំងពិត ឬទាញយកឯកសារ MP4'
-                    : 'Watch real cursor clicks, keypad PIN entries, and GPS attendance on real UI, or download Full HD MP4.'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-              title="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        {/* Left: Branding & Status */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 to-cyan-400 flex items-center justify-center font-black shadow-md shadow-blue-500/25 shrink-0">
+            <Video className="w-4 h-4 text-white" />
           </div>
-
-          {/* Quick Action Bar Inside Header */}
-          <div className="mt-4 pt-3 border-t border-white/15 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs text-slate-300 flex items-center gap-2">
-              <span className="font-bold text-white">Interactive Mode:</span> Active • <span className="font-bold text-white">Resolution:</span> 1920×1080 • <span className="font-bold text-white">Duration:</span> 77 seconds
-            </div>
-
-            <button
-              onClick={handleDownload}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs transition-all shadow-md cursor-pointer ${
-                downloadStarted
-                  ? 'bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-300'
-                  : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white active:scale-95'
-              }`}
-            >
-              <Download className={`w-3.5 h-3.5 ${downloadStarted ? 'animate-bounce' : ''}`} />
-              <span>
-                {downloadStarted
-                  ? (isKhmer ? 'កំពុងទាញយក... (Downloading)' : 'Downloading MP4...')
-                  : (isKhmer ? 'ទាញយកវីដេអូ (Download MP4)' : 'Download MP4 (5 MB)')}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-white text-xs sm:text-sm">
+                {isKhmer ? 'វីដេអូណែនាំការប្រើប្រាស់សម្រាប់គ្រូបង្រៀន' : 'Teacher Video User Manual'}
               </span>
-            </button>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                100% Real Live Interface
+              </span>
+            </div>
+            <span className="text-[10px] text-blue-200/80 font-medium hidden sm:inline-block">
+              {isKhmer
+                ? 'ពេញអេក្រង់ Full Screen • សកម្មភាពជាក់ស្តែងលើប្រព័ន្ធពិត ឬទាញយក MP4'
+                : 'Full Screen Mode • Real Automated Actions on Authentic Interface • 1080p MP4'}
+            </span>
           </div>
         </div>
 
-        {/* View Mode Switcher: Live Action vs MP4 Video Player vs Syllabus */}
-        <div className="bg-slate-100 border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center justify-between gap-2 text-xs font-bold shrink-0 overflow-x-auto">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('live_action')}
-              className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                activeTab === 'live_action'
-                  ? 'bg-blue-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 bg-white/60'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
-              <MousePointer className="w-3.5 h-3.5" />
-              <span>{isKhmer ? 'សកម្មភាពផ្ទាល់លើ Real Interface' : 'Live Real Interface Action'}</span>
-            </button>
+        {/* Center: Mode Switcher Tabs */}
+        <div className="flex items-center bg-slate-900/90 p-1 rounded-2xl border border-blue-900/40 font-bold">
+          <button
+            onClick={() => setActiveTab('live_action')}
+            className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'live_action'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
+            <MousePointer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{isKhmer ? 'សកម្មភាពលើផ្ទាំងពិត (Live Action)' : '100% Real Interface Walkthrough'}</span>
+            <span className="sm:hidden">Live UI</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('video_player')}
-              className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'video_player'
-                  ? 'bg-blue-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 bg-white/60'
-              }`}
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span>{isKhmer ? 'ចាក់វីដេអូ MP4 (1080p Player)' : 'MP4 Video Player'}</span>
-            </button>
+          <button
+            onClick={() => setActiveTab('video_player')}
+            className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'video_player'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Film className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{isKhmer ? 'ចាក់វីដេអូ MP4 (1080p Player)' : 'MP4 Video Player'}</span>
+            <span className="sm:hidden">MP4</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('syllabus')}
-              className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'syllabus'
-                  ? 'bg-blue-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900 bg-white/60'
-              }`}
-            >
-              <span>{isKhmer ? 'មាតិកាទាំង ៧ ជំពូក' : '7 Modules Syllabus'}</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setActiveTab('syllabus')}
+            className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'syllabus'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span className="hidden sm:inline">{isKhmer ? 'មាតិកាទាំង ៧ ជំពូក' : '7 Modules Syllabus'}</span>
+            <span className="sm:hidden">Syllabus</span>
+          </button>
         </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="overflow-y-auto flex-1 bg-slate-900/95 flex flex-col p-2 sm:p-4">
-          
-          {/* TAB 1: Real Interface Video Action Simulator */}
-          {activeTab === 'live_action' && (
-            <div className="flex-1 w-full h-full min-h-[460px]">
-              <RealInterfaceActionWalkthrough
-                initialModule={initialModule}
-                onDownloadRequested={handleDownload}
-              />
-            </div>
-          )}
+        {/* Right: Download, Browser Fullscreen, Close */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownload}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-black text-xs transition-all shadow-md cursor-pointer ${
+              downloadStarted
+                ? 'bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-300'
+                : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white active:scale-95'
+            }`}
+          >
+            <Download className={`w-3.5 h-3.5 ${downloadStarted ? 'animate-bounce' : ''}`} />
+            <span className="hidden sm:inline">
+              {downloadStarted ? (isKhmer ? 'កំពុងទាញយក...' : 'Downloading...') : (isKhmer ? 'ទាញយក MP4' : 'Download MP4')}
+            </span>
+          </button>
 
-          {/* TAB 2: Embedded MP4 Video Player with chapter markers */}
-          {activeTab === 'video_player' && (
-            <div className="flex-1 flex flex-col items-center justify-center space-y-4 max-w-4xl mx-auto w-full p-2">
-              <div className="w-full bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 relative aspect-video flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  src="/downloads/teacher-video-manual.mp4"
-                  controls
-                  playsInline
-                  className="w-full h-full object-contain"
-                  poster=""
-                >
-                  Your browser does not support HTML5 video.
-                </video>
-              </div>
+          <button
+            onClick={toggleBrowserFullscreen}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            title={isBrowserFullscreen ? 'Exit Full Screen' : 'Toggle Full Screen'}
+          >
+            {isBrowserFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
 
-              {/* Fast Jump Chapter Markers */}
-              <div className="w-full bg-slate-800/80 rounded-2xl border border-slate-700 p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs text-slate-300">
-                  <span className="font-bold">{isKhmer ? 'លោតទៅកាន់ជំពូកនីមួយៗ (Chapter Navigation):' : 'Jump to Video Chapters:'}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">1080p Full HD</span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  {[
-                    { label: 'Mod 1: Install', time: 0 },
-                    { label: 'Mod 2: PIN Login', time: 10 },
-                    { label: 'Mod 3: Schedule', time: 19 },
-                    { label: 'Mod 4: GPS Attendance', time: 29 },
-                    { label: 'Mod 5: QR Badge', time: 40 },
-                    { label: 'Mod 6: Leave Form', time: 49 },
-                    { label: 'Mod 7: Wage Ledger', time: 58 }
-                  ].map((ch, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => jumpToVideoTime(ch.time)}
-                      className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[11px] font-bold text-left flex items-center justify-between cursor-pointer border border-slate-700/60"
-                    >
-                      <span>{ch.label}</span>
-                      <span className="font-mono text-[10px] text-slate-400">00:{ch.time < 10 ? `0${ch.time}` : ch.time}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: Syllabus & Chapter Details */}
-          {activeTab === 'syllabus' && (
-            <div className="space-y-4 max-w-4xl mx-auto w-full p-2 bg-slate-50 rounded-2xl">
-              {chapters.map(ch => {
-                const IconComp = ch.icon;
-                return (
-                  <div key={ch.number} className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                          <IconComp className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                              MODULE {ch.number}
-                            </span>
-                            <span className="font-mono text-[10px] text-slate-400">
-                              {ch.timeRange} ({ch.duration})
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-bold text-slate-900 mt-0.5">
-                            {isKhmer ? ch.titleKm : ch.titleEn}
-                          </h4>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-xs space-y-1.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                        {isKhmer ? 'ចំណុចសំខាន់ៗដែលបានបង្ហាញក្នុងវីដេអូ' : 'Key Demonstrations in this Module:'}
-                      </span>
-                      {(isKhmer ? ch.keyPointsKm : ch.keyPointsEn).map((pt, pIdx) => (
-                        <div key={pIdx} className="flex items-start gap-2 text-slate-700">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                          <span>{pt}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-3.5 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 shrink-0">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>EduTrack Faculty Training System • Verified Interactive Resource</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>{isKhmer ? 'ទាញយក MP4' : 'Download Video (MP4)'}</span>
-            </button>
-
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors cursor-pointer"
-            >
-              {isKhmer ? 'បិទ' : 'Close'}
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white transition-colors cursor-pointer"
+            title="Exit Video Manual (ESC)"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
       </div>
+
+      {/* ======================================================== */}
+      {/* MAIN VIEWPORT: 100% FULLSCREEN CONTENT */}
+      {/* ======================================================== */}
+      <div className="flex-1 w-full h-full min-h-0 overflow-hidden relative flex flex-col bg-slate-900">
+        
+        {/* TAB 1: 100% Real Live Interface Walkthrough */}
+        {activeTab === 'live_action' && (
+          <div className="flex-1 w-full h-full min-h-0">
+            <RealInterfaceActionWalkthrough
+              initialModule={initialModule}
+              onDownloadRequested={handleDownload}
+              isFullscreen={isBrowserFullscreen}
+              onToggleFullscreen={toggleBrowserFullscreen}
+              onClose={onClose}
+            />
+          </div>
+        )}
+
+        {/* TAB 2: Fullscreen MP4 Video Player */}
+        {activeTab === 'video_player' && (
+          <div className="flex-1 w-full h-full flex flex-col justify-center items-center p-3 sm:p-6 space-y-4 max-w-5xl mx-auto">
+            <div className="w-full bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 relative aspect-video flex items-center justify-center">
+              <video
+                ref={videoRef}
+                src="/downloads/teacher-video-manual.mp4"
+                controls
+                autoPlay
+                playsInline
+                className="w-full h-full object-contain"
+              >
+                Your browser does not support HTML5 video.
+              </video>
+            </div>
+
+            {/* Quick Seek Chapter Markers */}
+            <div className="w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-4 space-y-2.5">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span className="font-bold">{isKhmer ? 'លោតទៅកាន់ជំពូកនីមួយៗ (Chapter Navigation):' : 'Jump to Video Chapters:'}</span>
+                <span className="text-[10px] text-slate-400 font-mono">1920×1080 Full HD</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                {[
+                  { label: 'Mod 1: Install', time: 0 },
+                  { label: 'Mod 2: PIN Login', time: 10 },
+                  { label: 'Mod 3: Schedule', time: 19 },
+                  { label: 'Mod 4: GPS Attendance', time: 29 },
+                  { label: 'Mod 5: QR Badge', time: 40 },
+                  { label: 'Mod 6: Leave Form', time: 49 },
+                  { label: 'Mod 7: Wage Ledger', time: 58 }
+                ].map((ch, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => jumpToVideoTime(ch.time)}
+                    className="px-3 py-2 rounded-xl bg-slate-950 hover:bg-blue-600 text-slate-300 hover:text-white transition-all text-[11px] font-bold text-left flex items-center justify-between cursor-pointer border border-slate-800"
+                  >
+                    <span>{ch.label}</span>
+                    <span className="font-mono text-[10px] text-slate-400">00:{ch.time < 10 ? `0${ch.time}` : ch.time}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Syllabus & Chapter Review */}
+        {activeTab === 'syllabus' && (
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-4 max-w-4xl mx-auto w-full">
+            {chapters.map(ch => {
+              const IconComp = ch.icon;
+              return (
+                <div key={ch.number} className="bg-slate-900 rounded-3xl border border-slate-800 p-5 sm:p-6 shadow-md space-y-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-blue-600/20 text-cyan-400 border border-blue-500/30 flex items-center justify-center font-bold shrink-0">
+                      <IconComp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold text-blue-400 uppercase bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800">
+                          MODULE {ch.number}
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-400">
+                          {ch.timeRange} ({ch.duration})
+                        </span>
+                      </div>
+                      <h4 className="text-sm sm:text-base font-bold text-white mt-1">
+                        {isKhmer ? ch.titleKm : ch.titleEn}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 text-xs space-y-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      {isKhmer ? 'ចំណុចសំខាន់ៗដែលបានបង្ហាញក្នុងវីដេអូ' : 'Key Demonstrations in this Module:'}
+                    </span>
+                    {(isKhmer ? ch.keyPointsKm : ch.keyPointsEn).map((pt, pIdx) => (
+                      <div key={pIdx} className="flex items-start gap-2 text-slate-300">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <span>{pt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      </div>
+
     </div>
   );
 };
