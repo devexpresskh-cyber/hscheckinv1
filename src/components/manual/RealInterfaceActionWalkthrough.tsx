@@ -37,7 +37,14 @@ import {
   FileCheck,
   Coffee,
   Check,
-  X
+  X,
+  Film,
+  LogIn,
+  LogOut,
+  Globe,
+  Search,
+  ArrowRight,
+  CornerDownLeft
 } from 'lucide-react';
 
 interface ModuleStep {
@@ -55,12 +62,14 @@ interface ModuleStep {
 export const RealInterfaceActionWalkthrough: React.FC<{
   initialModule?: number;
   onDownloadRequested?: () => void;
+  onSwitchToVideoPlayer?: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onClose?: () => void;
 }> = ({
   initialModule = 1,
   onDownloadRequested,
+  onSwitchToVideoPlayer,
   isFullscreen = true,
   onToggleFullscreen,
   onClose
@@ -77,12 +86,18 @@ export const RealInterfaceActionWalkthrough: React.FC<{
   const [isClicking, setIsClicking] = useState<boolean>(false);
 
   // Simulated UI state within walkthrough
+  const [browserUrlText, setBrowserUrlText] = useState<string>('');
+  const [isBrowserFocused, setIsBrowserFocused] = useState<boolean>(false);
+  const [isPageLoaded, setIsPageLoaded] = useState<boolean>(false);
   const [pwaInstalled, setPwaInstalled] = useState<boolean>(false);
   const [pinDigits, setPinDigits] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState<string>('Wed');
   const [selectedClassCard, setSelectedClassCard] = useState<boolean>(false);
   const [bottomTabMode, setBottomTabMode] = useState<'list' | 'timeline'>('list');
+  const [scheduleCheckedIn, setScheduleCheckedIn] = useState<boolean>(false);
+  const [scheduleCheckedOut, setScheduleCheckedOut] = useState<boolean>(false);
   const [checkInDone, setCheckInDone] = useState<boolean>(false);
+  const [kioskCheckedOut, setKioskCheckedOut] = useState<boolean>(false);
   const [doorSignOpen, setDoorSignOpen] = useState<boolean>(false);
   const [leaveSubmitted, setLeaveSubmitted] = useState<boolean>(false);
   const [reportExported, setReportExported] = useState<boolean>(false);
@@ -151,43 +166,65 @@ export const RealInterfaceActionWalkthrough: React.FC<{
   const modulesList = [
     {
       id: 1,
-      titleEn: 'Module 1: App Installation on Mobile & PC (PWA)',
-      titleKm: 'ផ្នែកទី ១៖ ការដំឡើងកម្មវិធី EduTrack លើទូរស័ព្ទ និងកុំព្យូទ័រ',
+      titleEn: 'Module 1: Opening Web Browser, Entering Link & App Installation',
+      titleKm: 'ផ្នែកទី ១៖ ការបើកកម្មវិធីរុករក វាយបញ្ចូលតំណភ្ជាប់ (Web Link) & ដំឡើងកម្មវិធី',
       icon: Smartphone,
       sidebarTab: 'dashboard',
       steps: [
         {
           id: '1-1',
-          timeSec: 2,
-          cursorX: 86,
-          cursorY: 12,
-          actionType: 'hover' as const,
-          titleEn: 'Step 1: Open school web address in browser and locate "Install App"',
-          titleKm: 'ជំហានទី ១៖ បើកកម្មវិធីរុករក រួចរកមើលផ្ទាំង "ដំឡើងកម្មវិធី"',
-          subtitleEn: 'EduTrack is a Progressive Web App (PWA) with instant offline caching.',
-          subtitleKm: 'EduTrack ជា PWA ដំណើរការលឿន និងគាំទ្រការប្រើ Offline គ្មានរបារ Browser។'
+          timeSec: 2.5,
+          cursorX: 50,
+          cursorY: 18,
+          actionType: 'click' as const,
+          titleEn: 'Step 1: Open Chrome / Safari browser and tap the top URL Address Bar',
+          titleKm: 'ជំហានទី ១៖ បើកកម្មវិធីរុករក (Chrome / Safari) រួចចុចលើរបារអាសយដ្ឋាន (URL Bar)',
+          subtitleEn: 'Tapping the top search/URL bar opens the keyboard ready for web address entry.',
+          subtitleKm: 'ចុចលើប្រអប់អាសយដ្ឋានខាងលើ ដើម្បីរៀបចំវាយបញ្ចូលតំណភ្ជាប់គេហទំព័រ។'
         },
         {
           id: '1-2',
           timeSec: 3,
-          cursorX: 86,
-          cursorY: 12,
-          actionType: 'click' as const,
-          titleEn: 'Step 2: Tap "Install App" to launch native installation banner',
-          titleKm: 'ជំហានទី ២៖ ចុចលើ "ដំឡើងកម្មវិធី" ដើម្បីបើកផ្ទាំងដំឡើង',
-          subtitleEn: 'The device prompt asks to add EduTrack MIS to the Home Screen.',
-          subtitleKm: 'ប្រព័ន្ធនឹងបង្ហាញផ្ទាំងសួរដើម្បីបន្ថែម EduTrack ទៅលើ Home Screen។'
+          cursorX: 58,
+          cursorY: 18,
+          actionType: 'type' as const,
+          titleEn: 'Step 2: Type or paste the school portal link: https://edutrack.edu.kh',
+          titleKm: 'ជំហានទី ២៖ វាយបញ្ចូល ឬបិទភ្ជាប់តំណភ្ជាប់សាលា៖ https://edutrack.edu.kh',
+          subtitleEn: 'Enter the exact school domain. Live autocomplete matches EduTrack Academic MIS.',
+          subtitleKm: 'វាយបញ្ចូលអាសយដ្ឋានគេហទំព័ររបស់សាលា ប្រព័ន្ធនឹងបង្ហាញឈ្មោះស្វ័យប្រវត្តិ។'
         },
         {
           id: '1-3',
-          timeSec: 3,
-          cursorX: 58,
-          cursorY: 62,
+          timeSec: 2.5,
+          cursorX: 50,
+          cursorY: 28,
           actionType: 'click' as const,
-          titleEn: 'Step 3: Confirm "Add to Home screen"',
-          titleKm: 'ជំហានទី ៣៖ ចុចយល់ព្រម "Add to Home Screen"',
-          subtitleEn: 'A standalone native app icon is created on the home screen immediately.',
-          subtitleKm: 'រូបតំណាងកម្មវិធីនឹងលេចឡើងលើអេក្រង់ទូរស័ព្ទភ្លាមៗ អាចចុចបើកប្រើបានគ្រប់ពេល។'
+          titleEn: 'Step 3: Tap "Go / Enter" to navigate & load the EduTrack MIS page',
+          titleKm: 'ជំហានទី ៣៖ ចុចប៊ូតុង "Go" ឬ "Enter" ដើម្បីបើកទំព័រប្រព័ន្ធ EduTrack',
+          subtitleEn: 'Browser connects securely via HTTPS and loads the real-time teacher environment.',
+          subtitleKm: 'កម្មវិធីរុករកភ្ជាប់ដោយសុវត្ថិភាព HTTPS និងបង្ហាញទំព័រគ្រប់គ្រងការសិក្សាភ្លាមៗ។'
+        },
+        {
+          id: '1-4',
+          timeSec: 2.5,
+          cursorX: 74,
+          cursorY: 34,
+          actionType: 'click' as const,
+          titleEn: 'Step 4: Tap "Install App" banner or browser menu (⋮) → "Add to Home screen"',
+          titleKm: 'ជំហានទី ៤៖ ចុចលើផ្ទាំង "ដំឡើងកម្មវិធី (Install App)" ឬ Menu (⋮) → Add to Home screen',
+          subtitleEn: 'The device displays the native install prompt to save EduTrack to Home Screen.',
+          subtitleKm: 'ទូរស័ព្ទបង្ហាញផ្ទាំងដំឡើង ដើម្បីដាក់រូបតំណាងកម្មវិធីលើអេក្រង់ដើម។'
+        },
+        {
+          id: '1-5',
+          timeSec: 3,
+          cursorX: 68,
+          cursorY: 68,
+          actionType: 'success' as const,
+          titleEn: 'Step 5: Confirm "Add to Home screen" - 1-tap standalone app ready!',
+          titleKm: 'ជំហានទី ៥៖ ចុចយល់ព្រម "Add to Home Screen" - កម្មវិធីរួចរាល់លើអេក្រង់ទូរស័ព្ទ!',
+          subtitleEn: 'Launch directly from home screen anytime without retyping the URL address bar.',
+          subtitleKm: 'ចុចបើកប្រើលើអេក្រង់ទូរស័ព្ទបានគ្រប់ពេល ដោយមិនបាច់វាយតំណភ្ជាប់ URL ម្តងទៀតឡើយ។'
         }
       ]
     },
@@ -246,14 +283,14 @@ export const RealInterfaceActionWalkthrough: React.FC<{
     },
     {
       id: 3,
-      titleEn: 'Module 3: Weekly & Monthly Schedule Timeline Calendar',
-      titleKm: 'ផ្នែកទី ៣៖ កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍ និងខែ (តាមរូបភាពថ្មី)',
+      titleEn: 'Module 3: Current Schedule Check-In & Check-Out Timeline',
+      titleKm: 'ផ្នែកទី ៣៖ ការស្កេនចូល-ចេញ លើកាលវិភាគបង្រៀនជាក់ស្តែង',
       icon: Calendar,
       sidebarTab: 'monthly_calendar',
       steps: [
         {
           id: '3-1',
-          timeSec: 2,
+          timeSec: 2.5,
           cursorX: 50,
           cursorY: 28,
           actionType: 'hover' as const,
@@ -268,28 +305,72 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           cursorX: 54,
           cursorY: 34,
           actionType: 'click' as const,
-          titleEn: 'Step 2: Tap Wednesday (Day 14) inside the connected capsule',
-          titleKm: 'ជំហានទី ២៖ ចុចលើថ្ងៃពុធ (ទី ១៤) ក្នុងរបារកាលវិភាគ',
-          subtitleEn: 'Day 14 lights up in vibrant solid blue pill.',
-          subtitleKm: 'ថ្ងៃទី ១៤ រំលេចពណ៌ខៀវដិតច្បាស់ងាយស្រួលមើល។'
+          titleEn: 'Step 2: Tap Wednesday (Day 14) to view today\'s current classes',
+          titleKm: 'ជំហានទី ២៖ ចុចលើថ្ងៃពុធ (ទី ១៤) ដើម្បីមើលម៉ោងបង្រៀនថ្ងៃនេះ',
+          subtitleEn: 'Day 14 lights up in vibrant solid blue pill, loading today\'s schedule.',
+          subtitleKm: 'ថ្ងៃទី ១៤ រំលេចពណ៌ខៀវដិតច្បាស់ និងបង្ហាញកាលវិភាគថ្ងៃនេះ។'
         },
         {
           id: '3-3',
+          timeSec: 2.5,
+          cursorX: 50,
+          cursorY: 62,
+          actionType: 'hover' as const,
+          titleEn: 'Step 3: Review current schedule card: CS-201 Data Structures (Room 304)',
+          titleKm: 'ជំហានទី ៣៖ ពិនិត្យកាតម៉ោងបង្រៀនបច្ចុប្បន្ន៖ CS-201 (បន្ទប់ 304 ម៉ោង ០៨:០០ ព្រឹក)',
+          subtitleEn: 'Shows start time 08:00 AM, department, period, and status ready for check-in.',
+          subtitleKm: 'បង្ហាញម៉ោង ០៨:០០ ព្រឹក ដេប៉ាតឺម៉ង់ បន្ទប់ និងប៊ូតុងត្រៀមស្កេនចូល។'
+        },
+        {
+          id: '3-4',
+          timeSec: 3,
+          cursorX: 62,
+          cursorY: 74,
+          actionType: 'click' as const,
+          titleEn: 'Step 4: Tap "Check In Class (ស្កេនចូល)" to start teaching session',
+          titleKm: 'ជំហានទី ៤៖ ចុចប៊ូតុង "ស្កេនចូល (Check In)" ដើម្បីចាប់ផ្តើមបង្រៀន',
+          subtitleEn: 'Locks check-in at 08:00 AM; verifies presence and notifies coordinator.',
+          subtitleKm: 'កត់ត្រាម៉ោងចូល ០៨:០០ ព្រឹក ផ្ទៀងផ្ទាត់វត្តមាន និងផ្ញើដំណឹងភ្លាមៗ។'
+        },
+        {
+          id: '3-5',
           timeSec: 3,
           cursorX: 50,
-          cursorY: 65,
+          cursorY: 74,
+          actionType: 'hover' as const,
+          titleEn: 'Step 5: Session In Progress: Status becomes "IN PROGRESS (កំពុងបង្រៀន)"',
+          titleKm: 'ជំហានទី ៥៖ ម៉ោងបង្រៀនកំពុងដំណើរការ៖ ស្ថានភាពប្តូរទៅ "កំពុងបង្រៀន"',
+          subtitleEn: 'Live elapsed timer counts teaching duration. Button switches to Check Out.',
+          subtitleKm: 'នាឡិការាប់ម៉ោងបង្រៀនជាក់ស្តែង ហើយប៊ូតុងប្តូរទៅជា "ស្កេនចេញ (Check Out)"។'
+        },
+        {
+          id: '3-6',
+          timeSec: 3,
+          cursorX: 62,
+          cursorY: 74,
           actionType: 'click' as const,
-          titleEn: 'Step 3: Review class card: CS-201 Data Structures (Room 304)',
-          titleKm: 'ជំហានទី ៣៖ ពិនិត្យកាតម៉ោងបង្រៀន៖ CS-201 (បន្ទប់ 304 ម៉ោង 08:00)',
-          subtitleEn: 'Curved white sheet displays category tag pills and ONGOING status.',
-          subtitleKm: 'ផ្ទាំងសបង្ហាញស្លាកពណ៌ និងស្ថានភាពកំពុងបង្រៀន (ONGOING)។'
+          titleEn: 'Step 6: Tap "Check Out Class (ស្កេនចេញ)" when period finishes',
+          titleKm: 'ជំហានទី ៦៖ ចុចប៊ូតុង "ស្កេនចេញ (Check Out)" នៅពេលចប់ម៉ោងបង្រៀន',
+          subtitleEn: 'Locks checkout at 09:30 AM (90 mins = 1.5 verified hours calculated).',
+          subtitleKm: 'កត់ត្រាម៉ោងបញ្ចប់ ០៩:៣០ ព្រឹក (៩០ នាទី = ១.៥ ម៉ោងបង្រៀនគណនាចូលប្រាក់ឈ្នួល)។'
+        },
+        {
+          id: '3-7',
+          timeSec: 3,
+          cursorX: 50,
+          cursorY: 78,
+          actionType: 'success' as const,
+          titleEn: 'Step 7: Session Completed! Verified Wage Hours Logged to Ledger',
+          titleKm: 'ជំហានទី ៧៖ បញ្ចប់ម៉ោងបង្រៀនជោគជ័យ! ទិន្នន័យម៉ោងត្រូវបានបញ្ចូលក្នុងបញ្ជីប្រាក់ឈ្នួល',
+          subtitleEn: 'Both In & Out timestamps recorded. Telegram broadcast dispatched.',
+          subtitleKm: 'កំណត់ត្រាម៉ោងចូល និងម៉ោងចេញពេញលេញ ជាមួយរបាយការណ៍ម៉ោងបង្រៀន។'
         }
       ]
     },
     {
       id: 4,
       titleEn: 'Module 4: Classroom Attendance & GPS Campus Kiosk',
-      titleKm: 'ផ្នែកទី ៤៖ វត្តមានចូលបង្រៀន & ផ្ទៀងផ្ទាត់ GPS បរិវេណសាលា',
+      titleKm: 'ផ្នែកទី ៤៖ វត្តមានចូល-ចេញ & ផ្ទៀងផ្ទាត់ GPS បរិវេណសាលា',
       icon: MapPin,
       sidebarTab: 'kiosk',
       steps: [
@@ -319,7 +400,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           id: '4-3',
           timeSec: 2.5,
           cursorX: 50,
-          cursorY: 72,
+          cursorY: 64,
           actionType: 'click' as const,
           titleEn: 'Step 3: Click "CHECK IN (ចូលបង្រៀន)" button',
           titleKm: 'ជំហានទី ៣៖ ចុចប៊ូតុង "CHECK IN (ចូលបង្រៀន)"',
@@ -330,12 +411,34 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           id: '4-4',
           timeSec: 2.5,
           cursorX: 50,
-          cursorY: 72,
-          actionType: 'success' as const,
+          cursorY: 64,
+          actionType: 'hover' as const,
           titleEn: 'Step 4: Attendance confirmed & Telegram notification sent!',
           titleKm: 'ជំហានទី ៤៖ កត់ត្រាវត្តមានជោគជ័យ & ផ្ញើដំណឹងស្វ័យប្រវត្តិទៅ Telegram!',
           subtitleEn: 'School administration and faculty channel receive instant proof.',
           subtitleKm: 'គណៈគ្រប់គ្រង និងក្រុមការងារសាលាទទួលបានសារដំណឹងតាម Telegram ភ្លាមៗ។'
+        },
+        {
+          id: '4-5',
+          timeSec: 3,
+          cursorX: 50,
+          cursorY: 70,
+          actionType: 'click' as const,
+          titleEn: 'Step 5: End of class: Click "CHECK OUT (បញ្ចប់ម៉ោងបង្រៀន)"',
+          titleKm: 'ជំហានទី ៥៖ ចប់ម៉ោងបង្រៀន៖ ចុចប៊ូតុង "CHECK OUT (បញ្ចប់ម៉ោង)"',
+          subtitleEn: 'Clock out timestamp logged at 09:30 AM (1.5 verified teaching hours).',
+          subtitleKm: 'កត់ត្រាម៉ោងចេញនៅម៉ោង ០៩:៣០ ព្រឹក (១.៥ ម៉ោងបង្រៀនត្រូវបានបញ្ជាក់)។'
+        },
+        {
+          id: '4-6',
+          timeSec: 3,
+          cursorX: 50,
+          cursorY: 70,
+          actionType: 'success' as const,
+          titleEn: 'Step 6: Class completed! Verified hours logged to wage payroll',
+          titleKm: 'ជំហានទី ៦៖ បញ្ចប់ម៉ោងបង្រៀន! ម៉ោងជាក់ស្តែងបញ្ចូលក្នុងបញ្ជីប្រាក់ឈ្នួល',
+          subtitleEn: 'Total duration (92 mins) synced to monthly faculty salary report.',
+          subtitleKm: 'រយៈពេលសរុប (៩២ នាទី) ត្រូវបានធ្វើសមកាលកម្មទៅរបាយការណ៍ប្រាក់បៀវត្ស។'
         }
       ]
     },
@@ -405,10 +508,10 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           cursorX: 50,
           cursorY: 52,
           actionType: 'type' as const,
-          titleEn: 'Step 2: Select Leave Type (Sick Leave) & Dates (Jan 16-17)',
-          titleKm: 'ជំហានទី ២៖ ជ្រើសប្រភេទច្បាប់ (ច្បាប់ឈឺ) និងកាលបរិច្ឆេទ (១៦-១៧ មករា)',
-          subtitleEn: 'Input reason note: "Doctor medical checkup and rest".',
-          subtitleKm: 'បញ្ចូលមូលហេតុ៖ "ពិនិត្យសុខភាពតាមវេជ្ជបញ្ជា និងសម្រាកព្យាបាល"។'
+          titleEn: 'Step 2: Select Duration Mode: Hourly (2.0 hrs: 08:00-10:00) or Full Days',
+          titleKm: 'ជំហានទី ២៖ ជ្រើសរើសទម្រង់សុំច្បាប់៖ ជាម៉ោង (២ ម៉ោង៖ ០៨:០០-១០:០០) ឬជាថ្ងៃពេញ',
+          subtitleEn: 'Supports flexible partial-day hour leaves matching specific class periods.',
+          subtitleKm: 'គាំទ្រការសុំច្បាប់ជាម៉ោងបត់បែន ស្របតាមវេនម៉ោងបង្រៀនជាក់ស្តែង។'
         },
         {
           id: '6-3',
@@ -483,9 +586,23 @@ export const RealInterfaceActionWalkthrough: React.FC<{
         playSfx('click');
         setTimeout(() => setIsClicking(false), 200);
 
-        if (currentModule === 1 && stepIndex === 1) {
+        if (currentModule === 1 && stepIndex === 0) {
+          setIsBrowserFocused(true);
+          setBrowserUrlText('');
+          setIsPageLoaded(false);
           setPwaInstalled(false);
+        } else if (currentModule === 1 && stepIndex === 1) {
+          setIsBrowserFocused(true);
+          setBrowserUrlText('https://edutrack.edu.kh');
+          playSfx('key');
         } else if (currentModule === 1 && stepIndex === 2) {
+          setIsBrowserFocused(false);
+          setBrowserUrlText('https://edutrack.edu.kh');
+          setIsPageLoaded(true);
+          playSfx('success');
+        } else if (currentModule === 1 && stepIndex === 3) {
+          playSfx('click');
+        } else if (currentModule === 1 && stepIndex === 4) {
           setPwaInstalled(true);
           playSfx('success');
         } else if (currentModule === 2 && stepIndex === 1) {
@@ -498,8 +615,17 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           setSelectedDay('Wed');
         } else if (currentModule === 3 && stepIndex === 2) {
           setSelectedClassCard(true);
+        } else if (currentModule === 3 && stepIndex === 3) {
+          setScheduleCheckedIn(true);
+          playSfx('success');
+        } else if (currentModule === 3 && stepIndex === 5) {
+          setScheduleCheckedOut(true);
+          playSfx('success');
         } else if (currentModule === 4 && stepIndex === 2) {
           setCheckInDone(true);
+          playSfx('success');
+        } else if (currentModule === 4 && stepIndex === 4) {
+          setKioskCheckedOut(true);
           playSfx('success');
         } else if (currentModule === 5 && stepIndex === 1) {
           setDoorSignOpen(true);
@@ -535,13 +661,23 @@ export const RealInterfaceActionWalkthrough: React.FC<{
   }, [isPlaying, currentModule, stepIndex, playbackSpeed, interactiveMode]);
 
   const resetModuleStates = (modId: number) => {
-    if (modId === 1) setPwaInstalled(false);
+    if (modId === 1) {
+      setPwaInstalled(false);
+      setBrowserUrlText('');
+      setIsBrowserFocused(false);
+      setIsPageLoaded(false);
+    }
     if (modId === 2) setPinDigits([]);
     if (modId === 3) {
-      setSelectedDay('Mon');
+      setSelectedDay('Wed');
       setSelectedClassCard(false);
+      setScheduleCheckedIn(false);
+      setScheduleCheckedOut(false);
     }
-    if (modId === 4) setCheckInDone(false);
+    if (modId === 4) {
+      setCheckInDone(false);
+      setKioskCheckedOut(false);
+    }
     if (modId === 5) setDoorSignOpen(false);
     if (modId === 6) setLeaveSubmitted(false);
     if (modId === 7) setReportExported(false);
@@ -638,6 +774,30 @@ export const RealInterfaceActionWalkthrough: React.FC<{
             </div>
           )}
 
+          {/* Switch to Pre-recorded 1080p MP4 */}
+          {onSwitchToVideoPlayer && (
+            <button
+              onClick={onSwitchToVideoPlayer}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition-colors border border-white/10 cursor-pointer"
+              title="Watch Recorded 1080p MP4 Video"
+            >
+              <Film className="w-3.5 h-3.5 text-cyan-300" />
+              <span>MP4 Video</span>
+            </button>
+          )}
+
+          {/* Download 1080p MP4 Button */}
+          {onDownloadRequested && (
+            <button
+              onClick={onDownloadRequested}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+              title="Download 1080p MP4 Video Manual"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">{isKhmer ? 'ទាញយក MP4' : 'Download MP4'}</span>
+            </button>
+          )}
+
           {/* Fullscreen & Close button */}
           <div className="flex items-center gap-1.5 border-l border-white/15 pl-3">
             {onToggleFullscreen && (
@@ -711,58 +871,312 @@ export const RealInterfaceActionWalkthrough: React.FC<{
         <main className="flex-1 bg-slate-950/60 overflow-y-auto p-3 sm:p-6 flex flex-col justify-center items-center relative">
           
           {/* ======================================================== */}
-          {/* MODULE 1: PWA Installation View */}
+          {/* MODULE 1: Real Web Browser URL Entry & PWA Installation */}
           {/* ======================================================== */}
           {currentModule === 1 && (
-            <div className="w-full max-w-xl bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 sm:p-8 space-y-6 text-slate-900 animate-in zoom-in-95">
-              <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-blue-600 to-cyan-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-blue-500/30">
-                <Smartphone className="w-8 h-8" />
-              </div>
-              <div className="text-center space-y-1">
-                <h3 className="text-lg sm:text-xl font-black text-slate-900">
-                  {isKhmer ? 'ដំឡើងកម្មវិធី EduTrack លើទូរស័ព្ទ និងកុំព្យូទ័រ' : 'Install EduTrack MIS on Home Screen'}
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  {isKhmer
-                    ? 'ដំណើរការពេញអេក្រង់ គ្មានរបារ Browser ជាមួយការទាញទិន្នន័យក្រៅបណ្តាញ Offline'
-                    : '1-tap native full-screen experience with zero browser address bars and offline caching.'}
-                </p>
-              </div>
-
-              {/* Real PWA Install Banner Simulation */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 text-white border border-slate-700 space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center font-black">
-                    E
+            <div className="w-full max-w-xl bg-slate-900 rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col text-slate-100 animate-in zoom-in-95">
+              
+              {/* Top Browser Bar: Window Controls + Browser Tab */}
+              <div className="bg-slate-950 px-4 pt-3 pb-2 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
+                    <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
                   </div>
-                  <div>
-                    <div className="text-xs font-bold">EduTrack Faculty Portal</div>
-                    <div className="text-[10px] text-slate-400">edutrack.school.edu • Progressive Web App (PWA)</div>
+                  {/* Browser Tab */}
+                  <div className="ml-3 px-3 py-1 bg-slate-900 rounded-t-xl text-[11px] font-bold text-slate-200 border-t border-x border-slate-800 flex items-center gap-2">
+                    <div className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-black">
+                      E
+                    </div>
+                    <span className="truncate max-w-[140px] sm:max-w-[200px]">
+                      {isPageLoaded ? 'EduTrack Academic MIS' : 'New Tab'}
+                    </span>
+                    <span className="text-slate-500 hover:text-white cursor-pointer ml-1">×</span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-300">
-                  {isKhmer
-                    ? 'បន្ថែមកម្មវិធីទៅលើផ្ទាំងទូរស័ព្ទដើម្បីចូលមើលកាលវិភាគ និងស្កេនវត្តមានបានលឿន?'
-                    : 'Add application to home screen for instant 1-tap faculty attendance and schedule?'}
-                </p>
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                  <button className="px-3 py-1.5 rounded-xl text-xs text-slate-400">Cancel</button>
-                  <button
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all shadow-md ${
-                      pwaInstalled ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-blue-600 text-white'
-                    }`}
-                  >
-                    {pwaInstalled ? '✓ Added to Home Screen' : 'Add to Home screen'}
-                  </button>
+
+                <div className="text-[10px] text-slate-500 font-mono hidden sm:inline-block">
+                  Chrome / Safari
                 </div>
               </div>
 
-              {pwaInstalled && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{isKhmer ? 'ដំឡើងជោគជ័យ! កម្មវិធីរួចរាល់លើ Home Screen' : 'Installed successfully! Icon created on Home Screen'}</span>
+              {/* Browser Navigation & Address (URL) Bar */}
+              <div className="bg-slate-900 px-3 sm:px-4 py-2.5 border-b border-slate-800 flex items-center gap-2">
+                <div className="flex items-center gap-1 text-slate-400">
+                  <button className="p-1 hover:text-white rounded transition-colors text-xs cursor-pointer">‹</button>
+                  <button className="p-1 hover:text-white rounded transition-colors text-xs cursor-pointer">›</button>
+                  <button className="p-1 hover:text-white rounded transition-colors text-xs cursor-pointer">↻</button>
+                </div>
+
+                {/* THE ACTUAL URL ADDRESS BAR INPUT */}
+                <div
+                  onClick={() => {
+                    if (interactiveMode) {
+                      setIsBrowserFocused(true);
+                      setBrowserUrlText('https://edutrack.edu.kh');
+                      setIsPageLoaded(true);
+                      playSfx('key');
+                    }
+                  }}
+                  className={`flex-1 h-10 px-3 rounded-2xl flex items-center justify-between text-xs transition-all cursor-pointer ${
+                    stepIndex <= 1
+                      ? 'bg-slate-950 border-2 border-cyan-500 shadow-md ring-2 ring-cyan-500/20'
+                      : 'bg-slate-950 border border-slate-700/80'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-1 overflow-hidden">
+                    {stepIndex >= 2 ? (
+                      <span className="text-emerald-400 flex items-center gap-1 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">
+                        <Lock className="w-3 h-3 text-emerald-400" />
+                        <span className="hidden sm:inline">Secure</span>
+                      </span>
+                    ) : (
+                      <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    )}
+
+                    {/* Typed Web Address */}
+                    {stepIndex === 0 ? (
+                      <span className="text-slate-400 flex items-center gap-1 truncate font-mono text-xs">
+                        <span>Search or enter website address...</span>
+                        <span className="w-1.5 h-4 bg-cyan-400 animate-pulse inline-block" />
+                      </span>
+                    ) : (
+                      <span className="text-white font-mono font-bold flex items-center gap-0.5 truncate text-xs">
+                        <span className="text-slate-400">https://</span>
+                        <span className="text-cyan-300">edutrack.edu.kh</span>
+                        {stepIndex === 1 && (
+                          <span className="w-1.5 h-4 bg-cyan-400 animate-pulse inline-block ml-0.5" />
+                        )}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0 ml-1">
+                    {stepIndex >= 1 && (
+                      <span className="p-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold px-2 flex items-center gap-1">
+                        <span>Go</span>
+                        <CornerDownLeft className="w-3 h-3" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-slate-400 hover:text-white cursor-pointer px-1 text-sm font-bold">
+                  ⋮
+                </div>
+              </div>
+
+              {/* Progress Sweep Bar when Navigating */}
+              {stepIndex >= 2 && !pwaInstalled && (
+                <div className="w-full h-0.5 bg-blue-900/50 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600 animate-pulse w-full" />
                 </div>
               )}
+
+              {/* Main In-Browser Viewport */}
+              <div className="bg-slate-950 p-4 sm:p-6 min-h-[340px] flex flex-col justify-between relative overflow-hidden">
+                
+                {/* STATE A: Pre-navigation / Entering Link in Browser */}
+                {stepIndex < 2 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3 py-4">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 text-cyan-400 flex items-center justify-center shadow-lg">
+                      <Search className="w-7 h-7 animate-pulse" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-white">
+                        {isKhmer ? 'វាយបញ្ចូលតំណភ្ជាប់សាលាលើ Web Browser' : 'Enter Official School Link in Browser'}
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-sm">
+                        {isKhmer
+                          ? 'បើកកម្មវិធី Chrome ឬ Safari រួចវាយ https://edutrack.edu.kh លើរបារអាសយដ្ឋាន'
+                          : 'Open Chrome or Safari, tap top address bar and type https://edutrack.edu.kh'}
+                      </p>
+                    </div>
+
+                    {/* Interactive Teacher Practice Controls */}
+                    <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+                      <button
+                        onClick={() => {
+                          setIsBrowserFocused(true);
+                          setBrowserUrlText('https://edutrack.edu.kh');
+                          setIsPageLoaded(false);
+                          setStepIndex(1);
+                          playSfx('key');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600 text-cyan-300 hover:text-white border border-blue-500/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <span>📋</span>
+                        <span>{isKhmer ? 'បិទភ្ជាប់តំណភ្ជាប់ (Paste Link)' : 'Paste School Link'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsBrowserFocused(true);
+                          setBrowserUrlText('https://edutrack.edu.kh');
+                          setIsPageLoaded(true);
+                          setStepIndex(2);
+                          playSfx('success');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+                      >
+                        <CornerDownLeft className="w-3.5 h-3.5" />
+                        <span>{isKhmer ? 'ចុច Enter / Go ដើម្បីបើក' : 'Press Enter / Go'}</span>
+                      </button>
+                    </div>
+
+                    {/* Simulated Mobile Keyboard Quick-Keys */}
+                    <div className="p-2 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-1.5 text-[10px] text-slate-300 font-mono">
+                      <span className="text-slate-500 text-[9px] mr-1">Quick:</span>
+                      {['https://', 'edutrack', '.edu.kh', 'Enter ↵'].map((keyText, kIdx) => (
+                        <button
+                          key={kIdx}
+                          onClick={() => {
+                            setIsBrowserFocused(true);
+                            setBrowserUrlText('https://edutrack.edu.kh');
+                            if (keyText.includes('Enter')) {
+                              setIsPageLoaded(true);
+                              setStepIndex(2);
+                              playSfx('success');
+                            } else {
+                              setStepIndex(1);
+                              playSfx('key');
+                            }
+                          }}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-blue-600 hover:text-white transition-colors cursor-pointer border border-slate-700/60 font-semibold"
+                        >
+                          {keyText}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Autocomplete Link Suggestion Pill */}
+                    {stepIndex === 1 && (
+                      <div
+                        onClick={() => {
+                          setIsPageLoaded(true);
+                          setStepIndex(2);
+                          playSfx('success');
+                        }}
+                        className="w-full max-w-md p-3 rounded-2xl bg-slate-900 border-2 border-blue-500/80 text-left flex items-center justify-between shadow-xl animate-in slide-in-from-top-2 cursor-pointer hover:bg-slate-850"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shrink-0">
+                            E
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-white">EduTrack Academic MIS</div>
+                            <div className="text-[10px] text-cyan-400 font-mono">https://edutrack.edu.kh</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-1 rounded-lg flex items-center gap-1">
+                          <span>Visit / Go</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  
+                  /* STATE B: EduTrack Web App Loaded in Browser */
+                  <div className="flex-1 flex flex-col justify-between space-y-4 animate-in fade-in">
+                    
+                    {/* EduTrack Portal Web Header inside Browser */}
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-blue-950 border border-blue-900/60 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shadow-md">
+                          E
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white leading-tight">EduTrack Faculty Portal</div>
+                          <div className="text-[10px] text-slate-400">https://edutrack.edu.kh • Active</div>
+                        </div>
+                      </div>
+
+                      {/* Header Install Button Badge */}
+                      <div
+                        onClick={() => {
+                          if (interactiveMode) setPwaInstalled(true);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          stepIndex === 3
+                            ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white ring-2 ring-cyan-400 scale-105 shadow-md shadow-blue-500/30 animate-pulse'
+                            : 'bg-blue-600/30 text-cyan-300 border border-blue-500/40 hover:bg-blue-600 hover:text-white'
+                        }`}
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>{pwaInstalled ? '✓ Installed' : 'Install App'}</span>
+                      </div>
+                    </div>
+
+                    {/* In-Browser In-App Welcome & Install Prompt Banner */}
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">
+                            PWA HOME SCREEN ACCESS
+                          </span>
+                          <h4 className="text-sm font-black text-white">
+                            {isKhmer ? 'ដំឡើង EduTrack លើអេក្រង់ទូរស័ព្ទ (Home Screen)' : 'Add EduTrack to Home Screen?'}
+                          </h4>
+                          <p className="text-xs text-slate-400">
+                            {isKhmer
+                              ? 'បើកប្រើប្រាស់ភ្លាមៗ គ្មានរបារ Browser មិនចាំបាច់វាយ Link ម្តងទៀតទេ'
+                              : 'Fast 1-tap full-screen access without retyping the browser web link.'}
+                          </p>
+                        </div>
+                        <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center text-lg shrink-0">
+                          📲
+                        </div>
+                      </div>
+
+                      {/* Browser Install Action Buttons */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                        <span className="text-xs text-slate-500">Not now</span>
+                        <button
+                          onClick={() => {
+                            if (interactiveMode) {
+                              setPwaInstalled(true);
+                              playSfx('success');
+                            }
+                          }}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md cursor-pointer ${
+                            pwaInstalled
+                              ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
+                              : stepIndex >= 3
+                              ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white ring-2 ring-cyan-300 scale-105'
+                              : 'bg-blue-600 hover:bg-blue-500 text-white'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{pwaInstalled ? '✓ Added to Home Screen' : 'Add to Home Screen (ដំឡើង)'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Installed Success Confirmation */}
+                    {pwaInstalled && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 text-xs font-bold flex items-center justify-between animate-in zoom-in-95">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>
+                            {isKhmer
+                              ? 'ដំឡើងជោគជ័យ! រូបតំណាង EduTrack បានបង្កើតលើ Home Screen'
+                              : 'Standalone App Icon Created! Launch directly without typing URL.'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-600/50">
+                          PWA Ready
+                        </span>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+
             </div>
           )}
 
@@ -910,10 +1324,33 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                 </div>
 
                 {/* Class Card */}
-                <div className="bg-white border border-slate-200 p-3.5 rounded-2xl shadow-xs space-y-2.5">
+                <div
+                  onClick={() => {
+                    if (interactiveMode) {
+                      if (!scheduleCheckedIn) {
+                        setScheduleCheckedIn(true);
+                        playSfx('success');
+                      } else if (!scheduleCheckedOut) {
+                        setScheduleCheckedOut(true);
+                        playSfx('success');
+                      }
+                    }
+                  }}
+                  className={`bg-white border p-3.5 rounded-2xl shadow-xs space-y-2.5 transition-all ${
+                    scheduleCheckedOut
+                      ? 'border-emerald-300 bg-emerald-50/20'
+                      : scheduleCheckedIn
+                      ? 'border-cyan-400 ring-2 ring-cyan-200/50 bg-gradient-to-br from-white via-cyan-50/20 to-blue-50/30'
+                      : 'border-slate-200'
+                  }`}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xs">
+                      <div
+                        className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs text-white ${
+                          scheduleCheckedOut ? 'bg-emerald-600' : 'bg-blue-600'
+                        }`}
+                      >
                         SV
                       </div>
                       <div>
@@ -921,16 +1358,98 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                         <div className="text-[10px] text-slate-400 mt-0.5">08:00 - 09:30 AM • Year 2</div>
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200">
-                      ONGOING
-                    </span>
+
+                    {/* Dynamic Status Badge */}
+                    {scheduleCheckedOut ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span>{isKhmer ? 'បានបញ្ចប់' : 'COMPLETED'}</span>
+                      </span>
+                    ) : scheduleCheckedIn ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50 text-cyan-800 border border-cyan-300 flex items-center gap-1.5 animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        <span>{isKhmer ? 'កំពុងបង្រៀន' : 'IN PROGRESS'}</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200">
+                        {isKhmer ? 'ម៉ោងនេះ' : 'CURRENT'}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-600">Computer Science</span>
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-600">Room 304</span>
                     <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700">Period 1</span>
                   </div>
+
+                  {/* Interactive Check-In / Check-Out Actions Strip */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-[10px] text-slate-500 flex items-center gap-1 font-mono">
+                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>
+                        {scheduleCheckedOut
+                          ? 'In: 08:00 AM • Out: 09:30 AM (1.5h)'
+                          : scheduleCheckedIn
+                          ? 'In: 08:00 AM • Session: 01:28:45'
+                          : isKhmer
+                          ? 'រង់ចាំស្កេនចូលម៉ោងបង្រៀន'
+                          : 'Ready for Faculty Check-In'}
+                      </span>
+                    </div>
+
+                    {!scheduleCheckedIn ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setScheduleCheckedIn(true);
+                          playSfx('success');
+                        }}
+                        className={`px-3 py-1.5 rounded-xl font-black text-[11px] shadow-sm transition-all flex items-center gap-1.5 text-white cursor-pointer ${
+                          stepIndex === 3
+                            ? 'bg-gradient-to-r from-blue-600 to-cyan-600 ring-2 ring-blue-400 scale-105 animate-pulse'
+                            : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500'
+                        }`}
+                      >
+                        <LogIn className="w-3 h-3" />
+                        <span>{isKhmer ? 'ស្កេនចូល (Check In)' : 'Check In Class'}</span>
+                      </button>
+                    ) : !scheduleCheckedOut ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setScheduleCheckedOut(true);
+                          playSfx('success');
+                        }}
+                        className={`px-3 py-1.5 rounded-xl font-black text-[11px] shadow-sm transition-all flex items-center gap-1.5 text-slate-950 cursor-pointer ${
+                          stepIndex === 5
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 ring-2 ring-amber-300 scale-105 animate-pulse'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400'
+                        }`}
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>{isKhmer ? 'ស្កេនចេញ (Check Out)' : 'Check Out Class'}</span>
+                      </button>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>{isKhmer ? 'ស្កេនចេញរួចរាល់' : 'Checked Out'}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Verified Session Summary Notification */}
+                  {scheduleCheckedOut && (
+                    <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-800 font-bold flex items-center justify-between animate-in zoom-in-95">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>1.5 Verified Hours Credited to Payroll</span>
+                      </div>
+                      <span className="bg-white px-2 py-0.5 rounded text-emerald-700 shadow-2xs font-mono">
+                        +$37.50
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -947,7 +1466,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                   <span className="text-xs font-bold text-slate-900">Classroom Check-In Terminal</span>
                 </div>
                 <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
-                  07:58 AM
+                  {kioskCheckedOut ? '09:30 AM' : checkInDone ? '08:45 AM' : '07:58 AM'}
                 </span>
               </div>
 
@@ -971,28 +1490,84 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                 </span>
               </div>
 
-              <button
-                className={`w-full py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 shadow-lg ${
-                  checkInDone
-                    ? 'bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-300'
-                    : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-500/30 active:scale-95'
-                }`}
-              >
-                <UserCheck className="w-5 h-5" />
-                <span>{checkInDone ? '✓ CHECK IN COMPLETED (07:58 AM)' : 'CHECK IN (ចូលបង្រៀន) • 07:58 AM'}</span>
-              </button>
+              {/* Interactive Kiosk Buttons & Active Session State */}
+              <div className="space-y-3">
+                {!checkInDone ? (
+                  <button
+                    onClick={() => {
+                      setCheckInDone(true);
+                      playSfx('success');
+                    }}
+                    className={`w-full py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer ${
+                      stepIndex === 2
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white ring-2 ring-emerald-300 scale-105 animate-pulse shadow-emerald-500/30'
+                        : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-500/30 active:scale-95'
+                    }`}
+                  >
+                    <UserCheck className="w-5 h-5" />
+                    <span>CHECK IN (ចូលបង្រៀន) • 07:58 AM</span>
+                  </button>
+                ) : !kioskCheckedOut ? (
+                  <div className="space-y-2.5">
+                    <div className="p-3 rounded-2xl bg-cyan-50 border border-cyan-200 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 font-bold text-cyan-900">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span>Class Session Active (Started 07:58 AM)</span>
+                      </div>
+                      <span className="font-mono text-cyan-800 bg-white px-2.5 py-1 rounded-lg shadow-2xs font-black">
+                        01:31:12
+                      </span>
+                    </div>
 
-              {checkInDone && (
-                <div className="p-3.5 rounded-2xl bg-blue-50 text-blue-900 border border-blue-200 text-xs font-semibold flex items-center justify-between animate-in slide-in-from-bottom-2">
-                  <div className="flex items-center gap-2">
-                    <Send className="w-4 h-4 text-blue-600" />
-                    <span>Telegram Alert Sent to School Group #Faculty</span>
+                    <button
+                      onClick={() => {
+                        setKioskCheckedOut(true);
+                        playSfx('success');
+                      }}
+                      className={`w-full py-3.5 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer ${
+                        stepIndex === 4
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 ring-2 ring-amber-300 scale-105 animate-pulse shadow-orange-500/20'
+                          : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-orange-500/20 active:scale-95'
+                      }`}
+                    >
+                      <LogOut className="w-5 h-5" />
+                      <span>CHECK OUT (បញ្ចប់ម៉ោងបង្រៀន) • 09:30 AM</span>
+                    </button>
                   </div>
-                  <span className="text-[10px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded shadow-2xs">
-                    Delivered
-                  </span>
-                </div>
-              )}
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-xs font-bold text-emerald-900 space-y-2 animate-in zoom-in-95">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Teaching Session Completed &amp; Verified</span>
+                      </span>
+                      <span className="bg-emerald-600 text-white px-2 py-0.5 rounded text-[10px] font-black">
+                        1.5 Hours
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-emerald-700 font-mono font-normal">
+                      In: 07:58 AM • Out: 09:30 AM • Duration: 92 mins
+                    </div>
+                  </div>
+                )}
+
+                {/* Telegram Alert Notification Status */}
+                {checkInDone && (
+                  <div className="p-3.5 rounded-2xl bg-blue-50 text-blue-900 border border-blue-200 text-xs font-semibold flex items-center justify-between animate-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-2">
+                      <Send className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>
+                        {kioskCheckedOut
+                          ? 'Telegram: Dr. Sovann Checked Out at 09:30 AM (1.5h Logged)'
+                          : 'Telegram: Dr. Sovann Checked In at 07:58 AM (On-Time)'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded shadow-2xs shrink-0">
+                      Delivered
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1055,29 +1630,50 @@ export const RealInterfaceActionWalkthrough: React.FC<{
               </div>
 
               <div className="space-y-3 text-xs">
+                {/* Duration Mode Switcher */}
+                <div>
+                  <label className="text-slate-500 font-bold block mb-1">Duration Mode (ទម្រង់សុំច្បាប់)</label>
+                  <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl">
+                    <span className="py-1 px-2.5 rounded-lg text-[11px] font-bold text-center bg-white text-purple-900 shadow-xs">
+                      ⏱️ By Hours (ជាម៉ោង)
+                    </span>
+                    <span className="py-1 px-2.5 rounded-lg text-[11px] font-medium text-center text-slate-500">
+                      📅 Full Days (ជាថ្ងៃ)
+                    </span>
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-slate-500 font-bold block mb-1">Leave Category</label>
                   <input
                     readOnly
-                    value="Sick Leave (ច្បាប់ឈឺ)"
+                    value="Personal / Doctor Leave (ច្បាប់ផ្ទាល់ខ្លួន)"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">From Date</label>
+                    <label className="text-slate-500 font-bold block mb-1">Date</label>
                     <input
                       readOnly
                       value="16 Jan 2026"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800 text-xs"
                     />
                   </div>
                   <div>
-                    <label className="text-slate-500 font-bold block mb-1">To Date</label>
+                    <label className="text-slate-500 font-bold block mb-1">Hours</label>
                     <input
                       readOnly
-                      value="17 Jan 2026"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800"
+                      value="2.0 hrs"
+                      className="w-full bg-purple-50 border border-purple-200 text-purple-900 font-bold rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 font-bold block mb-1">Time</label>
+                    <input
+                      readOnly
+                      value="08:00 - 10:00"
+                      className="w-full bg-purple-50 border border-purple-200 text-purple-900 font-bold rounded-xl px-3 py-2 text-xs"
                     />
                   </div>
                 </div>
@@ -1085,7 +1681,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                   <label className="text-slate-500 font-bold block mb-1">Reason / Notes</label>
                   <input
                     readOnly
-                    value="Doctor appointment & prescribed medical recovery"
+                    value="Doctor dental appointment (morning period)"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-semibold text-slate-800"
                   />
                 </div>

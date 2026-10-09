@@ -362,9 +362,9 @@ function renderInstallScene(cursorX, cursorY, isClick, label, isInstalled = fals
     'PWA App Installation',
     'ការដំឡើងកម្មវិធីលើទូរស័ព្ទដៃ (Android &amp; iOS) និងកុំព្យូទ័រ',
     {
-      title: 'Open Official App Link in Browser',
-      desc: 'Open the EduTrack URL in Google Chrome (Android/PC) or Safari (iPhone/iPad).',
-      km: 'បើកតំណភ្ជាប់ប្រព័ន្ធក្នុងកម្មវិធី Chrome (Android) ឬ Safari (iPhone)'
+      title: 'Enter School Web Link in Browser',
+      desc: 'Open Google Chrome (Android/PC) or Safari (iPhone/iPad), tap the top address bar, and enter https://edutrack.edu.kh.',
+      km: 'បើក Chrome ឬ Safari រួចចុចលើរបារអាសយដ្ឋានខាងលើ និងវាយ https://edutrack.edu.kh'
     },
     {
       title: 'Android: Tap "Install App" or Browser Menu (⋮)',
@@ -391,12 +391,21 @@ function renderInstallScene(cursorX, cursorY, isClick, label, isInstalled = fals
     <g transform="translate(16, 48)">
       <rect width="468" height="800" rx="32" fill="#f8fafc"/>
 
+      <!-- Real Web Browser Top Address Bar -->
+      <rect width="468" height="46" rx="16" fill="#0b1b36"/>
+      <rect x="10" y="7" width="448" height="32" rx="14" fill="#051024" stroke="#1e3a8a" stroke-width="1"/>
+      <text x="26" y="28" fill="#10b981" font-size="12">🔒</text>
+      <text x="46" y="28" fill="#93c5fd" font-size="13" font-weight="bold" font-family="Liberation Sans, sans-serif">https://edutrack.edu.kh</text>
+      <text x="440" y="27" fill="#64748b" font-size="14" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">⋮</text>
+
       <!-- App Header Bar -->
-      <rect width="468" height="64" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
-      <rect x="16" y="12" width="40" height="40" rx="12" fill="url(#appHeaderGrad)"/>
-      <text x="36" y="38" fill="#ffffff" font-size="20" font-family="Liberation Sans, sans-serif" text-anchor="middle">🏛</text>
-      <text x="68" y="30" fill="#0f172a" font-size="15" font-weight="bold" font-family="Liberation Sans, sans-serif">EduTrack Academy</text>
-      <text x="68" y="47" fill="#64748b" font-size="11" font-family="Liberation Sans, sans-serif">Faculty Portal</text>
+      <g transform="translate(0, 46)">
+        <rect width="468" height="64" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+        <rect x="16" y="12" width="40" height="40" rx="12" fill="url(#appHeaderGrad)"/>
+        <text x="36" y="38" fill="#ffffff" font-size="20" font-family="Liberation Sans, sans-serif" text-anchor="middle">🏛</text>
+        <text x="68" y="30" fill="#0f172a" font-size="15" font-weight="bold" font-family="Liberation Sans, sans-serif">EduTrack Academy</text>
+        <text x="68" y="47" fill="#64748b" font-size="11" font-family="Liberation Sans, sans-serif">Faculty Portal</text>
+      </g>
 
       <!-- App Body Content Background -->
       <rect x="16" y="80" width="436" height="110" rx="20" fill="#0f172a"/>
@@ -584,9 +593,9 @@ function renderScheduleScene(cursorX, cursorY, isClick, label, activeDay = 'Mon'
       km: 'កាតម៉ោងបង្រៀនបង្ហាញម៉ោងច្បាស់លាស់ មុខវិជ្ជា បន្ទប់រៀន និងរូបថតគ្រូ'
     },
     {
-      title: 'Quick Options (...) Action Menu',
-      desc: 'Tap the three dots on any class card to inspect session details or view classroom map.',
-      km: 'ចុចសញ្ញាចុចបី (...) លើកាតនីមួយៗដើម្បីមើលព័ត៌មានលម្អិត និងទីតាំងបន្ទប់'
+      title: 'Interactive Schedule Check-In & Check-Out',
+      desc: 'Tap "Check In Class" on the active card to start teaching. When session finishes, tap "Check Out Class" to log verified hours.',
+      km: 'ចុច "ស្កេនចូល" លើកាតម៉ោងបង្រៀន ដើម្បីចាប់ផ្តើមបង្រៀន និងចុច "ស្កេនចេញ" ពេលចប់ម៉ោង'
     }
   )}
 
@@ -623,7 +632,13 @@ function renderScheduleScene(cursorX, cursorY, isClick, label, activeDay = 'Mon'
         <text x="410" y="38" fill="#34d399" font-size="12" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">Room 304</text>
         <text x="18" y="80" fill="#ffffff" font-size="18" font-weight="900" font-family="Liberation Sans, sans-serif">CS-201 Data Structures &amp; Algorithms</text>
         <text x="18" y="105" fill="#93c5fd" font-size="13" font-family="Liberation Sans, sans-serif">Faculty: Dr. Sovann Vichea • Year 2 Semester 1</text>
-        <text x="18" y="130" fill="#34d399" font-size="12" font-weight="bold" font-family="Liberation Sans, sans-serif">● Active Class for Wednesday</text>
+        <text x="18" y="130" fill="${isClassClicked ? '#38bdf8' : '#34d399'}" font-size="12" font-weight="bold" font-family="Liberation Sans, sans-serif">
+          ${isClassClicked ? '● Session Active (In: 08:00 AM)' : '● Current Schedule Ready'}
+        </text>
+        <rect x="330" y="112" width="130" height="28" rx="8" fill="${isClassClicked ? '#f59e0b' : '#2563eb'}"/>
+        <text x="395" y="130" fill="${isClassClicked ? '#0f172a' : '#ffffff'}" font-size="11" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">
+          ${isClassClicked ? '✓ Check Out Class' : '▶ Check In Class'}
+        </text>
       </g>
 
       <!-- Class 2 -->
@@ -714,13 +729,21 @@ function renderKioskScene(cursorX, cursorY, isClick, label, isConfirmed = false)
 
     ${isConfirmed ? `
       <!-- Confirmation Banner & Telegram Dispatched -->
-      <g transform="translate(25, 440)">
+      <g transform="translate(25, 435)">
         <rect width="470" height="66" rx="16" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1.5"/>
         <text x="235" y="32" fill="#0369a1" font-size="13" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">
           ✈ Dispatched to School Telegram Group:
         </text>
         <text x="235" y="52" fill="#0284c7" font-size="12" font-family="Liberation Sans, sans-serif" text-anchor="middle">
           "Dr. Sovann Vichea Checked In at 07:58 AM (On-Time)"
+        </text>
+      </g>
+
+      <!-- End of Period CHECK OUT Option -->
+      <g transform="translate(25, 515)">
+        <rect width="470" height="64" rx="20" fill="#f59e0b" filter="url(#cardShadow)"/>
+        <text x="235" y="40" fill="#0f172a" font-size="18" font-weight="900" font-family="Liberation Sans, sans-serif" text-anchor="middle">
+          CHECK OUT (បញ្ចប់ម៉ោងបង្រៀន) • 09:30 AM
         </text>
       </g>
     ` : ''}
@@ -832,9 +855,9 @@ function renderLeaveScene(cursorX, cursorY, isClick, label, isSubmitted = false,
       km: 'ចូលផ្ទាំង "ច្បាប់ឈប់សម្រាក (Leave)" ពិនិត្យកូតាច្បាប់នៅសល់ប្រចាំឆ្នាំ'
     },
     {
-      title: 'Select Leave Category &amp; Date Range',
-      desc: 'Choose Sick Leave, Annual Vacation, or Urgent Family Leave and input date interval.',
-      km: 'ជ្រើសប្រភេទច្បាប់ (ឈឺ, សម្រាកប្រចាំឆ្នាំ, បន្ទាន់) និងកាលបរិច្ឆេទចាប់ផ្តើម-បញ្ចប់'
+      title: 'Duration: Full Days or Flexible Hourly Leave',
+      desc: 'Select Full Days or By Hours (e.g., 2.0 hrs: 08:00 - 10:00) matching specific class periods.',
+      km: 'ជ្រើសរើសសុំច្បាប់ជាថ្ងៃពេញ ឬជាម៉ោង (ឧ. ២ ម៉ោង៖ ០៨:០០-១០:០០) ស្របតាមវេនបង្រៀន'
     },
     {
       title: 'Real-Time Status Tracking',
@@ -872,9 +895,9 @@ function renderLeaveScene(cursorX, cursorY, isClick, label, isSubmitted = false,
       <rect x="0" y="26" width="470" height="48" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
       <text x="20" y="56" fill="#0f172a" font-size="14" font-weight="bold" font-family="Liberation Sans, sans-serif">Sick Leave (ច្បាប់ឈឺ) ∨</text>
 
-      <text x="5" y="100" fill="#334155" font-size="13" font-weight="bold" font-family="Liberation Sans, sans-serif">DATE RANGE</text>
+      <text x="5" y="100" fill="#334155" font-size="13" font-weight="bold" font-family="Liberation Sans, sans-serif">DATE &amp; DURATION (HOURLY / DAYS)</text>
       <rect x="0" y="110" width="470" height="48" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
-      <text x="20" y="140" fill="#0f172a" font-size="14" font-weight="bold" font-family="Liberation Sans, sans-serif">16 Jan 2026 → 17 Jan 2026 (2 Days)</text>
+      <text x="20" y="140" fill="#0f172a" font-size="14" font-weight="bold" font-family="Liberation Sans, sans-serif">16 Jan 2026 • ⏱️ 2.0 Hours (08:00 - 10:00)</text>
 
       <text x="5" y="185" fill="#334155" font-size="13" font-weight="bold" font-family="Liberation Sans, sans-serif">REASON / NOTES</text>
       <rect x="0" y="195" width="470" height="48" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>

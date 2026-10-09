@@ -472,9 +472,15 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                   <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5">
                     <span>{teacherObj?.department || 'Academic'}</span>
                     {info.isTeacherAbsent && (
-                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1 rounded border border-rose-200">
+                      <span className={`text-[10px] font-bold px-1 rounded border ${
+                        info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave'
+                          ? 'text-blue-700 bg-blue-50 border-blue-200'
+                          : 'text-rose-600 bg-rose-50 border-rose-200'
+                      }`}>
                         {info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave'
-                          ? (isKhmer ? 'សុំច្បាប់ (Leave)' : 'On Leave (Absent)')
+                          ? (isKhmer
+                              ? (info.todayRec?.correctionNote?.includes('Hourly') ? '⏱️ ច្បាប់ជាម៉ោង' : '📋 ច្បាប់សម្រាក')
+                              : (info.todayRec?.correctionNote?.includes('Hourly') ? '⏱️ Hourly Leave' : '📋 Leave'))
                           : (isKhmer ? 'អវត្តមាន' : 'Absent')}
                       </span>
                     )}
@@ -536,12 +542,30 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
             </span>
           ) : info.isTeacherAbsent && !info.substitution ? (
             <div className="space-y-0.5">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                <span>{isKhmer ? 'អវត្តមាន (Absent)' : 'Absent ($0.00)'}</span>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black ${
+                info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave'
+                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+              }`}>
+                <AlertCircle className={`w-3.5 h-3.5 ${
+                  info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave' ? 'text-blue-600' : 'text-rose-600'
+                }`} />
+                <span>
+                  {info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave'
+                    ? (isKhmer
+                        ? (info.todayRec?.correctionNote?.includes('Hourly') || info.absentRecord?.correctionNote?.includes('Hourly')
+                            ? '⏱️ ច្បាប់ជាម៉ោង (Hourly Leave)'
+                            : '📋 ច្បាប់សម្រាក (Leave)')
+                        : (info.todayRec?.correctionNote?.includes('Hourly') || info.absentRecord?.correctionNote?.includes('Hourly')
+                            ? '⏱️ Hourly Leave'
+                            : '📋 Approved Leave'))
+                    : (isKhmer ? 'អវត្តមាន (Absent)' : 'Absent ($0.00)')}
+                </span>
               </span>
-              <div className="text-[10px] text-rose-600 font-semibold pl-1">
-                {isKhmer ? 'ត្រូវការចាត់តាំងគ្រូជំនួស' : 'Needs substitute'}
+              <div className="text-[10px] text-slate-500 font-semibold pl-1">
+                {info.absentRecord?.status === 'Leave' || info.todayRec?.status === 'Leave'
+                  ? (isKhmer ? 'បានអនុម័តច្បាប់ (អាចចាត់តាំងគ្រូជំនួស)' : 'Approved leave (substitute optional)')
+                  : (isKhmer ? 'ត្រូវការចាត់តាំងគ្រូជំនួស' : 'Needs substitute')}
               </div>
             </div>
           ) : info.isCheckedOut ? (

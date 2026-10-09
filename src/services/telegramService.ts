@@ -274,6 +274,10 @@ export const TelegramService = {
     reason: string;
     approvedBy: string;
     scheduleCount?: number;
+    durationUnit?: 'days' | 'hours';
+    hours?: number;
+    startTime?: string;
+    endTime?: string;
   }) {
     const settings = StorageService.getTelegramSettings();
     if (!settings.isEnabled) return;
@@ -285,12 +289,16 @@ export const TelegramService = {
     const groupChatId = (settings.groupChatId || '').trim();
     const adminChatId = (settings.adminChatId || '').trim();
 
+    const durationLine = data.durationUnit === 'hours'
+      ? `⏱️ <b>រយៈពេល៖</b> ${data.hours ? `${data.hours} ម៉ោង (Hours)` : 'សុំច្បាប់ជាម៉ោង'}${data.startTime && data.endTime ? ` (${data.startTime} ដល់ ${data.endTime})` : ''}`
+      : `📅 <b>កាលបរិច្ឆេទ៖</b> ${data.startDate} ដល់ ${data.endDate}`;
+
     const msg = `📝 <b>[${roleTagKhmer}] ការអនុម័តច្បាប់ឈប់សម្រាក (Approved Leave - Auto Logged)</b>\n\n` +
       `👤 <b>ឈ្មោះ៖</b> ${displayName}\n` +
       `🏷️ <b>តួនាទី៖</b> ${roleTagKhmer}\n` +
       `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${data.department}\n` +
       `📋 <b>ប្រភេទច្បាប់៖</b> ${data.leaveType}\n` +
-      `📅 <b>កាលបរិច្ឆេទ៖</b> ${data.startDate} ដល់ ${data.endDate}\n` +
+      `${durationLine}\n` +
       `💬 <b>មូលហេតុ៖</b> ${data.reason}\n` +
       `✅ <b>អនុម័តដោយ៖</b> ${data.approvedBy}\n` +
       `📌 <b>ស្ថានភាព៖</b> កត់ត្រាអវត្តមានស្វ័យប្រវត្តក្នុងតារាង (${data.scheduleCount || 0} វេន/ម៉ោងបង្រៀន)\n` +

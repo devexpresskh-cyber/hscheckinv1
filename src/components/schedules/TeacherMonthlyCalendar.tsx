@@ -708,8 +708,10 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                     activeTeacher ? [activeTeacher] : undefined
                   );
 
-                  const isCheckedIn = !!classAtt;
-                  const isOngoing = isToday && !isCheckedIn;
+                  const hasCheckedIn = Boolean(classAtt?.checkInTime);
+                  const hasCheckedOut = Boolean(classAtt?.checkOutTime);
+                  const isInProgress = isToday && hasCheckedIn && !hasCheckedOut;
+                  const isCurOngoing = isToday && !hasCheckedIn;
 
                   // Initials for avatar circle
                   const initials = (cls.teacherName || activeTeacher?.fullName || 'T')
@@ -724,7 +726,13 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                   return (
                     <div
                       key={cls.id || idx}
-                      className="bg-white border border-slate-200/90 hover:border-blue-300 p-4 rounded-3xl shadow-xs hover:shadow-md transition-all space-y-3"
+                      className={`bg-white border p-4 rounded-3xl shadow-xs hover:shadow-md transition-all space-y-3 ${
+                        isInProgress
+                          ? 'border-cyan-400 ring-2 ring-cyan-200/50 bg-gradient-to-br from-white via-cyan-50/20 to-blue-50/30'
+                          : isCurOngoing
+                          ? 'border-blue-300 hover:border-blue-400'
+                          : 'border-slate-200/90 hover:border-blue-300'
+                      }`}
                     >
                       {/* Top Row: Avatar + Title + Status Badge */}
                       <div className="flex items-start justify-between gap-3">
@@ -749,18 +757,26 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           </div>
                         </div>
 
-                        {/* Status Badge (Matching ONGOING / COMPLETED from screenshot) */}
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
-                            isCheckedIn
-                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                              : isOngoing
-                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {isCheckedIn ? 'COMPLETED' : isOngoing ? 'ONGOING' : 'UPCOMING'}
-                        </span>
+                        {/* Status Badge: COMPLETED vs IN PROGRESS vs CURRENT / UPCOMING */}
+                        {hasCheckedOut ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shrink-0">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>{isKhmer ? 'បានបញ្ចប់' : 'COMPLETED'}</span>
+                          </span>
+                        ) : isInProgress ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50 text-cyan-800 border border-cyan-300 flex items-center gap-1.5 shrink-0 shadow-2xs animate-pulse">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                            <span>{isKhmer ? 'កំពុងបង្រៀន' : 'IN PROGRESS'}</span>
+                          </span>
+                        ) : isCurOngoing ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200 shrink-0">
+                            {isKhmer ? 'ម៉ោងនេះ' : 'CURRENT'}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 shrink-0">
+                            {isKhmer ? 'នឹងមកដល់' : 'UPCOMING'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Category Tag Pills Row (Matching Design / Home Page / Business pills) */}
@@ -778,36 +794,41 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
 
                       {/* Interactive Check-In / Check-Out Actions */}
                       {isToday && (
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
                             <span>
-                              {isCheckedIn
-                                ? `In: ${classAtt.checkInTime} ${classAtt.checkOutTime ? `• Out: ${classAtt.checkOutTime}` : ''}`
-                                : 'Awaiting Faculty Check-In'}
+                              {hasCheckedOut
+                                ? `In: ${classAtt?.checkInTime} • Out: ${classAtt?.checkOutTime}`
+                                : hasCheckedIn
+                                ? `In: ${classAtt?.checkInTime} • ${isKhmer ? 'កំពុងបង្រៀន' : 'Session Active'}`
+                                : (isKhmer ? 'រង់ចាំស្កេនចូលម៉ោងបង្រៀន' : 'Ready for Faculty Check-In')}
                             </span>
                           </div>
 
-                          {!isCheckedIn ? (
+                          {!hasCheckedIn ? (
                             <button
                               onClick={() => handleTeacherCheckInAction(cls)}
                               disabled={isActionLoading}
-                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
                             >
                               <LogIn className="w-3.5 h-3.5" />
-                              <span>{isKhmer ? 'ស្កេនចូល (Check In)' : 'Check In'}</span>
+                              <span>{isKhmer ? 'ស្កេនចូល (Check In)' : 'Check In Class'}</span>
+                            </button>
+                          ) : !hasCheckedOut ? (
+                            <button
+                              onClick={() => handleTeacherCheckOutAction(cls)}
+                              disabled={isActionLoading}
+                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                            >
+                              <LogOut className="w-3.5 h-3.5" />
+                              <span>{isKhmer ? 'ស្កេនចេញ (Check Out)' : 'Check Out Class'}</span>
                             </button>
                           ) : (
-                            !classAtt.checkOutTime && (
-                              <button
-                                onClick={() => handleTeacherCheckOutAction(cls)}
-                                disabled={isActionLoading}
-                                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-                              >
-                                <LogOut className="w-3.5 h-3.5" />
-                                <span>{isKhmer ? 'ស្កេនចេញ' : 'Check Out'}</span>
-                              </button>
-                            )
+                            <span className="px-3 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>{isKhmer ? 'ស្កេនចេញរួចរាល់' : 'Checked Out'}</span>
+                            </span>
                           )}
                         </div>
                       )}

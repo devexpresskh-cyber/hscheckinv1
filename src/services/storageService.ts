@@ -1819,8 +1819,13 @@ export const StorageService = {
       const dayOfWeek = dateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
 
       if (matchedTeacher) {
+        const isHourly = leave.durationUnit === 'hours';
+        const leaveLabel = isHourly
+          ? `Approved Hourly Leave (${leave.hours || 'Partial'} hrs${leave.startTime && leave.endTime ? `: ${leave.startTime}-${leave.endTime}` : ''})`
+          : `Approved Leave (${leave.leaveType})`;
+
         // Find teacher subject classes scheduled on this day of week
-        const matchingSchedules = subjectSchedules.filter(s => {
+        let matchingSchedules = subjectSchedules.filter(s => {
           const isTeacher = s.teacherId === matchedTeacher.id ||
             s.teacherName?.trim().toLowerCase() === matchedTeacher.fullName?.trim().toLowerCase();
           if (!isTeacher) return false;
@@ -1829,6 +1834,13 @@ export const StorageService = {
           }
           return s.dayOfWeek === dayOfWeek;
         });
+
+        // If hourly leave with start and end times, only match schedules within that time range!
+        if (isHourly && leave.startTime && leave.endTime) {
+          matchingSchedules = matchingSchedules.filter(sub => {
+            return sub.startTime < leave.endTime! && sub.endTime > leave.startTime!;
+          });
+        }
 
         if (matchingSchedules.length > 0) {
           matchingSchedules.forEach(sub => {
@@ -1843,8 +1855,8 @@ export const StorageService = {
               if (existing.status !== 'Present' && !existing.checkInTime) {
                 this.updateAttendanceRecord(existing.id, {
                   status: 'Leave',
-                  correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
-                  reassignReason: `On approved ${leave.leaveType}`
+                  correctionNote: `${leaveLabel}: ${leave.reason || 'Auto-logged on leave approval'}`,
+                  reassignReason: `On ${leaveLabel}`
                 });
                 generatedRecords.push(existing);
               }
@@ -1874,16 +1886,16 @@ export const StorageService = {
                 earlyLeaveMinutes: 0,
                 overtimeMinutes: 0,
                 locationVerified: false,
-                correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
-                reassignReason: `On approved ${leave.leaveType}`,
+                correctionNote: `${leaveLabel}: ${leave.reason || 'Auto-logged on leave approval'}`,
+                reassignReason: `On ${leaveLabel}`,
                 createdAt: `${dateStr}T${sub.startTime}:00`
               };
               this.addAttendanceRecord(newRec);
               generatedRecords.push(newRec);
             }
           });
-        } else if (dayOfWeek >= 1 && dayOfWeek <= 6) {
-          // If no specific class schedule on this day of week, log daily duty leave
+        } else if (dayOfWeek >= 1 && dayOfWeek <= 6 && !isHourly) {
+          // If no specific class schedule on this day of week, log daily duty leave (full day only)
           const existing = cache.attendance.find(
             a => a.personId === matchedTeacher.id && a.date === dateStr && !a.isSubstitute
           );
@@ -1915,12 +1927,17 @@ export const StorageService = {
           }
         }
       } else if (matchedEmployee) {
+        const isHourly = leave.durationUnit === 'hours';
+        const leaveLabel = isHourly
+          ? `Approved Hourly Leave (${leave.hours || 'Partial'} hrs${leave.startTime && leave.endTime ? `: ${leave.startTime}-${leave.endTime}` : ''})`
+          : `Approved Leave (${leave.leaveType})`;
+
         // Employee / Staff: Look up assigned duty schedule
         const empSchedule = dutySchedules.find(s => s.id === matchedEmployee.assignedScheduleId) ||
           dutySchedules.find(s => s.department === matchedEmployee.department) ||
           dutySchedules[0];
 
-        const isWorkingDay = empSchedule ? empSchedule.daysOfWeek.includes(dayOfWeek) : (dayOfWeek >= 1 && dayOfWeek <= 5);
+        const isWorkingDay = empSchedule ? empSchedule.daysOfWeek.includes(dayOfWeek) : (dayOfWeek >= 1 && dayOfWeek <= 6);
 
         if (isWorkingDay) {
           const existing = cache.attendance.find(
@@ -1931,8 +1948,8 @@ export const StorageService = {
             if (existing.status !== 'Present' && !existing.checkInTime) {
               this.updateAttendanceRecord(existing.id, {
                 status: 'Leave',
-                correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
-                reassignReason: `On approved ${leave.leaveType}`
+                correctionNote: `${leaveLabel}: ${leave.reason || 'Auto-logged on leave approval'}`,
+                reassignReason: `On ${leaveLabel}`
               });
               generatedRecords.push(existing);
             }
@@ -1947,16 +1964,16 @@ export const StorageService = {
               date: dateStr,
               scheduleId: empSchedule?.id || 'sch-office-fulltime',
               scheduleName: empSchedule?.name || 'Office Duty Schedule',
-              scheduledStart: empSchedule?.startTime || '07:30',
-              scheduledEnd: empSchedule?.endTime || '17:00',
+              scheduledStart: isHourly && leave.startTime ? leave.startTime : (empSchedule?.startTime || '07:30'),
+              scheduledEnd: isHourly && leave.endTime ? leave.endTime : (empSchedule?.endTime || '17:00'),
               status: 'Leave',
               lateMinutes: 0,
               earlyLeaveMinutes: 0,
               overtimeMinutes: 0,
               locationVerified: false,
-              correctionNote: `Approved Leave (${leave.leaveType}): ${leave.reason || 'Auto-logged on leave approval'}`,
-              reassignReason: `On approved ${leave.leaveType}`,
-              createdAt: `${dateStr}T${empSchedule?.startTime || '07:30'}:00`
+              correctionNote: `${leaveLabel}: ${leave.reason || 'Auto-logged on leave approval'}`,
+              reassignReason: `On ${leaveLabel}`,
+              createdAt: `${dateStr}T${isHourly && leave.startTime ? leave.startTime : (empSchedule?.startTime || '07:30')}:00`
             };
             this.addAttendanceRecord(newRec);
             generatedRecords.push(newRec);

@@ -94,6 +94,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
   const [holidays, setHolidays] = useState(() => StorageService.getHolidays());
   const [leaveRequests, setLeaveRequests] = useState(() => StorageService.getLeaveRequests());
   const [subjectSchedules, setSubjectSchedules] = useState(() => StorageService.getSubjectSchedules());
+  const [schedules, setSchedules] = useState(() => StorageService.getSchedules());
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
 
@@ -106,6 +107,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
       setHolidays(StorageService.getHolidays());
       setLeaveRequests(StorageService.getLeaveRequests());
       setSubjectSchedules(StorageService.getSubjectSchedules());
+      setSchedules(StorageService.getSchedules());
       setSystemSettings(StorageService.getSystemSettings());
     });
     return unsub;
@@ -156,7 +158,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
         const dateObj = new Date(year, monthNum - 1, d);
         const dayOfWeek = dateObj.getDay();
         const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isWeekend = dayOfWeek === 0; // Weekly off is ONLY Sunday
         const isToday = dateStr === todayStr;
         const isHoliday = holidays.some(h => h.date === dateStr);
 
@@ -265,6 +267,54 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
 
   // Compute status for each staff across all 31 days
   const gridData = useMemo(() => {
+    // Helper to get full scheduled minutes for a session/shift
+    const getFullScheduleMinutes = (r: AttendanceRecord, staffType: string): number => {
+      // 1. Explicit scheduledStart & scheduledEnd on attendance record
+      if (r.scheduledStart && r.scheduledEnd && r.scheduledStart.includes(':') && r.scheduledEnd.includes(':')) {
+        const [sh, sm] = r.scheduledStart.split(':').map(Number);
+        const [eh, em] = r.scheduledEnd.split(':').map(Number);
+        if (!isNaN(sh) && !isNaN(eh)) {
+          const diff = (eh * 60 + em) - (sh * 60 + sm);
+          if (diff > 0) return diff;
+        }
+      }
+
+      // 2. Linked subject schedule if teacher class session
+      if (r.subjectScheduleId) {
+        const sub = subjectSchedules.find(s => s.id === r.subjectScheduleId);
+        if (sub && sub.startTime && sub.endTime && sub.startTime.includes(':') && sub.endTime.includes(':')) {
+          const [sh, sm] = sub.startTime.split(':').map(Number);
+          const [eh, em] = sub.endTime.split(':').map(Number);
+          if (!isNaN(sh) && !isNaN(eh)) {
+            const diff = (eh * 60 + em) - (sh * 60 + sm);
+            if (diff > 0) return diff;
+          }
+        }
+      }
+
+      // 3. Linked duty schedule if staff/employee duty shift
+      if (r.scheduleId) {
+        const sched = schedules.find(s => s.id === r.scheduleId);
+        if (sched && sched.startTime && sched.endTime && sched.startTime.includes(':') && sched.endTime.includes(':')) {
+          const [sh, sm] = sched.startTime.split(':').map(Number);
+          const [eh, em] = sched.endTime.split(':').map(Number);
+          if (!isNaN(sh) && !isNaN(eh)) {
+            let diff = (eh * 60 + em) - (sh * 60 + sm);
+            if (sched.breakStart && sched.breakEnd && sched.breakStart.includes(':') && sched.breakEnd.includes(':')) {
+              const [bsh, bsm] = sched.breakStart.split(':').map(Number);
+              const [beh, bem] = sched.breakEnd.split(':').map(Number);
+              const bDiff = (beh * 60 + bem) - (bsh * 60 + bsm);
+              if (bDiff > 0 && diff > bDiff) diff -= bDiff;
+            }
+            if (diff > 0) return diff;
+          }
+        }
+      }
+
+      // 4. Fallback defaults: 8 hours (480 mins) for employees, 2 hours (120 mins) for teachers
+      return staffType === 'Employee' || r.personType === 'employee' ? 480 : 120;
+    };
+
     return staffList.map(staff => {
       let presentCount = 0;
       let lateCount = 0;
@@ -345,15 +395,11 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
             presentCount++;
           }
 
-          // Compute duration
+          // Compute duration using full schedule hour
           records.forEach(r => {
-            if (r.checkInTime && r.checkOutTime) {
-              const [ih, im] = r.checkInTime.split(':').map(Number);
-              const [oh, om] = r.checkOutTime.split(':').map(Number);
-              const diff = (oh * 60 + om) - (ih * 60 + im);
-              if (diff > 0) totalWorkMinutes += diff;
-            } else if (r.status === 'Present' || r.status === 'Late') {
-              totalWorkMinutes += 120; // 2 hour default session
+            const isAttended = Boolean(r.checkInTime) || r.status === 'Present' || r.status === 'Late';
+            if (isAttended) {
+              totalWorkMinutes += getFullScheduleMinutes(r, staff.type);
             }
           });
 
@@ -411,11 +457,12 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
         }
 
         // Check if person on approved leave
-        const onLeave = leaveRequests.some(
-          l => l.personId === staff.id && l.status === 'Approved' && l.startDate <= dateStr && l.endDate >= dateStr
+        const leaveReq = leaveRequests.find(
+          l => l.personId === staff.id && l.status === 'Approved' && l.startDate <= dateStr && (l.endDate || l.startDate) >= dateStr
         );
-        if (onLeave) {
+        if (leaveReq && records.length === 0) {
           leaveCount++;
+          const isHourly = leaveReq.durationUnit === 'hours';
           return {
             dayNum: header.dayNum,
             dateStr,
@@ -424,7 +471,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
             isToday: header.isToday,
             isValidDay: true,
             status: 'Leave',
-            badgeLetter: 'LV',
+            badgeLetter: isHourly ? `${leaveReq.hours || ''}h` : 'LV',
             recordsCount: 0
           };
         }
@@ -477,7 +524,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
         attendanceRate
       };
     });
-  }, [staffList, dayHeaders, attendance, todayStr, leaveRequests]);
+  }, [staffList, dayHeaders, attendance, todayStr, leaveRequests, subjectSchedules, schedules]);
 
   // Aggregate totals per day across all staff for bottom summary row
   const daySummaryTotals = useMemo(() => {

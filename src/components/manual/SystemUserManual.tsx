@@ -27,11 +27,22 @@ import {
   Bell,
   Volume2,
   Play,
-  Video
+  Video,
+  Monitor,
+  Laptop,
+  CornerDownLeft,
+  ExternalLink,
+  RotateCcw,
+  Check,
+  Layers,
+  LayoutDashboard,
+  CalendarCheck,
+  Palmtree
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 import { ScheduleAlertService } from '../../services/scheduleAlertService.ts';
 import { TeacherVideoManualModal } from './TeacherVideoManualModal.tsx';
+import { RealInterfaceActionWalkthrough } from './RealInterfaceActionWalkthrough.tsx';
 
 interface ManualSection {
   id: string;
@@ -47,18 +58,422 @@ interface ManualSection {
   faqKm?: { q: string; a: string }[];
 }
 
+/**
+ * Interactive Web Browser Link Simulator Component
+ * Demonstrates exactly how a teacher enters the URL on mobile/desktop browsers.
+ */
+const WebBrowserLinkSimulator: React.FC<{ onExplorePages: () => void }> = ({ onExplorePages }) => {
+  const { isKhmer } = useLanguage();
+  const [deviceType, setDeviceType] = useState<'mobile' | 'desktop'>('mobile');
+  const [browserMode, setBrowserMode] = useState<'chrome' | 'safari'>('chrome');
+  const [urlState, setUrlState] = useState<'empty' | 'typed' | 'navigated'>('typed');
+  const [typedUrl, setTypedUrl] = useState<string>('https://edutrack.edu.kh');
+  const [isCopied, setIsCopied] = useState<boolean>(false);
+
+  const handlePaste = () => {
+    setTypedUrl('https://edutrack.edu.kh');
+    setUrlState('typed');
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard?.writeText('https://edutrack.edu.kh').catch(() => {});
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleGo = () => {
+    setUrlState('navigated');
+  };
+
+  const handleReset = () => {
+    setUrlState('empty');
+    setTypedUrl('');
+  };
+
+  return (
+    <div className="bg-slate-900 rounded-3xl border border-slate-800 p-4 sm:p-6 text-white shadow-xl space-y-5">
+      {/* Simulator Header & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              Interactive Simulator
+            </span>
+            <span className="text-xs text-slate-400">
+              {isKhmer ? 'សាកល្បងវាយតំណភ្ជាប់គេហទំព័រផ្ទាល់' : 'Try entering link live'}
+            </span>
+          </div>
+          <h3 className="text-base sm:text-lg font-black text-white">
+            {isKhmer ? 'របៀបវាយបញ្ចូលតំណភ្ជាប់សាលាលើ Web Browser' : 'How to Enter School Link on Web Browser'}
+          </h3>
+        </div>
+
+        {/* Device Switcher */}
+        <div className="flex items-center gap-2">
+          <div className="bg-slate-950 p-1 rounded-2xl border border-slate-800 flex items-center text-xs font-bold">
+            <button
+              onClick={() => setDeviceType('mobile')}
+              className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all ${
+                deviceType === 'mobile'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'ទូរស័ព្ទដៃ' : 'Mobile'}</span>
+            </button>
+            <button
+              onClick={() => setDeviceType('desktop')}
+              className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all ${
+                deviceType === 'desktop'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Laptop className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'កុំព្យូទ័រ' : 'Desktop'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Simulated Browser Window Frame */}
+      <div className={`mx-auto bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden transition-all ${
+        deviceType === 'mobile' ? 'max-w-md' : 'w-full'
+      }`}>
+        {/* Top Browser Bar (Tabs + Window Controls) */}
+        <div className="bg-slate-900/90 px-3 py-2 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+            </div>
+
+            {/* Browser Tab */}
+            <div className="ml-2 px-3 py-1 bg-slate-950 rounded-t-lg text-[11px] font-bold text-slate-300 border-t border-x border-slate-800 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+              <span className="truncate max-w-[150px]">
+                {urlState === 'navigated' ? 'EduTrack Faculty Portal' : 'New Tab'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-[10px] font-mono text-slate-400">
+            <span className="hidden sm:inline">Google Chrome / Apple Safari</span>
+          </div>
+        </div>
+
+        {/* Address Bar Area (The Core Focus for the Teacher) */}
+        <div className="p-3 bg-slate-900/50 border-b border-slate-800/80 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-slate-400 text-xs shrink-0">
+              <span className="p-1 hover:text-white cursor-pointer">‹</span>
+              <span className="p-1 hover:text-white cursor-pointer">›</span>
+              <span className="p-1 hover:text-white cursor-pointer">↻</span>
+            </div>
+
+            {/* The Actual Address Bar */}
+            <div className="flex-1 min-h-[42px] bg-slate-950 rounded-xl border-2 border-cyan-500/80 px-3 flex items-center justify-between text-xs font-mono shadow-inner ring-2 ring-cyan-500/20">
+              <div className="flex items-center gap-2 truncate">
+                {urlState === 'navigated' ? (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1 text-[11px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                    <Lock className="w-3 h-3 text-emerald-400" />
+                    <span>Secure</span>
+                  </span>
+                ) : (
+                  <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                )}
+
+                {urlState === 'empty' ? (
+                  <span className="text-slate-500 text-xs">Search or enter website address...</span>
+                ) : (
+                  <span className="text-white font-bold text-xs truncate">
+                    <span className="text-slate-400">https://</span>
+                    <span className="text-cyan-300">edutrack.edu.kh</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Action Inside Bar */}
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                {urlState !== 'navigated' && (
+                  <button
+                    onClick={handleGo}
+                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <span>Go</span>
+                    <CornerDownLeft className="w-3 h-3" />
+                  </button>
+                )}
+                <span className="text-slate-500 hover:text-white cursor-pointer text-xs font-bold pl-1">⋮</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Practice Buttons Beneath Address Bar */}
+          <div className="flex items-center justify-between flex-wrap gap-2 pt-1 text-[11px]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handlePaste}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>📋</span>
+                <span>{isKhmer ? 'បិទភ្ជាប់ Link: https://edutrack.edu.kh' : 'Paste School Link'}</span>
+              </button>
+
+              <button
+                onClick={handleCopyLink}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>{isCopied ? '✓ Copied' : '📑 Copy URL'}</span>
+              </button>
+
+              <button
+                onClick={handleReset}
+                className="px-2 py-1 rounded-lg bg-slate-850 hover:bg-slate-750 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Reset simulation"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            </div>
+
+            <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>SSL HTTPS 256-bit</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Viewport Content Area inside the Simulated Browser */}
+        <div className="p-4 sm:p-6 min-h-[220px] bg-slate-950 flex flex-col justify-center items-center text-center">
+          {urlState === 'empty' ? (
+            <div className="space-y-2 py-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                <Search className="w-6 h-6" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-300">
+                {isKhmer ? 'របារអាសយដ្ឋានទទេ (សូមវាយតំណភ្ជាប់)' : 'Address Bar Empty (Type link to proceed)'}
+              </h4>
+              <p className="text-[11px] text-slate-500 max-w-xs">
+                {isKhmer
+                  ? 'ចុចលើប៊ូតុង "បិទភ្ជាប់ Link" ខាងលើ ដើម្បីសាកល្បងបញ្ចូលអាសយដ្ឋានគេហទំព័រ។'
+                  : 'Click "Paste School Link" above to test entering the school web address.'}
+              </p>
+            </div>
+          ) : urlState === 'typed' ? (
+            <div className="space-y-3 py-4 animate-in fade-in">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-cyan-300 flex items-center justify-center mx-auto">
+                <CornerDownLeft className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white">
+                  {isKhmer ? 'អាសយដ្ឋានបានវាយបញ្ចូលរួចរាល់!' : 'School Link Entered!'}
+                </h4>
+                <p className="text-xs text-cyan-300 font-mono">
+                  https://edutrack.edu.kh
+                </p>
+                <p className="text-[11px] text-slate-400 max-w-sm pt-1">
+                  {isKhmer
+                    ? 'ឥឡូវនេះ សូមចុចប៊ូតុង "Go" ឬ "Enter" លើក្តារចុចទូរស័ព្ទរបស់អ្នក ដើម្បីបើកទំព័រគ្រប់គ្រងការសិក្សា។'
+                    : 'Now tap the blue "Go" button or press Enter on your mobile keyboard to navigate to the faculty portal.'}
+                </p>
+              </div>
+
+              <button
+                onClick={handleGo}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-black text-xs shadow-lg shadow-blue-500/30 flex items-center gap-2 mx-auto active:scale-95 transition-all cursor-pointer"
+              >
+                <span>{isKhmer ? 'ចុច Enter / Go ដើម្បីបើកទំព័រ' : 'Press Go / Enter to Open'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            /* Loaded Official Portal Preview */
+            <div className="w-full space-y-4 animate-in zoom-in-95 text-left">
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-800/60 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-md">
+                    E
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black text-white leading-tight">
+                      EduTrack Academic MIS
+                    </h5>
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                      <span>✓ Official Faculty Portal Connected</span>
+                    </span>
+                  </div>
+                </div>
+
+                <span className="px-2.5 py-1 rounded-xl bg-blue-500/20 text-cyan-300 border border-blue-400/30 text-[10px] font-bold">
+                  2026 Academic Year
+                </span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-white block">
+                    {isKhmer ? 'ទំព័រដើមបានបើកជោគជ័យ! ចង់ចូលទំព័រជាក់ស្តែង?' : 'Page Loaded! Explore Real Interface Walkthrough?'}
+                  </span>
+                  <p className="text-[11px] text-slate-400">
+                    {isKhmer
+                      ? 'ចុចដើម្បីមើលទំព័រកាលវិភាគបង្រៀន ស្កេនវត្តមាន និងប្រាក់ឈ្នួលជាក់ស្តែង'
+                      : 'Step through teacher PIN login, daily schedule check-in, and wage ledger.'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={onExplorePages}
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? 'មើលទំព័រជាក់ស្តែង' : 'Use Live Pages'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Step by Step Device Directions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+          <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs">
+            <span className="w-5 h-5 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px]">1</span>
+            <span>{isKhmer ? 'ទូរស័ព្ទ Android (Chrome)' : 'Android (Google Chrome)'}</span>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            {isKhmer
+              ? '១. បើក Chrome ២. ចុចរបារខាងលើ ៣. វាយ https://edutrack.edu.kh ៤. ចុច Enter/Go ៥. ចុចសញ្ញាចុចបី (⋮) រើស "Add to Home Screen"។'
+              : '1. Open Chrome. 2. Tap top URL bar. 3. Enter https://edutrack.edu.kh. 4. Press Enter. 5. Tap menu (⋮) → "Add to Home screen".'}
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+          <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+            <span className="w-5 h-5 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center text-[10px]">2</span>
+            <span>{isKhmer ? 'ទូរស័ព្ទ iPhone (Safari)' : 'iPhone & iPad (Safari)'}</span>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            {isKhmer
+              ? '១. បើក Safari ២. ចុចរបារ URL ខាងក្រោម/លើ ៣. វាយ https://edutrack.edu.kh ៤. ចុច Go ៥. ចុច Share (⎋) រើស "Add to Home Screen"។'
+              : '1. Open Safari. 2. Tap address bar. 3. Enter https://edutrack.edu.kh. 4. Press Go. 5. Tap Share (⎋) → "Add to Home Screen".'}
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+          <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+            <span className="w-5 h-5 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-[10px]">3</span>
+            <span>{isKhmer ? 'កុំព្យូទ័រ PC / Mac' : 'Desktop PC / Mac'}</span>
+          </div>
+          <p className="text-[11px] text-slate-300 leading-relaxed">
+            {isKhmer
+              ? '១. បើក Chrome ឬ Edge ២. ចុចរបារ URL ខាងលើ ៣. វាយ https://edutrack.edu.kh រួចចុច Enter ៤. ចុចរូបសញ្ញាដំឡើង ⊕ នៅខាងស្តាំរបារ។'
+              : '1. Open Chrome or Edge. 2. Tap address bar. 3. Enter https://edutrack.edu.kh and press Enter. 4. Click install icon ⊕ in URL bar.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const SystemUserManual: React.FC = () => {
   const { isKhmer } = useLanguage();
-  const [activeSectionId, setActiveSectionId] = useState<string>('kiosk');
+  const [manualViewMode, setManualViewMode] = useState<'interactive_pages' | 'documentation'>('interactive_pages');
+  const [activeSectionId, setActiveSectionId] = useState<string>('browser-entry');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeLangMode, setActiveLangMode] = useState<'both' | 'km' | 'en'>(isKhmer ? 'km' : 'en');
   const [isVideoModalOpen, setIsVideoModalOpen] = useState<boolean>(false);
 
   const manualSections: ManualSection[] = [
     {
+      id: 'browser-entry',
+      titleEn: '1. Opening Web Browser & Entering Link (https://edutrack.edu.kh)',
+      titleKm: '១. ការបើកកម្មវិធីរុករក & វាយបញ្ចូលតំណភ្ជាប់សាលា',
+      badge: 'Getting Started',
+      icon: Globe,
+      descriptionEn: 'How teachers open Google Chrome or Apple Safari, type or paste the official school domain (https://edutrack.edu.kh), and navigate securely to the faculty portal.',
+      descriptionKm: 'ការណែនាំអំពីរបៀបដែលគ្រូបង្រៀនបើកកម្មវិធីរុករក (Chrome ឬ Safari) វាយបញ្ចូល ឬបិទភ្ជាប់តំណភ្ជាប់សាលា (https://edutrack.edu.kh) និងចូលប្រើប្រព័ន្ធដោយសុវត្ថិភាព។',
+      stepsEn: [
+        {
+          title: 'Step 1: Open Google Chrome or Apple Safari',
+          desc: 'On your Android device or PC, open Google Chrome. On your iPhone or iPad, open Apple Safari.',
+          tip: 'Chrome and Safari fully support offline timetable caching and camera QR scanning.'
+        },
+        {
+          title: 'Step 2: Tap the Top Search / Address (URL) Bar',
+          desc: 'Tap inside the top search or address bar to open your on-screen keyboard.',
+          tip: 'On iOS 15+ iPhones, the address bar is at the bottom of the screen by default.'
+        },
+        {
+          title: 'Step 3: Type or Paste the Exact School Link: https://edutrack.edu.kh',
+          desc: 'Type https://edutrack.edu.kh accurately. As you type, the browser autocompletes with the official EduTrack Faculty Portal.',
+          tip: 'Bookmark or save the link to your phone favorites for instant recall.'
+        },
+        {
+          title: 'Step 4: Press "Enter" or "Go" to Navigate',
+          desc: 'Tap Go or the blue Enter arrow on your keyboard. The browser initiates a secure TLS/SSL encrypted connection indicated by the padlock 🔒 symbol.',
+          tip: 'The page loads instantly with faculty login and attendance features.'
+        },
+        {
+          title: 'Step 5: Add to Home Screen (PWA Standalone App)',
+          desc: 'On Android: Tap browser menu (⋮) → "Add to Home screen" or "Install App". On iPhone: Tap Share (⎋) → "Add to Home Screen".',
+          tip: 'A dedicated EduTrack icon will be pinned to your phone desktop, so you never have to retype the URL bar again!'
+        }
+      ],
+      stepsKm: [
+        {
+          title: 'ជំហានទី ១៖ បើកកម្មវិធី Google Chrome ឬ Safari',
+          desc: 'នៅលើទូរស័ព្ទ Android ឬកុំព្យូទ័រ សូមបើក Google Chrome។ លើទូរស័ព្ទ iPhone ឬ iPad សូមបើក Apple Safari។',
+          tip: 'Chrome និង Safari គាំទ្រការប្រើប្រាស់ Offline និងការស្កេន QR កម្រិតខ្ពស់។'
+        },
+        {
+          title: 'ជំហានទី ២៖ ចុចលើរបារអាសយដ្ឋាន (URL Bar)',
+          desc: 'ចុចលើប្រអប់អាសយដ្ឋានខាងលើ ដើម្បីបើកក្តារចុចលើអេក្រង់ទូរស័ព្ទ។',
+          tip: 'លើ iPhone ប្រព័ន្ធ iOS របារ URL អាចស្ថិតនៅផ្នែកខាងក្រោមនៃអេក្រង់។'
+        },
+        {
+          title: 'ជំហានទី ៣៖ វាយបញ្ចូល ឬបិទភ្ជាប់តំណភ្ជាប់៖ https://edutrack.edu.kh',
+          desc: 'វាយបញ្ចូលអាសយដ្ឋានសាលា៖ https://edutrack.edu.kh ឱ្យបានត្រឹមត្រូវ។ ប្រព័ន្ធនឹងបង្ហាញឈ្មោះស្វ័យប្រវត្តិ។',
+          tip: 'អាចចម្លង (Copy) តំណភ្ជាប់ទុក ដើម្បីងាយស្រួលបិទភ្ជាប់ (Paste)។'
+        },
+        {
+          title: 'ជំហានទី ៤៖ ចុច "Go" ឬ "Enter" ដើម្បីបើកទំព័រ',
+          desc: 'ចុចប៊ូតុង Go ឬ Enter លើក្តារចុច។ កម្មវិធីរុករកនឹងភ្ជាប់ដោយសុវត្ថិភាព ជាមួយរូបសោរ 🔒 (SSL Encrypted)។',
+          tip: 'ទំព័រគ្រប់គ្រងការសិក្សានឹងបង្ហាញភ្លាមៗ ត្រៀមសម្រាប់ការចូលគណនីគ្រូ។'
+        },
+        {
+          title: 'ជំហានទី ៥៖ បន្ថែមទៅអេក្រង់ដើម (Add to Home screen)',
+          desc: 'លើ Android៖ ចុចសញ្ញាចុចបី (⋮) រើស "Add to Home screen"។ លើ iPhone៖ ចុច Share (⎋) រើស "Add to Home Screen"។',
+          tip: 'រូបតំណាង EduTrack នឹងបង្កើតលើអេក្រង់ទូរស័ព្ទ មិនបាច់វាយតំណភ្ជាប់ URL ម្តងទៀតឡើយ!'
+        }
+      ],
+      faqEn: [
+        {
+          q: 'Do I need to retype the web link every morning?',
+          a: 'No! Simply tap "Add to Home screen" once. An EduTrack app icon is saved to your phone desktop. Tap it to launch full-screen directly without opening the browser.'
+        },
+        {
+          q: 'What should I do if the link says "Not Secure"?',
+          a: 'Always check for the green padlock 🔒 and ensure you typed https:// (with an "s" for SSL security) at https://edutrack.edu.kh.'
+        }
+      ],
+      faqKm: [
+        {
+          q: 'តើខ្ញុំត្រូវវាយតំណភ្ជាប់ URL រាល់ព្រឹកដែរឬទេ?',
+          a: 'មិនបាច់ទេ! គ្រាន់តែចុច "Add to Home Screen" តែម្តងគត់ រូបតំណាងកម្មវិធីនឹងបង្ហាញលើអេក្រង់ទូរស័ព្ទ។ អ្នកអាចចុចបើកប្រើភ្លាមៗពេញអេក្រង់ដោយមិនបាច់វាយ Link ម្តងទៀតឡើយ។'
+        },
+        {
+          q: 'តើត្រូវធ្វើដូចម្តេចប្រសិនបើតំណភ្ជាប់មិនដំណើរការ?',
+          a: 'សូមពិនិត្យមើលរូបសោរ 🔒 និងប្រាកដថាបានវាយ https://edutrack.edu.kh ត្រឹមត្រូវតាមអក្សរតូចទាំងអស់។'
+        }
+      ]
+    },
+    {
       id: 'kiosk',
-      titleEn: '1. Check-in Terminal & GPS Attendance',
-      titleKm: '១. ចំណុចស្កេនវត្តមាន និងទីតាំង GPS',
+      titleEn: '2. Check-in Terminal & GPS Attendance',
+      titleKm: '២. ចំណុចស្កេនវត្តមាន និងទីតាំង GPS',
       badge: 'Core Feature',
       icon: Clock,
       descriptionEn: 'How teachers and staff record daily check-in and check-out with automatic GPS boundary verification.',
@@ -130,8 +545,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'timetables',
-      titleEn: '2. Weekly Timetable & Period Management',
-      titleKm: '២. កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍ និងការគ្រប់គ្រងម៉ោង',
+      titleEn: '3. Weekly Timetable & Period Management',
+      titleKm: '៣. កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍ និងការគ្រប់គ្រងម៉ោង',
       badge: 'Academic',
       icon: Calendar,
       descriptionEn: 'Managing Mon-Sat timetable periods, assigning class sessions, rooms, subjects, and hourly wage rates.',
@@ -183,8 +598,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'wages',
-      titleEn: '3. Teaching Hours & Wage Payroll Calculation',
-      titleKm: '៣. ការគណនាម៉ោងបង្រៀន និងប្រាក់ឈ្នួលគ្រូ',
+      titleEn: '4. Teaching Hours & Wage Payroll Calculation',
+      titleKm: '៤. ការគណនាម៉ោងបង្រៀន និងប្រាក់ឈ្នួលគ្រូ',
       badge: 'Finance / HR',
       icon: DollarSign,
       descriptionEn: 'Automated calculation of actual taught hours and net payable wages based on verified check-in/out records.',
@@ -236,8 +651,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'telegram',
-      titleEn: '4. Telegram Bot & Instant Alerts Setup',
-      titleKm: '៤. ការកំណត់ Telegram Bot និងសារដំណឹងស្វ័យប្រវត្តិ',
+      titleEn: '5. Telegram Bot & Instant Alerts Setup',
+      titleKm: '៥. ការកំណត់ Telegram Bot និងសារដំណឹងស្វ័យប្រវត្តិ',
       badge: 'Automation',
       icon: Send,
       descriptionEn: 'Connect your school Telegram group or channel to receive real-time notifications when teachers arrive, depart, or arrive late.',
@@ -279,8 +694,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'staff',
-      titleEn: '5. Faculty & Employee Staff Profiles',
-      titleKm: '៥. ការគ្រប់គ្រងព័ត៌មានគ្រូបង្រៀន និងបុគ្គលិក',
+      titleEn: '6. Faculty & Employee Staff Profiles',
+      titleKm: '៦. ការគ្រប់គ្រងព័ត៌មានគ្រូបង្រៀន និងបុគ្គលិក',
       badge: 'HR / Records',
       icon: Users,
       descriptionEn: 'Adding and editing teacher credentials, subjects, departments, hourly wage rates, and contact info.',
@@ -322,8 +737,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'settings',
-      titleEn: '6. Organization & Geofence Policy Configuration',
-      titleKm: '៦. ការកំណត់ស្ថាប័ន និងគោលការណ៍ទីតាំង GPS',
+      titleEn: '7. Organization & Geofence Policy Configuration',
+      titleKm: '៧. ការកំណត់ស្ថាប័ន និងគោលការណ៍ទីតាំង GPS',
       badge: 'Administration',
       icon: ShieldCheck,
       descriptionEn: 'Customizing school branding, Khmer institution name, grace periods, and physical campus coordinates.',
@@ -365,8 +780,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'auth',
-      titleEn: '7. Sign-in, User Accounts & Roles (RBAC)',
-      titleKm: '៧. ការចូលប្រើប្រព័ន្ធ គណនី និងសិទ្ធិអនុញ្ញាត',
+      titleEn: '8. Sign-in, User Accounts & Roles (RBAC)',
+      titleKm: '៨. ការចូលប្រើប្រព័ន្ធ គណនី និងសិទ្ធិអនុញ្ញាត',
       badge: 'Security',
       icon: Lock,
       descriptionEn: 'How to sign in with Google or Staff ID, and how role permissions control feature access.',
@@ -408,13 +823,18 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'pwa-install',
-      titleEn: '8. Install App to Mobile Home Screen (PWA)',
-      titleKm: '៨. ដំឡើងកម្មវិធីលើអេក្រង់ទូរស័ព្ទ (PWA)',
+      titleEn: '9. Install App to Mobile Home Screen (PWA)',
+      titleKm: '៩. ដំឡើងកម្មវិធីលើអេក្រង់ទូរស័ព្ទ (PWA)',
       badge: 'Mobile PWA',
       icon: Smartphone,
       descriptionEn: 'How to install EduTrack directly onto iPhone (iOS Safari) or Android (Chrome) home screen for fast 1-tap full-screen access without app stores.',
       descriptionKm: 'ការណែនាំអំពីរបៀបដំឡើង EduTrack លើអេក្រង់ដើមនៃទូរស័ព្ទដៃ iPhone និង Android ដើម្បីប្រើប្រាស់ដូចកម្មវិធីទូរស័ព្ទពិតប្រាកដ ដោយមិនបាច់ចូល App Store ឬ Play Store។',
       stepsEn: [
+        {
+          title: 'Opening Browser & Entering Web Link (https://edutrack.edu.kh)',
+          desc: '1. Open Google Chrome on Android/PC or Safari on iPhone. 2. Tap the top URL address bar. 3. Type or paste the school portal link: https://edutrack.edu.kh. 4. Tap Enter/Go to load the portal.',
+          tip: 'Ensure the secure padlock 🔒 (HTTPS) appears for verified encrypted privacy.'
+        },
         {
           title: 'First-Login Popup Alert & In-App Guide',
           desc: 'When staff or teachers first sign in on a mobile browser, an automatic popup alert welcomes them to install EduTrack directly to their home screen with 1 tap.',
@@ -432,6 +852,11 @@ export const SystemUserManual: React.FC = () => {
         }
       ],
       stepsKm: [
+        {
+          title: 'ការបើកកម្មវិធីរុករក & វាយបញ្ចូលតំណភ្ជាប់ (https://edutrack.edu.kh)',
+          desc: '១. បើកកម្មវិធី Google Chrome (លើ Android/PC) ឬ Safari (លើ iPhone/iPad)។ ២. ចុចលើរបារអាសយដ្ឋាន URL ខាងលើ។ ៣. វាយបញ្ចូល ឬបិទភ្ជាប់តំណភ្ជាប់សាលា៖ https://edutrack.edu.kh។ ៤. ចុច Go ឬ Enter ដើម្បីចូលប្រព័ន្ធ។',
+          tip: 'ពិនិត្យមើលរូបសោរ 🔒 (HTTPS) ដើម្បីធានាសុវត្ថិភាពទិន្នន័យ និងការការពារកម្រិតខ្ពស់។'
+        },
         {
           title: 'ផ្ទាំង Alert ដំឡើងស្វ័យប្រវត្តពេលចូលដំបូង',
           desc: 'នៅពេលគ្រូ ឬបុគ្គលិកចូលប្រើលើកដំបូងតាមទូរស័ព្ទដៃ ប្រព័ន្ធនឹងបង្ហាញផ្ទាំង Alert ស្វាគមន៍ដោយស្វ័យប្រវត្ត ដើម្បីឱ្យលោកអ្នកដំឡើង App លើអេក្រង់ដើមដោយចុចតែម្តង។',
@@ -451,8 +876,8 @@ export const SystemUserManual: React.FC = () => {
     },
     {
       id: 'schedule-alerts',
-      titleEn: '9. Teacher Schedule Alerts Before Start & End',
-      titleKm: '៩. ការដាស់តឿនគ្រូមុនម៉ោងបង្រៀនចូល និងចេញ',
+      titleEn: '10. Teacher Schedule Alerts Before Start & End',
+      titleKm: '១០. ការដាស់តឿនគ្រូមុនម៉ោងបង្រៀនចូល និងចេញ',
       badge: 'Automated Alerts',
       icon: Bell,
       descriptionEn: 'How EduTrack alerts teachers automatically before their scheduled class starts and ends via Audio Bell Chimes, Web Push Notifications, In-App Countdown Banners, and Telegram Bot Dispatches.',
@@ -521,6 +946,79 @@ export const SystemUserManual: React.FC = () => {
           a: 'ដំណើរការ! នៅពេលដំឡើង App លើទូរស័ព្ទ (PWA) រួចចុច "បើកការជូនដំណឹង" ទូរស័ព្ទនឹងលោត Push Notification លើ Lock Screen ដូចកម្មវិធីទូរស័ព្ទដទៃទៀត។'
         }
       ]
+    },
+    {
+      id: 'leave-requests',
+      titleEn: '11. Leave Requests by Hours or Full Days & Approvals',
+      titleKm: '១១. ការស្នើសុំច្បាប់ជាម៉ោង ឬជាថ្ងៃពេញ និងការអនុម័តច្បាប់',
+      badge: 'Leave Policy',
+      icon: CalendarCheck,
+      descriptionEn: 'Apply for leave flexibly by exact hours (e.g., 2 hours: 08:00 - 10:00) or full days. The system automatically cross-references scheduled teaching sessions, routes requests to department supervisors, logs leave attendance upon approval, and updates the 31-day sheet and personal monthly calendar.',
+      descriptionKm: 'ការស្នើសុំច្បាប់ឈប់សម្រាកបត់បែនជាម៉ោង (ឧ. ២ ម៉ោង៖ ០៨:០០-១០:០០) ឬជាថ្ងៃពេញ។ ប្រព័ន្ធផ្ទៀងផ្ទាត់ស្វ័យប្រវត្តិនូវម៉ោងបង្រៀនជាក់ស្តែង បញ្ជូនទៅប្រធានដេប៉ាតឺម៉ង់ពិនិត្យអនុម័ត កត់ត្រាអវត្តមានស្វ័យប្រវត្តលើតារាងវត្តមាន ៣១ថ្ងៃ និងប្រតិទិនបុគ្គលិក។',
+      stepsEn: [
+        {
+          title: '1. Select Leave Duration Mode: By Hours or Full Days',
+          desc: 'Click "+ Apply for Leave" in the Leave Requests tab. Toggle between "⏱️ By Hours" (partial day) or "📅 Full Days".',
+          tip: 'Hourly leave is ideal for medical visits, family errands, or official school missions during specific teaching periods.'
+        },
+        {
+          title: '2. Set Date & Exact Hours with Quick Presets',
+          desc: 'Choose your date and input Start Time & End Time. Use quick buttons (1 hr, 1.5 hrs, 2 hrs, 3 hrs, Half Day 4h). The system computes exact duration automatically.',
+          tip: 'The form displays any class sessions scheduled on that day to prevent timetable conflicts.'
+        },
+        {
+          title: '3. Select Category & Submit Reason',
+          desc: 'Choose from Annual Leave, Sick Leave, Personal Leave, Maternity Leave, or Other Duty. Enter a clear explanation for supervisor review.',
+          tip: 'Submissions are instantly timestamped with status "Pending Review".'
+        },
+        {
+          title: '4. Supervisor Approval & Auto-Attendance Logging',
+          desc: 'Supervisors approve or reject with 1 click. When approved, EduTrack automatically logs leave status for only the affected timetable classes, dispatches Telegram alerts with exact hours, and updates the 31-day sheet.',
+          tip: 'Classes outside the leave time window remain active so the teacher can teach and check in normally for the rest of the day.'
+        }
+      ],
+      stepsKm: [
+        {
+          title: '១. ជ្រើសរើសទម្រង់សុំច្បាប់៖ ជាម៉ោង ឬជាថ្ងៃពេញ',
+          desc: 'ចុចប៊ូតុង "+ ស្នើសុំច្បាប់ថ្មី" ក្នុងទំព័រច្បាប់ឈប់សម្រាក។ អ្នកអាចជ្រើសរើស "⏱️ ជាម៉ោង (By Hours)" ឬ "📅 ជាថ្ងៃពេញ (Full Days)"។',
+          tip: 'ការសុំច្បាប់ជាម៉ោងស័ក្តិសមបំផុតសម្រាប់ពិនិត្យសុខភាព ឬធុរៈផ្ទាល់ខ្លួនខ្លីៗមួយចំនួនម៉ោង។'
+        },
+        {
+          title: '២. កំណត់កាលបរិច្ឆេទ ម៉ោងចាប់ផ្តើម និងម៉ោងបញ្ចប់',
+          desc: 'ជ្រើសរើសកាលបរិច្ឆេទ រួចកំណត់ម៉ោងចាប់ផ្តើម និងបញ្ចប់ ឬចុចប៊ូតុងរហ័ស (១ ម៉ោង, ១.៥ ម៉ោង, ២ ម៉ោង, ៣ ម៉ោង, កន្លះថ្ងៃ ៤ ម៉ោង)។ ប្រព័ន្ធគណនាចំនួនម៉ោងស្វ័យប្រវត្ត។',
+          tip: 'ផ្ទាំងនឹងបង្ហាញបញ្ជីម៉ោងបង្រៀនដែលចំកាលបរិច្ឆេទនោះ ដើម្បីងាយស្រួលផ្ទៀងផ្ទាត់។'
+        },
+        {
+          title: '៣. ជ្រើសរើសប្រភេទច្បាប់ និងមូលហេតុ',
+          desc: 'ជ្រើសរើស៖ ច្បាប់ប្រចាំឆ្នាំ, ច្បាប់ឈឺ, ច្បាប់ផ្ទាល់ខ្លួន, ច្បាប់លំហែមាតុភាព ឬធុរៈផ្សេងៗ រួចបំពេញមូលហេតុដើម្បីផ្ញើទៅប្រធានដេប៉ាតឺម៉ង់។',
+          tip: 'សំណើនឹងមានស្ថានភាព "រង់ចាំពិនិត្យ (Pending Review)" ភ្លាមៗ។'
+        },
+        {
+          title: '៤. ការអនុម័ត និងកត់ត្រាវត្តមានស្វ័យប្រវត្តក្នុងតារាង',
+          desc: 'ប្រធានដេប៉ាតឺម៉ង់ចុច "អនុម័ត (Approve)"។ ប្រព័ន្ធនឹងកត់ត្រាអវត្តមានស្វ័យប្រវត្តតែលើម៉ោងបង្រៀនដែលចំម៉ោងសុំច្បាប់ប៉ុណ្ណោះ ផ្ញើសារដំណឹងទៅ Telegram និងបង្ហាញលើតារាង ៣១ថ្ងៃ និងប្រតិទិនប្រចាំខែ។',
+          tip: 'ម៉ោងបង្រៀនផ្សេងទៀតក្នុងថ្ងៃដដែលនៅតែបន្តដំណើរការធម្មតា គ្រូអាចស្កេនវត្តមានបង្រៀនបាន។'
+        }
+      ],
+      faqEn: [
+        {
+          q: 'Does taking 2 hours of leave mark the teacher absent for the whole day?',
+          a: 'No! When using "By Hours", the system precisely marks Leave only for class sessions that fall within that time window (e.g. 08:00 - 10:00). Other morning or afternoon classes remain completely unaffected and count toward regular presence.'
+        },
+        {
+          q: 'Where do teachers and managers see approved hourly leave?',
+          a: 'Approved hourly leave appears in the Leave Requests table (with exact hours count and badge), on the Monthly Presence Calendar (e.g. ⏱️ 2h Hourly Leave 08:00-10:00), and on the 31-Day Attendance Sheet.'
+        }
+      ],
+      faqKm: [
+        {
+          q: 'តើការសុំច្បាប់ ២ ម៉ោង ធ្វើឱ្យខកខានវត្តមានពេញមួយថ្ងៃទេ?',
+          a: 'មិនទេ! នៅពេលជ្រើសរើស "ជាម៉ោង (By Hours)" ប្រព័ន្ធកត់ត្រាច្បាប់តែលើម៉ោងបង្រៀនដែលចំចន្លោះម៉ោងសុំច្បាប់ប៉ុណ្ណោះ (ឧ. ០៨:០០-១០:០០)។ ម៉ោងបង្រៀនដទៃទៀតក្នុងថ្ងៃដដែលនៅតែដំណើរការធម្មតា។'
+        },
+        {
+          q: 'តើអាចមើលឃើញច្បាប់ជាម៉ោងនៅកន្លែងណាខ្លះ?',
+          a: 'ច្បាប់ជាម៉ោងបង្ហាញក្នុងតារាងគ្រប់គ្រងច្បាប់ (បង្ហាញចំនួនម៉ោង និងចន្លោះម៉ោងច្បាស់លាស់), លើប្រតិទិនវត្តមានប្រចាំខែ (ឧ. ⏱️ ២ម៉ោង ០៨:០០-១០:០០) និងលើតារាងវត្តមាន ៣១ ថ្ងៃ។'
+        }
+      ]
     }
   ];
 
@@ -563,8 +1061,8 @@ export const SystemUserManual: React.FC = () => {
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl font-medium">
             {isKhmer
-              ? 'ការណែនាំលម្អិតពីរបៀបស្កេនវត្តមាន កាលវិភាគបង្រៀន គណនាប្រាក់ឈ្នួលគ្រូ ការកំណត់ទីតាំង GPS និងតេឡេក្រាម Bot។'
-              : 'Complete walkthrough for faculty check-in, weekly class timetables, teaching hours & wage payroll, GPS geofencing, and automated Telegram alerts.'}
+              ? 'ការណែនាំលម្អិតពីរបៀបវាយតំណភ្ជាប់លើ Browser ស្កេនវត្តមាន កាលវិភាគបង្រៀន គណនាប្រាក់ឈ្នួលគ្រូ និងតេឡេក្រាម Bot។'
+              : 'Complete walkthrough for opening browser, entering school link, teacher PIN login, daily class schedule check-in, GPS attendance, and payroll.'}
           </p>
         </div>
 
@@ -624,316 +1122,358 @@ export const SystemUserManual: React.FC = () => {
         </div>
       </div>
 
-      {/* Teacher Video Manual Feature Banner (Installation till End - Download Only) */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-lg border border-blue-800/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 print:hidden">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0">
-            <Video className="w-7 h-7" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/30 text-blue-200 border border-blue-400/30">
-                Teacher Video Manual
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                1080p Full HD • MP4
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
-                7 Modules (Start till End)
-              </span>
-            </div>
-            <h3 className="text-base sm:text-lg font-black text-white">
-              {isKhmer
-                ? 'វីដេអូណែនាំការប្រើប្រាស់សម្រាប់គ្រូបង្រៀន (ចាប់ពីដំឡើងរហូតដល់បញ្ចប់)'
-                : 'Complete Teacher Video Manual: Installation till End'}
-            </h3>
-            <p className="text-xs text-blue-200/90 mt-0.5 max-w-xl">
-              {isKhmer
-                ? 'វីដេអូបង្រៀនកម្រិត Full HD 1080p គ្របដណ្តប់ពីការដំឡើងលើទូរស័ព្ទ (PWA), ចូលគណនី, កាលវិភាគបង្រៀន, ស្កេនវត្តមាន GPS, កូដ QR, សុំច្បាប់ និងប្រាក់ឈ្នួល។'
-                : 'Step-by-step Full HD training video covering PWA install, PIN login, weekly timetable, GPS campus check-in, personal QR badge, leaves & wages.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 flex-wrap sm:flex-nowrap">
+      {/* Primary Mode Selector: Live System Pages vs Written Documentation */}
+      <div className="bg-slate-900 p-2 rounded-3xl border border-slate-800 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
-            onClick={() => setIsVideoModalOpen(true)}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors border border-white/15 cursor-pointer"
+            onClick={() => setManualViewMode('interactive_pages')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+              manualViewMode === 'interactive_pages'
+                ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white shadow-lg shadow-blue-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
-            <Play className="w-4 h-4 text-cyan-300" />
-            <span>{isKhmer ? 'មើលមាតិកាជំពូក' : 'View Syllabus'}</span>
+            <LayoutDashboard className="w-4 h-4" />
+            <span>{isKhmer ? '💻 ទំព័រជាក់ស្តែងក្នុងប្រព័ន្ធ (Live System Pages)' : '💻 Live System Pages Walkthrough'}</span>
+            <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white uppercase tracking-wider font-extrabold">
+              100% Real
+            </span>
           </button>
 
-          <a
-            href="/downloads/teacher-video-manual.mp4"
-            download="EduTrack_Teacher_Video_Manual_1080p.mp4"
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-xs shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+          <button
+            onClick={() => setManualViewMode('documentation')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+              manualViewMode === 'documentation'
+                ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white shadow-lg shadow-blue-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
           >
-            <Download className="w-4 h-4" />
-            <span>{isKhmer ? 'ទាញយកវីដេអូ (MP4)' : 'Download Video (MP4)'}</span>
-          </a>
+            <BookOpen className="w-4 h-4" />
+            <span>{isKhmer ? '📖 សៀវភៅណែនាំផ្លូវការ (Detailed Guide)' : '📖 Detailed User Documentation'}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 px-3 text-xs text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>{isKhmer ? 'ប្រព័ន្ធផ្ទាល់ អាចចុចសាកល្បងបានគ្រប់ទំព័រ' : 'Interactive & Real Live Application'}</span>
         </div>
       </div>
 
-      {/* Quick Search & Summary Strip */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder={isKhmer ? 'ស្វែងរកមេរៀនណែនាំ (ឧ. ស្កេនវត្តមាន, ប្រាក់ឈ្នួល)...' : 'Search user manual guides...'}
-            className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+      {/* ======================================================== */}
+      {/* MODE A: LIVE SYSTEM PAGES WALKTHROUGH EMBEDDED IN MANUAL */}
+      {/* ======================================================== */}
+      {manualViewMode === 'interactive_pages' ? (
+        <div className="space-y-4 animate-in fade-in">
+          {/* Quick Explanatory Banner */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 border border-slate-800 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center text-lg shrink-0">
+                🌐
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white">
+                  {isKhmer ? 'ទំព័រជាក់ស្តែងក្នុងប្រព័ន្ធ សម្រាប់គ្រូបង្រៀន (Live Authentic Interface)' : 'Real System Interface Walkthrough for Teachers'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {isKhmer
+                    ? 'ចុចលើម៉ូឌុលខាងក្រោមដើម្បីមើលរបៀបវាយតំណភ្ជាប់ Browser, ចូលគណនី, កាលវិភាគបង្រៀន និងស្កេនចូល-ចេញ។'
+                    : 'Click modules below to inspect web browser URL entry, PIN login, schedule check-in/out, and kiosk attendance.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsVideoModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all border border-slate-700 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Video className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{isKhmer ? 'មើលពេញអេក្រង់ (Fullscreen)' : 'Open Fullscreen'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Embedded Real Interface Action Walkthrough */}
+          <div className="h-[780px] w-full rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative bg-slate-950">
+            <RealInterfaceActionWalkthrough
+              initialModule={1}
+              onDownloadRequested={() => setIsVideoModalOpen(true)}
+              onSwitchToVideoPlayer={() => setIsVideoModalOpen(true)}
+              onClose={() => setManualViewMode('documentation')}
+            />
+          </div>
+        </div>
+      ) : (
+        /* ======================================================== */
+        /* MODE B: DETAILED DOCUMENTATION & BROWSER LINK SIMULATOR */
+        /* ======================================================== */
+        <div className="space-y-6 animate-in fade-in">
+          {/* Top Interactive Browser Link Simulator (Always accessible) */}
+          <WebBrowserLinkSimulator
+            onExplorePages={() => setManualViewMode('interactive_pages')}
           />
-        </div>
 
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-          <span>{manualSections.length} Comprehensive Modules</span>
-          <span>•</span>
-          <span className="text-indigo-600 font-extrabold">Bilingual Khmer/English</span>
-        </div>
-      </div>
-
-      {/* Main Documentation Layout: Sidebar + Reader View */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Navigation Sidebar of Modules */}
-        <div className="lg:col-span-4 space-y-2 print:hidden">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-3 space-y-1.5">
-            <div className="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              {isKhmer ? 'ជំពូក និងប្រធានបទ' : 'Table of Contents'}
+          {/* Quick Search & Summary Strip */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={isKhmer ? 'ស្វែងរកមេរៀនណែនាំ (ឧ. វាយតំណភ្ជាប់, ស្កេនវត្តមាន)...' : 'Search user manual guides...'}
+                className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              />
             </div>
 
-            {filteredSections.map(sec => {
-              const IconComp = sec.icon;
-              const isSelected = sec.id === activeSection.id;
-
-              return (
-                <button
-                  key={sec.id}
-                  onClick={() => setActiveSectionId(sec.id)}
-                  className={`w-full text-left p-3 rounded-2xl transition-all flex items-start gap-3 ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                      : 'hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <div className={`p-2 rounded-xl shrink-0 ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    <IconComp className="w-4 h-4" />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className={`text-xs font-bold truncate block ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                        {isKhmer ? sec.titleKm : sec.titleEn}
-                      </span>
-                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0 ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {sec.badge}
-                      </span>
-                    </div>
-
-                    <p className={`text-[10px] mt-0.5 truncate ${isSelected ? 'text-indigo-100' : 'text-slate-400 font-khmer'}`}>
-                      {isKhmer ? sec.titleEn : sec.titleKm}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Quick Support Card */}
-          <div className="bg-indigo-50/70 rounded-3xl p-5 border border-indigo-100 space-y-2">
-            <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span>{isKhmer ? 'ជំនួយបច្ចេកទេស' : 'Institutional Assistance'}</span>
-            </div>
-            <p className="text-xs text-slate-600 font-medium">
-              {isKhmer
-                ? 'ប្រសិនបើត្រូវការជំនួយបន្ថែម ឬកំណត់ទីតាំង GPS សាលា សូមទាក់ទងអ្នកគ្រប់គ្រងប្រព័ន្ធ (Super Administrator)។'
-                : 'Need help onboarding staff or calibrating GPS boundary? Contact your system super administrator.'}
-            </p>
-          </div>
-        </div>
-
-        {/* Reader Display Panel */}
-        <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-8">
-          
-          {/* Module Title Header */}
-          <div className="border-b border-slate-100 pb-5">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 uppercase tracking-wider">
-                {activeSection.badge}
-              </span>
-              <span className="text-xs text-slate-400">Chapter Guide</span>
-            </div>
-
-            {(activeLangMode === 'km' || activeLangMode === 'both') && (
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 font-khmer leading-snug">
-                {activeSection.titleKm}
-              </h2>
-            )}
-
-            {(activeLangMode === 'en' || activeLangMode === 'both') && (
-              <h3 className="text-lg sm:text-xl font-bold text-indigo-900 mt-1">
-                {activeSection.titleEn}
-              </h3>
-            )}
-
-            <p className="text-xs sm:text-sm text-slate-600 mt-3 leading-relaxed">
-              {activeLangMode === 'km' && activeSection.descriptionKm}
-              {activeLangMode === 'en' && activeSection.descriptionEn}
-              {activeLangMode === 'both' && (
-                <>
-                  <span className="block font-khmer text-slate-800">{activeSection.descriptionKm}</span>
-                  <span className="block text-slate-500 mt-1">{activeSection.descriptionEn}</span>
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* Step-by-Step Instructions */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>{isKhmer ? 'ជំហាននៃការអនុវត្តជាក់ស្តែង' : 'Operational Step-by-Step Instructions'}</span>
-            </h4>
-
-            <div className="space-y-4">
-              {activeSection.stepsEn.map((stepEn, idx) => {
-                const stepKm = activeSection.stepsKm[idx] || stepEn;
-
-                return (
-                  <div
-                    key={idx}
-                    className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors space-y-2.5"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                        {idx + 1}
-                      </div>
-                      
-                      <div className="space-y-1 flex-1 min-w-0">
-                        {(activeLangMode === 'km' || activeLangMode === 'both') && (
-                          <h5 className="text-sm font-extrabold text-slate-900 font-khmer">
-                            {stepKm.title}
-                          </h5>
-                        )}
-                        {(activeLangMode === 'en' || activeLangMode === 'both') && (
-                          <h6 className="text-xs font-bold text-indigo-950">
-                            {stepEn.title}
-                          </h6>
-                        )}
-
-                        <p className="text-xs text-slate-600 leading-relaxed pt-1">
-                          {activeLangMode === 'km' && stepKm.desc}
-                          {activeLangMode === 'en' && stepEn.desc}
-                          {activeLangMode === 'both' && (
-                            <>
-                              <span className="block font-khmer text-slate-700">{stepKm.desc}</span>
-                              <span className="block text-slate-500 mt-1">{stepEn.desc}</span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    {(stepKm.tip || stepEn.tip) && (
-                      <div className="ml-10 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-bold mr-1">{isKhmer ? 'ចំណាំ៖' : 'Pro Tip:'}</span>
-                          <span>{isKhmer ? (stepKm.tip || stepEn.tip) : (stepEn.tip || stepKm.tip)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+              <span>{manualSections.length} Comprehensive Modules</span>
+              <span>•</span>
+              <span className="text-indigo-600 font-extrabold">Bilingual Khmer/English</span>
             </div>
           </div>
 
-          {/* Interactive Install Action if viewing the PWA Install module */}
-          {activeSection.id === 'pwa-install' && (
-            <div className="pt-2">
-              <PWAInstallButton variant="banner" />
-            </div>
-          )}
-
-          {/* Interactive Audio Bell Test if viewing Schedule Alerts module */}
-          {activeSection.id === 'schedule-alerts' && (
-            <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Volume2 className="w-5 h-5 text-indigo-600" />
-                  <span className="font-bold text-xs sm:text-sm text-indigo-950">
-                    {isKhmer ? 'សាកល្បងសម្លេងកណ្ដឹងរោទ៍កាលវិភាគផ្ទាល់' : 'Test Real-Time Schedule Chimes'}
-                  </span>
+          {/* Main Documentation Layout: Sidebar + Reader View */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Navigation Sidebar of Modules */}
+            <div className="lg:col-span-4 space-y-2 print:hidden">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-3 space-y-1.5">
+                <div className="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  {isKhmer ? 'ជំពូក និងប្រធានបទ' : 'Table of Contents'}
                 </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-200/60 text-indigo-800">
-                  Web Audio Synthesizer
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                {isKhmer
-                  ? 'ចុចប៊ូតុងខាងក្រោមដើម្បីស្តាប់សម្លេងកណ្ដឹងដែលប្រព័ន្ធនឹងបន្លឺឡើងមុនម៉ោងបង្រៀនចូល និងមុនម៉ោងចេញ៖'
-                  : 'Click below to preview the melodic chimes triggered by the system before class starts and ends:'}
-              </p>
-              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
-                <button
-                  onClick={() => ScheduleAlertService.playStartAlertSound()}
-                  className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{isKhmer ? '🔔 សម្លេងមុនម៉ោងចូល (Start Chime)' : '🔔 Play Class Start Chime'}</span>
-                </button>
-                <button
-                  onClick={() => ScheduleAlertService.playEndAlertSound()}
-                  className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{isKhmer ? '⏳ សម្លេងមុនម៉ោងចេញ (Wrap-up Chime)' : '⏳ Play Class End Chime'}</span>
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Frequently Asked Questions (FAQ) */}
-          {((activeSection.faqKm && activeSection.faqKm.length > 0) || (activeSection.faqEn && activeSection.faqEn.length > 0)) && (
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <HelpCircle className="w-4 h-4 text-indigo-600" />
-                <span>{isKhmer ? 'សំណួរដែលជួបញឹកញាប់ (FAQ)' : 'Frequently Asked Questions (FAQ)'}</span>
-              </h4>
-
-              <div className="space-y-3">
-                {activeSection.faqEn?.map((itemEn, fIdx) => {
-                  const itemKm = activeSection.faqKm?.[fIdx] || itemEn;
+                {filteredSections.map(sec => {
+                  const IconComp = sec.icon;
+                  const isSelected = sec.id === activeSection.id;
 
                   return (
-                    <div key={fIdx} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1.5">
-                      <div className="text-xs font-black text-slate-900 flex items-start gap-2">
-                        <span className="text-indigo-600 font-mono font-bold">Q:</span>
-                        <span>{isKhmer ? itemKm.q : itemEn.q}</span>
+                    <button
+                      key={sec.id}
+                      onClick={() => setActiveSectionId(sec.id)}
+                      className={`w-full text-left p-3 rounded-2xl transition-all flex items-start gap-3 ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className={`p-2 rounded-xl shrink-0 ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        <IconComp className="w-4 h-4" />
                       </div>
-                      <div className="text-xs text-slate-600 pl-4.5 leading-relaxed">
-                        <span className="text-emerald-600 font-bold mr-1">A:</span>
-                        <span>{isKhmer ? itemKm.a : itemEn.a}</span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={`text-xs font-bold truncate block ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                            {isKhmer ? sec.titleKm : sec.titleEn}
+                          </span>
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shrink-0 ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {sec.badge}
+                          </span>
+                        </div>
+
+                        <p className={`text-[10px] mt-0.5 truncate ${isSelected ? 'text-indigo-100' : 'text-slate-400 font-khmer'}`}>
+                          {isKhmer ? sec.titleEn : sec.titleKm}
+                        </p>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+
+              {/* Quick Support Card */}
+              <div className="bg-indigo-50/70 rounded-3xl p-5 border border-indigo-100 space-y-2">
+                <div className="flex items-center gap-2 text-indigo-900 font-bold text-xs">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <span>{isKhmer ? 'ជំនួយបច្ចេកទេស' : 'Institutional Assistance'}</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium">
+                  {isKhmer
+                    ? 'ប្រសិនបើត្រូវការជំនួយបន្ថែម ឬកំណត់ទីតាំង GPS សាលា សូមទាក់ទងអ្នកគ្រប់គ្រងប្រព័ន្ធ (Super Administrator)។'
+                    : 'Need help onboarding staff or calibrating GPS boundary? Contact your system super administrator.'}
+                </p>
+              </div>
             </div>
-          )}
 
+            {/* Reader Display Panel */}
+            <div className="lg:col-span-8 bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-8">
+              
+              {/* Module Title Header */}
+              <div className="border-b border-slate-100 pb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 uppercase tracking-wider">
+                    {activeSection.badge}
+                  </span>
+                  <span className="text-xs text-slate-400">Chapter Guide</span>
+                </div>
+
+                {(activeLangMode === 'km' || activeLangMode === 'both') && (
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 font-khmer leading-snug">
+                    {activeSection.titleKm}
+                  </h2>
+                )}
+
+                {(activeLangMode === 'en' || activeLangMode === 'both') && (
+                  <h3 className="text-lg sm:text-xl font-bold text-indigo-900 mt-1">
+                    {activeSection.titleEn}
+                  </h3>
+                )}
+
+                <p className="text-xs sm:text-sm text-slate-600 mt-3 leading-relaxed">
+                  {activeLangMode === 'km' && activeSection.descriptionKm}
+                  {activeLangMode === 'en' && activeSection.descriptionEn}
+                  {activeLangMode === 'both' && (
+                    <>
+                      <span className="block font-khmer text-slate-800">{activeSection.descriptionKm}</span>
+                      <span className="block text-slate-500 mt-1">{activeSection.descriptionEn}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Step-by-Step Instructions */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{isKhmer ? 'ជំហាននៃការអនុវត្តជាក់ស្តែង' : 'Operational Step-by-Step Instructions'}</span>
+                </h4>
+
+                <div className="space-y-4">
+                  {activeSection.stepsEn.map((stepEn, idx) => {
+                    const stepKm = activeSection.stepsKm[idx] || stepEn;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors space-y-2.5"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                            {idx + 1}
+                          </div>
+                          
+                          <div className="space-y-1 flex-1 min-w-0">
+                            {(activeLangMode === 'km' || activeLangMode === 'both') && (
+                              <h5 className="text-sm font-extrabold text-slate-900 font-khmer">
+                                {stepKm.title}
+                              </h5>
+                            )}
+                            {(activeLangMode === 'en' || activeLangMode === 'both') && (
+                              <h6 className="text-xs font-bold text-indigo-950">
+                                {stepEn.title}
+                              </h6>
+                            )}
+
+                            <p className="text-xs text-slate-600 leading-relaxed pt-1">
+                              {activeLangMode === 'km' && stepKm.desc}
+                              {activeLangMode === 'en' && stepEn.desc}
+                              {activeLangMode === 'both' && (
+                                <>
+                                  <span className="block font-khmer text-slate-700">{stepKm.desc}</span>
+                                  <span className="block text-slate-500 mt-1">{stepEn.desc}</span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {(stepKm.tip || stepEn.tip) && (
+                          <div className="ml-10 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-900 flex items-start gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold mr-1">{isKhmer ? 'ចំណាំ៖' : 'Pro Tip:'}</span>
+                              <span>{isKhmer ? (stepKm.tip || stepEn.tip) : (stepEn.tip || stepKm.tip)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Interactive Install Action if viewing the PWA Install module or Browser entry */}
+              {(activeSection.id === 'pwa-install' || activeSection.id === 'browser-entry') && (
+                <div className="pt-2">
+                  <PWAInstallButton variant="banner" />
+                </div>
+              )}
+
+              {/* Interactive Audio Bell Test if viewing Schedule Alerts module */}
+              {activeSection.id === 'schedule-alerts' && (
+                <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="w-5 h-5 text-indigo-600" />
+                      <span className="font-bold text-xs sm:text-sm text-indigo-950">
+                        {isKhmer ? 'សាកល្បងសម្លេងកណ្ដឹងរោទ៍កាលវិភាគផ្ទាល់' : 'Test Real-Time Schedule Chimes'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-200/60 text-indigo-800">
+                      Web Audio Synthesizer
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {isKhmer
+                      ? 'ចុចប៊ូតុងខាងក្រោមដើម្បីស្តាប់សម្លេងកណ្ដឹងដែលប្រព័ន្ធនឹងបន្លឺឡើងមុនម៉ោងបង្រៀនចូល និងមុនម៉ោងចេញ៖'
+                      : 'Click below to preview the melodic chimes triggered by the system before class starts and ends:'}
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                    <button
+                      onClick={() => ScheduleAlertService.playStartAlertSound()}
+                      className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{isKhmer ? '🔔 សម្លេងមុនម៉ោងចូល (Start Chime)' : '🔔 Play Class Start Chime'}</span>
+                    </button>
+                    <button
+                      onClick={() => ScheduleAlertService.playEndAlertSound()}
+                      className="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-colors"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{isKhmer ? '⏳ សម្លេងមុនម៉ោងចេញ (Wrap-up Chime)' : '⏳ Play Class End Chime'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Frequently Asked Questions (FAQ) */}
+              {((activeSection.faqKm && activeSection.faqKm.length > 0) || (activeSection.faqEn && activeSection.faqEn.length > 0)) && (
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-indigo-600" />
+                    <span>{isKhmer ? 'សំណួរដែលជួបញឹកញាប់ (FAQ)' : 'Frequently Asked Questions (FAQ)'}</span>
+                  </h4>
+
+                  <div className="space-y-3">
+                    {activeSection.faqEn?.map((itemEn, fIdx) => {
+                      const itemKm = activeSection.faqKm?.[fIdx] || itemEn;
+
+                      return (
+                        <div key={fIdx} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-1.5">
+                          <div className="text-xs font-black text-slate-900 flex items-start gap-2">
+                            <span className="text-indigo-600 font-mono font-bold">Q:</span>
+                            <span>{isKhmer ? itemKm.q : itemEn.q}</span>
+                          </div>
+                          <div className="text-xs text-slate-600 pl-4.5 leading-relaxed">
+                            <span className="text-emerald-600 font-bold mr-1">A:</span>
+                            <span>{isKhmer ? itemKm.a : itemEn.a}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+          </div>
         </div>
-
-      </div>
+      )}
 
       {/* Teacher Video Manual Syllabus & Download Modal */}
       <TeacherVideoManualModal

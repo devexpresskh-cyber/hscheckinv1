@@ -392,22 +392,22 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
           break;
       }
 
-      // Calculate worked minutes if attendance record exists
-      if (cell.attendance) {
-        if (cell.attendance.checkInTime && cell.attendance.checkOutTime) {
-          const inMins = AttendanceEngine.timeToMinutes(cell.attendance.checkInTime);
-          const outMins = AttendanceEngine.timeToMinutes(cell.attendance.checkOutTime);
-          if (outMins > inMins) {
-            totalWorkedMinutes += (outMins - inMins);
+      // Calculate worked minutes using full schedule hour
+      if (cell.attendance && (cell.attendance.checkInTime || cell.computedStatus === 'Present' || cell.computedStatus === 'Late' || cell.computedStatus === 'On Duty')) {
+        let schedMins = 480; // default 8 hours shift
+        if (assignedSchedule.startTime && assignedSchedule.endTime) {
+          const inMins = AttendanceEngine.timeToMinutes(assignedSchedule.startTime);
+          const outMins = AttendanceEngine.timeToMinutes(assignedSchedule.endTime);
+          let diff = outMins - inMins;
+          if (assignedSchedule.breakStart && assignedSchedule.breakEnd) {
+            const bIn = AttendanceEngine.timeToMinutes(assignedSchedule.breakStart);
+            const bOut = AttendanceEngine.timeToMinutes(assignedSchedule.breakEnd);
+            const bDiff = bOut - bIn;
+            if (bDiff > 0 && diff > bDiff) diff -= bDiff;
           }
-        } else if (cell.attendance.checkInTime) {
-          // If on duty today, calculate elapsed
-          const inMins = AttendanceEngine.timeToMinutes(cell.attendance.checkInTime);
-          const nowMins = AttendanceEngine.timeToMinutes(AttendanceEngine.getCurrentTimeString());
-          if (nowMins > inMins) {
-            totalWorkedMinutes += (nowMins - inMins);
-          }
+          if (diff > 0) schedMins = diff;
         }
+        totalWorkedMinutes += schedMins;
       }
     });
 
@@ -714,7 +714,7 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
         {/* Day Cells Grid */}
         <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 auto-rows-fr">
           {calendarCells.map((cell, idx) => {
-            const isWeekend = cell.dayOfWeek === 0 || cell.dayOfWeek === 6;
+            const isWeekend = cell.dayOfWeek === 0;
 
             return (
               <div
@@ -807,7 +807,16 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
                       {/* 2. Approved Leave Day */}
                       {cell.computedStatus === 'Leave' && cell.leave && (
                         <div className="p-1 rounded-lg bg-blue-50 border border-blue-200 text-[10px] text-blue-900 font-bold leading-tight">
-                          <p className="truncate">📋 {isKhmer ? 'ច្បាប់ឈប់សម្រាក' : cell.leave.leaveType}</p>
+                          <p className="truncate">
+                            {cell.leave.durationUnit === 'hours'
+                              ? `⏱️ ${cell.leave.hours || ''}h ${isKhmer ? 'ច្បាប់ជាម៉ោង' : 'Hourly Leave'}`
+                              : `📋 ${isKhmer ? 'ច្បាប់ឈប់សម្រាក' : cell.leave.leaveType}`}
+                          </p>
+                          {cell.leave.durationUnit === 'hours' && cell.leave.startTime && cell.leave.endTime && (
+                            <p className="text-[9px] text-blue-700 font-mono font-medium">
+                              {cell.leave.startTime} - {cell.leave.endTime}
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -821,6 +830,11 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
                           {cell.attendance.checkOutTime && (
                             <div className="text-[9px] text-slate-500 font-mono">
                               Out: {cell.attendance.checkOutTime}
+                            </div>
+                          )}
+                          {cell.leave && cell.leave.durationUnit === 'hours' && (
+                            <div className="text-[9px] text-blue-700 font-bold bg-blue-50 px-1 py-0.5 rounded border border-blue-200 truncate">
+                              ⏱️ +{cell.leave.hours}h {isKhmer ? 'ច្បាប់ជាម៉ោង' : 'LV'}
                             </div>
                           )}
                         </div>
@@ -956,11 +970,19 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
               {selectedDayDetails.leave && (
                 <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 flex items-center gap-3">
                   <CalendarCheck className="w-5 h-5 text-blue-600 shrink-0" />
-                  <div>
-                    <span className="font-bold text-xs text-blue-900 block">
-                      {selectedDayDetails.leave.leaveType}
-                    </span>
-                    <span className="text-[11px] text-blue-700">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs text-blue-900 block">
+                        {selectedDayDetails.leave.leaveType}
+                      </span>
+                      {selectedDayDetails.leave.durationUnit === 'hours' && (
+                        <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          ⏱️ {selectedDayDetails.leave.hours} {isKhmer ? 'ម៉ោង' : 'hrs'}
+                          {selectedDayDetails.leave.startTime && selectedDayDetails.leave.endTime && ` (${selectedDayDetails.leave.startTime} - ${selectedDayDetails.leave.endTime})`}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-blue-700 block mt-0.5">
                       {selectedDayDetails.leave.reason || (isKhmer ? 'ច្បាប់ឈប់សម្រាកត្រូវបានអនុម័ត' : 'Approved Leave')}
                     </span>
                   </div>

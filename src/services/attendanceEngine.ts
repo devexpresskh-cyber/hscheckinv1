@@ -868,7 +868,7 @@ export const AttendanceEngine = {
 
     // 1. Process TEACHERS strictly by Subject Schedule
     teachers.forEach(teacher => {
-      const onLeave = leaveRequests.find(l => l.personId === teacher.id);
+      const teacherLeaves = leaveRequests.filter(l => l.personId === teacher.id);
       const teacherSubjects = subjectSchedules.filter(s => {
         if (s.teacherId !== teacher.id) return false;
         if (s.daysOfWeek && Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
@@ -881,6 +881,13 @@ export const AttendanceEngine = {
         const attendance = currentAttendance.find(
           a => a.personId === teacher.id && a.subjectScheduleId === sub.id
         );
+
+        const onLeave = teacherLeaves.find(l => {
+          if (l.durationUnit === 'hours' && l.startTime && l.endTime) {
+            return sub.startTime < l.endTime && sub.endTime > l.startTime;
+          }
+          return true;
+        });
 
         if (onLeave && !attendance) {
           StorageService.addAttendanceRecord({
@@ -982,7 +989,13 @@ export const AttendanceEngine = {
       const schedule = this.getScheduleForPerson(emp.assignedScheduleId, emp.department);
       if (!schedule.daysOfWeek.includes(dayOfWeek)) return;
 
-      const onLeave = leaveRequests.find(l => l.personId === emp.id);
+      const onLeave = leaveRequests.find(l => {
+        if (l.personId !== emp.id) return false;
+        if (l.durationUnit === 'hours' && l.startTime && l.endTime) {
+          return schedule.startTime < l.endTime && schedule.endTime > l.startTime;
+        }
+        return true;
+      });
       const attendance = currentAttendance.find(a => a.personId === emp.id && !a.subjectScheduleId);
 
       if (onLeave && !attendance) {

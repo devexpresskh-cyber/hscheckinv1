@@ -372,6 +372,10 @@ export interface LeaveRequest {
   status: 'Pending' | 'Approved' | 'Rejected';
   approvedBy?: string;
   createdAt: string;
+  durationUnit?: 'days' | 'hours';
+  hours?: number;
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface Holiday {
