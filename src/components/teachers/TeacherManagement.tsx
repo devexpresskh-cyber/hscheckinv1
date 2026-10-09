@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
@@ -43,6 +44,8 @@ import {
 export const TeacherManagement: React.FC = () => {
   const { currentUser, canAccessDepartment, hasPermission } = useAuth();
   const { showToast } = useNotification();
+  const { isKhmer } = useLanguage();
+  const isTeacher = currentUser.role === 'teacher';
 
   const [activeTab, setActiveTab] = useState<'directory' | 'on_teaching' | 'sync_queue'>('directory');
   const [searchQuery, setSearchQuery] = useState('');
@@ -520,14 +523,21 @@ export const TeacherManagement: React.FC = () => {
                             <Layers className="w-4 h-4 text-indigo-600" />
                           </button>
 
-                          {/* Teacher Schedule QR Code & Printable Door Sign */}
-                          <button
-                            onClick={() => setSelectedTeacherForQR(teacher)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
-                            title="View & Print Teacher Schedule QR Door Sign / Badge"
-                          >
-                            <QrCode className="w-4 h-4 text-indigo-600" />
-                          </button>
+                          {/* Teacher Schedule QR Code & Printable Door Sign (Restricted: teachers can only view own QR) */}
+                          {(!isTeacher || (
+                            (currentUser.personId && (teacher.id === currentUser.personId || teacher.teacherId?.toLowerCase() === currentUser.personId.toLowerCase())) ||
+                            teacher.id === currentUser.id.replace(/^usr-/, '') ||
+                            (currentUser.email && teacher.email && teacher.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+                            teacher.fullName.toLowerCase() === currentUser.fullName.toLowerCase()
+                          )) && (
+                            <button
+                              onClick={() => setSelectedTeacherForQR(teacher)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer"
+                              title={isTeacher ? (isKhmer ? 'មើលកូដ QR ផ្ទាល់ខ្លួន' : 'View My Own QR Badge') : (isKhmer ? 'មើល និងបោះពុម្ពកូដ QR គ្រូ' : 'View & Print Teacher Schedule QR Door Sign / Badge')}
+                            >
+                              <QrCode className="w-4 h-4 text-indigo-600" />
+                            </button>
+                          )}
 
                           {/* View Attendance History */}
                           <button
@@ -724,6 +734,8 @@ export const TeacherManagement: React.FC = () => {
                 subjectSchedules={subjectSchedules}
                 teachers={[selectedTeacherForSchedule]}
                 initialTeacherFilter={selectedTeacherForSchedule.id}
+                lockedTeacherId={selectedTeacherForSchedule.id}
+                isTeacherRole={currentUser.role === 'teacher'}
                 canEdit={false}
                 canDelete={false}
                 canCreate={false}

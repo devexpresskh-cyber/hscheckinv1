@@ -1278,12 +1278,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden max-w-full">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <CalendarDays className="w-6 h-6 text-indigo-600 shrink-0" />
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
+            <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 shrink-0" />
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight truncate">
               {isKhmer ? 'កាលវិភាគការងារ និងវេនបង្រៀន' : 'Work Schedules & Shift Calendar'}
             </h2>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1 sm:line-clamp-none">
             {isKhmer
               ? 'ការគ្រប់គ្រងកាលវិភាគ ម៉ោងចូល-ចេញ រយៈពេលអនុគ្រោះ និងការកំណត់វត្តមាន'
               : 'Configure shifts, flexible grace periods, absence thresholds, and department rosters.'}
@@ -1291,53 +1291,53 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 max-w-full">
-          {/* View Toggle: Daily > Weekly > Monthly */}
-          <div className="bg-slate-100 p-1 sm:p-1.5 rounded-2xl flex flex-wrap items-center gap-1 sm:gap-1.5 border border-slate-200 w-full sm:w-auto max-w-full">
+          {/* View Toggle: Daily > Weekly > Monthly (Compact & Clean without excessive wrapping) */}
+          <div className="bg-slate-100 p-1 rounded-2xl flex items-center overflow-x-auto no-scrollbar gap-1 border border-slate-200 w-full sm:w-auto max-w-full">
             <button
               onClick={() => setViewMode('daily_schedule')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 viewMode === 'daily_schedule' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <Clock className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាលវិភាគប្រចាំថ្ងៃ' : 'Daily Schedule'}</span>
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>{isKhmer ? 'ប្រចាំថ្ងៃ' : 'Daily'}</span>
             </button>
             <button
               onClick={() => setViewMode('weekly_timetable')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 viewMode === 'weekly_timetable' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <Calendar className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាលវិភាគសប្តាហ៍' : 'Weekly Timetable'}</span>
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              <span>{isKhmer ? 'ប្រចាំសប្តាហ៍' : 'Weekly'}</span>
             </button>
             <button
               onClick={() => setViewMode('monthly_calendar')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 viewMode === 'monthly_calendar' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <CalendarDays className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាលវិភាគខែ' : 'Monthly Calendar'}</span>
+              <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+              <span>{isKhmer ? 'ប្រចាំខែ' : 'Monthly'}</span>
             </button>
             <button
               onClick={() => setViewMode('subject_schedules')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 viewMode === 'subject_schedules' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
-              <BookOpen className="w-4 h-4 shrink-0" />
-              <span>{isKhmer ? 'កាតមុខវិជ្ជា' : 'Subject Cards'}</span>
+              <BookOpen className="w-3.5 h-3.5 shrink-0" />
+              <span>{isKhmer ? 'មុខវិជ្ជា' : 'Subjects'}</span>
             </button>
             {!isTeacher && (
               <button
                 onClick={() => setViewMode('cards')}
-                className={`flex-1 sm:flex-initial flex items-center justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   viewMode === 'cards' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
                 }`}
               >
-                <Building className="w-4 h-4 shrink-0" />
-                <span>{isKhmer ? 'វេនទូទៅ' : 'General Shifts'}</span>
+                <Building className="w-3.5 h-3.5 shrink-0" />
+                <span>{isKhmer ? 'វេនទូទៅ' : 'Shifts'}</span>
               </button>
             )}
           </div>

@@ -3,6 +3,7 @@ import { Teacher, TeacherSubjectSchedule, TimetablePeriod } from '../../types/in
 import { StorageService } from '../../services/storageService.ts';
 import { PeriodModal } from './PeriodModal.tsx';
 import { PeriodManagementModal } from './PeriodManagementModal.tsx';
+import { TeacherWeeklyTimelineCalendar } from './TeacherWeeklyTimelineCalendar.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { exportSchedulesToCsv } from '../../utils/scheduleExportUtils.ts';
@@ -24,7 +25,9 @@ import {
   DollarSign,
   Sliders,
   Coffee,
-  Building2
+  Building2,
+  LayoutList,
+  LayoutGrid
 } from 'lucide-react';
 
 export interface WeekDayDef {
@@ -97,23 +100,52 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   const isTeacherAccount = isTeacherRole || currentUser?.role === 'teacher';
   const systemSettings = StorageService.getSystemSettings();
 
-  const [selectedTeacher, setSelectedTeacher] = useState<string>(lockedTeacherId || initialTeacherFilter);
+  // Robustly resolve teacher profile for teacher accounts or locked view
+  const effectiveLockedTeacher = useMemo(() => {
+    if (lockedTeacherId) {
+      const match = teachers.find(t => t.id === lockedTeacherId);
+      if (match) return match;
+    }
+    if (isTeacherAccount && currentUser) {
+      if (currentUser.personId) {
+        const match = teachers.find(
+          t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase()
+        );
+        if (match) return match;
+      }
+      if (currentUser.email) {
+        const match = teachers.find(t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase());
+        if (match) return match;
+      }
+      if (currentUser.fullName) {
+        const match = teachers.find(t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase());
+        if (match) return match;
+      }
+    }
+    return lockedTeacherId ? teachers.find(t => t.id === lockedTeacherId) || null : null;
+  }, [lockedTeacherId, isTeacherAccount, currentUser, teachers]);
+
+  const [selectedTeacher, setSelectedTeacher] = useState<string>(() => {
+    if (effectiveLockedTeacher) return effectiveLockedTeacher.id;
+    return lockedTeacherId || initialTeacherFilter;
+  });
   const [selectedClass, setSelectedClass] = useState<string>('All');
   const [selectedRoom, setSelectedRoom] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [includeSunday, setIncludeSunday] = useState<boolean>(false);
+  const [viewLayout, setViewLayout] = useState<'timeline' | 'table'>('timeline');
 
   useEffect(() => {
-    if (lockedTeacherId) {
+    if (effectiveLockedTeacher) {
+      setSelectedTeacher(effectiveLockedTeacher.id);
+    } else if (lockedTeacherId) {
       setSelectedTeacher(lockedTeacherId);
     } else if (initialTeacherFilter) {
       setSelectedTeacher(initialTeacherFilter);
     }
-  }, [lockedTeacherId, initialTeacherFilter]);
+  }, [effectiveLockedTeacher, lockedTeacherId, initialTeacherFilter]);
 
-  const lockedTeacher = useMemo(() => {
-    return lockedTeacherId ? teachers.find(t => t.id === lockedTeacherId) : null;
-  }, [lockedTeacherId, teachers]);
+  const lockedTeacher = effectiveLockedTeacher;
 
   // Today day of week (0=Sun, 1=Mon, ..., 6=Sat)
   const todayDayOfWeek = new Date().getDay();
@@ -128,17 +160,15 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
 
   // Extract unique classes and rooms for filtering
   const relevantSchedulesForTeacher = useMemo(() => {
-    if (lockedTeacherId && isTeacherRole) {
+    if (effectiveLockedTeacher) {
       return subjectSchedules.filter(s =>
-        s.teacherId === lockedTeacherId ||
-        (lockedTeacher && (
-          s.teacherName?.toLowerCase() === lockedTeacher.fullName.toLowerCase() ||
-          (s.teacherId && lockedTeacher.teacherId && s.teacherId.toLowerCase() === lockedTeacher.teacherId.toLowerCase())
-        ))
+        s.teacherId === effectiveLockedTeacher.id ||
+        s.teacherName?.toLowerCase() === effectiveLockedTeacher.fullName.toLowerCase() ||
+        (s.teacherId && effectiveLockedTeacher.teacherId && s.teacherId.toLowerCase() === effectiveLockedTeacher.teacherId.toLowerCase())
       );
     }
     return subjectSchedules;
-  }, [subjectSchedules, lockedTeacherId, isTeacherRole, lockedTeacher]);
+  }, [subjectSchedules, effectiveLockedTeacher]);
 
   const uniqueClasses = useMemo(() => {
     const set = new Set<string>();
@@ -252,6 +282,24 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
     return filteredSchedules.filter(sub => isScheduleOnDay(sub, dayIndex)).length;
   };
 
+  // Unique rooms count
+  const roomsInSchedule = useMemo(() => {
+    return Array.from(new Set(filteredSchedules.map(s => s.room).filter(Boolean))).length;
+  }, [filteredSchedules]);
+
+  // Active teaching days count
+  const activeTeachingDays = useMemo(() => {
+    const daysSet = new Set<number>();
+    filteredSchedules.forEach(s => {
+      if (Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
+        s.daysOfWeek.forEach(d => daysSet.add(d));
+      } else if (s.dayOfWeek !== undefined) {
+        daysSet.add(s.dayOfWeek);
+      }
+    });
+    return daysSet.size;
+  }, [filteredSchedules]);
+
   const handlePrint = () => {
     window.print();
   };
@@ -265,39 +313,66 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   return (
     <div className="space-y-4">
       {/* Timetable Filter Toolbar */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 print:hidden">
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 print:hidden">
         {/* Left Filters */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-            <Filter className="w-4 h-4 text-indigo-600 shrink-0" />
-            <span>{isKhmer ? 'ច្រោះទិន្នន័យ៖' : 'Filter Timetable:'}</span>
-          </div>
-
-          {/* Teacher Selector or Locked Badge */}
-          {lockedTeacherId && isTeacherRole ? (
-            <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
-              <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
-              <span className="text-xs font-bold text-indigo-900">
-                {lockedTeacher?.fullName || 'My Timetable'}
-                {lockedTeacher?.khmerName ? ` (${lockedTeacher.khmerName})` : ''}
-              </span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-600 text-white uppercase tracking-wider">
-                {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned'}
+          {/* Teacher Selector or Teacher Profile Pill */}
+          {isTeacherAccount && effectiveLockedTeacher ? (
+            <div className="flex items-center gap-2.5 bg-gradient-to-r from-indigo-50 to-indigo-100/60 border border-indigo-200/80 px-3.5 py-1.5 rounded-2xl shadow-2xs">
+              {effectiveLockedTeacher.photoUrl?.trim() ? (
+                <img
+                  src={effectiveLockedTeacher.photoUrl.trim()}
+                  alt={effectiveLockedTeacher.fullName}
+                  className="w-7 h-7 rounded-full object-cover ring-2 ring-indigo-300 shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                  {effectiveLockedTeacher.fullName.charAt(0)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <span className="text-xs font-black text-indigo-950 block leading-tight truncate">
+                  {effectiveLockedTeacher.fullName} {effectiveLockedTeacher.khmerName ? `(${effectiveLockedTeacher.khmerName})` : ''}
+                </span>
+                <span className="text-[10px] text-indigo-700 font-semibold block leading-tight truncate">
+                  {effectiveLockedTeacher.department} • {effectiveLockedTeacher.subject}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-indigo-600 text-white shrink-0">
+                {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'My Schedule'}
               </span>
             </div>
+          ) : lockedTeacherId && lockedTeacher ? (
+            <div className="flex items-center gap-2.5 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl">
+              <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-indigo-900 block truncate">
+                  {lockedTeacher.fullName} {lockedTeacher.khmerName ? `(${lockedTeacher.khmerName})` : ''}
+                </span>
+                <span className="text-[10px] text-indigo-600 block truncate">
+                  {lockedTeacher.department}
+                </span>
+              </div>
+            </div>
           ) : (
-            <select
-              value={selectedTeacher}
-              onChange={e => setSelectedTeacher(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Faculty)' : 'All Teachers'}</option>
-              {teachers.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.subject}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                <Filter className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>{isKhmer ? 'គ្រូ៖' : 'Faculty:'}</span>
+              </div>
+              <select
+                value={selectedTeacher}
+                onChange={e => setSelectedTeacher(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Faculty)' : 'All Teachers'}</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.subject}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
 
           {/* Class / Grade Selector */}
@@ -339,22 +414,52 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
         </div>
 
         {/* Right Search & Actions */}
-        <div className="flex items-center gap-2.5">
-          <div className="relative flex-1 sm:w-64">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View Mode Toggle: Timeline vs Table Grid */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewLayout('timeline')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewLayout === 'timeline'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={isKhmer ? 'កាលវិភាគ Timeline' : 'Timeline View (Screenshot)'}
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'កាលវិភាគ' : 'Timeline'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewLayout('table')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewLayout === 'table'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title={isKhmer ? 'តារាងក្រឡា' : 'Grid Table'}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'តារាង' : 'Grid'}</span>
+            </button>
+          </div>
+
+          <div className="relative flex-1 sm:w-56 min-w-[140px]">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder={isKhmer ? 'ស្វែងរកមុខវិជ្ជា, គ្រូ, បន្ទប់...' : 'Search subject, room, teacher...'}
+              placeholder={isKhmer ? 'ស្វែងរក...' : 'Search subject, room...'}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-medium focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs font-medium focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
           {!isTeacherRole && canEdit && (
             <button
               onClick={() => setIsPeriodManageModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-colors border border-indigo-200 shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition-colors border border-indigo-200 shrink-0 cursor-pointer"
               title="Manage Timetable Periods & Bells"
             >
               <Sliders className="w-3.5 h-3.5 text-indigo-600" />
@@ -364,8 +469,8 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
 
           <button
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold transition-colors border border-slate-300 shadow-2xs shrink-0 cursor-pointer"
-            title="Export Weekly Schedule (CSV format compatible with import)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold transition-colors border border-slate-300 shadow-2xs shrink-0 cursor-pointer"
+            title="Export Weekly Schedule (CSV)"
           >
             <Download className="w-3.5 h-3.5 text-indigo-600" />
             <span className="hidden sm:inline">{isKhmer ? 'នាំចេញ CSV' : 'Export CSV'}</span>
@@ -373,61 +478,92 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shrink-0 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-2xs shrink-0 cursor-pointer"
             title="Print Mon-Sat Weekly Timetable"
           >
-            <Printer className="w-3.5 h-3.5" />
+            <Printer className="w-3.5 h-3.5 text-slate-200" />
             <span className="hidden sm:inline">{isKhmer ? 'បោះពុម្ព' : 'Print'}</span>
           </button>
         </div>
       </div>
 
-      {/* Weekly Schedule Banner Info */}
-      <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-5 shadow-md flex flex-wrap items-center justify-between gap-4 print:hidden">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-indigo-300">
-              <CalendarDays className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-black tracking-tight">
-                {isTeacherRole
-                  ? (isKhmer ? 'កាលវិភាគបង្រៀនផ្ទាល់ខ្លួនរបស់ខ្ញុំ (ចន្ទ ដល់ សៅរ៍)' : 'My Personal Teaching Timetable (Mon – Sat View)')
+      {viewLayout === 'timeline' ? (
+        <div className="py-2">
+          <TeacherWeeklyTimelineCalendar
+            subjectSchedules={subjectSchedules}
+            teachers={teachers}
+            effectiveTeacher={effectiveLockedTeacher || (selectedTeacher !== 'All' ? teachers.find(t => t.id === selectedTeacher) || null : null)}
+            isTeacherAccount={isTeacherAccount}
+            selectedClass={selectedClass}
+            selectedRoom={selectedRoom}
+            searchQuery={searchQuery}
+            onEditSchedule={onEditSchedule}
+            onDeleteSchedule={onDeleteSchedule}
+            onAddForSlot={onAddForSlot}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            canCreate={canCreate}
+            periods={periods}
+            onToggleToGridView={() => setViewLayout('table')}
+            onPrint={handlePrint}
+            onExportCsv={handleExportCsv}
+          />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Weekly Schedule Banner Info */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-md flex flex-wrap items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 shrink-0">
+            <CalendarDays className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-black tracking-tight">
+                {isTeacherAccount
+                  ? (isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍របស់ខ្ញុំ' : 'My Weekly Teaching Timetable')
                   : (isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំសប្តាហ៍ (ចន្ទ ដល់ សៅរ៍)' : 'Weekly Teaching Timetable (Mon – Sat View)')}
               </h3>
-              <p className="text-xs text-indigo-200 font-khmer mt-0.5">
-                {isTeacherRole
-                  ? (isKhmer
-                      ? 'កាលវិភាគផ្លូវការសម្រាប់តែថ្នាក់ និងមុខវិជ្ជារបស់អ្នកផ្ទាល់'
-                      : 'Official personal academic timetable showing exclusively your assigned classes and teaching slots')
-                  : (isKhmer 
-                      ? 'តារាងបែងចែកម៉ោងបង្រៀនប្រចាំសប្តាហ៍ ពីថ្ងៃចន្ទ ដល់ ថ្ងៃសៅរ៍ តាមវេននីមួយៗ'
-                      : 'Official 6-day academic schedule from Monday to Saturday with real-time period mapping')}
-              </p>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-indigo-200 border border-white/15">
+                {includeSunday ? 'Mon – Sun' : 'Mon – Sat'}
+              </span>
             </div>
+            <p className="text-xs text-indigo-200/90 font-khmer mt-0.5">
+              {isTeacherAccount && effectiveLockedTeacher
+                ? `${effectiveLockedTeacher.fullName} • ${effectiveLockedTeacher.department} • ${effectiveLockedTeacher.subject}`
+                : (isKhmer
+                    ? 'តារាងបែងចែកម៉ោងបង្រៀនប្រចាំសប្តាហ៍ ពីថ្ងៃចន្ទ ដល់ ថ្ងៃសៅរ៍ តាមវេននីមួយៗ'
+                    : 'Official academic schedule with period mapping and room assignments')}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <span className="text-[10px] text-indigo-300 uppercase tracking-wider block font-bold">
-              {isKhmer ? 'ម៉ោងបង្រៀនសរុប' : 'Total Active Periods'}
+        {/* 3 Metric Stats Chips */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="bg-white/10 backdrop-blur-xs border border-white/10 px-3.5 py-2 rounded-2xl text-center min-w-[80px]">
+            <span className="text-[10px] text-indigo-300 font-bold block uppercase tracking-wider">
+              {isKhmer ? 'ម៉ោងបង្រៀន' : 'Classes'}
             </span>
-            <span className="text-lg font-mono font-black text-white">
+            <span className="text-base sm:text-lg font-mono font-black text-white leading-tight">
               {filteredSchedules.length}
             </span>
           </div>
-          <div className="h-8 w-px bg-white/20" />
-          <div className="text-right">
-            <span className="text-[10px] text-indigo-300 uppercase tracking-wider block font-bold">
-              {isKhmer ? 'គ្រូកំពុងមើល' : 'Filtered Faculty'}
+
+          <div className="bg-white/10 backdrop-blur-xs border border-white/10 px-3.5 py-2 rounded-2xl text-center min-w-[80px]">
+            <span className="text-[10px] text-indigo-300 font-bold block uppercase tracking-wider">
+              {isKhmer ? 'ថ្ងៃបង្រៀន' : 'Days'}
             </span>
-            <span className="text-xs font-bold text-emerald-400 block truncate max-w-[160px]">
-              {lockedTeacherId
-                ? `${lockedTeacher?.fullName || 'My Timetable'} (${isKhmer ? 'ផ្ទាល់ខ្លួន' : 'Owned'})`
-                : (selectedTeacher === 'All' 
-                    ? (isKhmer ? 'គ្រូទាំងអស់' : 'All Teachers')
-                    : (teachers.find(t => t.id === selectedTeacher)?.fullName || selectedTeacher))}
+            <span className="text-base sm:text-lg font-mono font-black text-emerald-300 leading-tight">
+              {activeTeachingDays}
+            </span>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-xs border border-white/10 px-3.5 py-2 rounded-2xl text-center min-w-[80px]">
+            <span className="text-[10px] text-indigo-300 font-bold block uppercase tracking-wider">
+              {isKhmer ? 'បន្ទប់រៀន' : 'Rooms'}
+            </span>
+            <span className="text-base sm:text-lg font-mono font-black text-sky-300 leading-tight">
+              {roomsInSchedule}
             </span>
           </div>
         </div>
@@ -763,20 +899,27 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                           onEditSchedule(cls);
                                         }
                                       }}
-                                      role="button"
-                                      tabIndex={0}
-                                      className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs hover:shadow-md hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 transition-all relative overflow-hidden group cursor-pointer text-left timetable-card print:p-2 print:rounded-lg print:border print:border-slate-400 print:shadow-none"
-                                      style={{ borderLeftColor: cardBg, borderLeftWidth: '4px' }}
+                                      role={canEdit ? "button" : undefined}
+                                      tabIndex={canEdit ? 0 : undefined}
+                                      className={`rounded-xl border border-slate-200/90 bg-white p-2 sm:p-2.5 shadow-2xs hover:shadow-md transition-all relative overflow-hidden group text-left timetable-card print:p-1.5 print:rounded-lg print:border print:border-slate-400 print:shadow-none ${
+                                        canEdit ? 'cursor-pointer hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100' : ''
+                                      }`}
+                                      style={{ borderLeftColor: cardBg, borderLeftWidth: '3.5px' }}
                                     >
-                                      {/* Top Row: Code & Rate */}
+                                      {/* Top Row: Code & Grade Badge */}
                                       <div className="flex items-center justify-between gap-1 mb-1">
-                                        <span className="font-mono text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 print:bg-slate-100 print:text-black print:border-slate-300">
+                                        <span className="font-mono text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100/80 print:bg-slate-100 print:text-black print:border-slate-300 whitespace-nowrap">
                                           {cls.subjectCode || 'SUB'}
                                         </span>
 
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                          <span className="inline-flex items-center gap-0.5 font-bold text-[9px] text-indigo-900 bg-indigo-50/70 border border-indigo-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                            <GraduationCap className="w-2.5 h-2.5 text-indigo-600 shrink-0" />
+                                            <span className="truncate max-w-[70px] sm:max-w-[80px]">{cls.gradeClass}</span>
+                                          </span>
+
                                           {!isTeacherAccount && cls.hourlyRate && (
-                                            <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 print:bg-slate-100 print:text-black print:border-slate-300">
+                                            <span className="text-[8.5px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded border border-emerald-200 print:bg-slate-100 print:text-black print:border-slate-300 whitespace-nowrap">
                                               ${cls.hourlyRate.toFixed(0)}/h
                                             </span>
                                           )}
@@ -790,10 +933,10 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                                   e.stopPropagation();
                                                   onEditSchedule(cls);
                                                 }}
-                                                className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+                                                className="p-0.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
                                                 title={isKhmer ? 'កែសម្រួលវេន / មុខវិជ្ជា' : 'Edit Period / Schedule'}
                                               >
-                                                <Edit2 className="w-3 h-3" />
+                                                <Edit2 className="w-2.5 h-2.5" />
                                               </button>
                                             )}
                                             {canDelete && onDeleteSchedule && (
@@ -803,62 +946,64 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                                   e.stopPropagation();
                                                   onDeleteSchedule(cls.id, cls.subject);
                                                 }}
-                                                className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                                className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                                                 title={isKhmer ? 'លុប' : 'Delete'}
                                               >
-                                                <Trash2 className="w-3 h-3" />
+                                                <Trash2 className="w-2.5 h-2.5" />
                                               </button>
                                             )}
                                           </div>
                                         </div>
                                       </div>
 
-                                      {/* Subject Name */}
-                                      <h4 className="text-xs font-black text-slate-900 leading-snug line-clamp-2 print:text-[11px] print:line-clamp-none">
+                                      {/* Subject Name - Smaller font to avoid excessive wrapping */}
+                                      <h4 className="text-[11px] sm:text-[11.5px] font-bold text-slate-900 leading-tight line-clamp-2 print:text-[10px] print:line-clamp-none">
                                         {cls.subject}
                                       </h4>
                                       {cls.khmerSubject && (
-                                        <p className="text-[10px] text-slate-500 font-khmer truncate mt-0.5 print:text-slate-700 print:text-[9.5px]">
+                                        <p className="text-[9.5px] text-slate-500 font-khmer truncate mt-0.5 leading-tight print:text-slate-700 print:text-[9px]">
                                           {cls.khmerSubject}
                                         </p>
                                       )}
 
-                                      {/* Class Grade & Room */}
-                                      <div className="mt-2 pt-2 border-t border-slate-100 print:border-slate-300 print:mt-1.5 print:pt-1 flex items-center justify-between text-[10px] text-slate-600">
-                                        <div className="flex items-center gap-1 font-bold text-slate-800 print:text-black">
-                                          <GraduationCap className="w-3 h-3 text-indigo-600 print:text-slate-700 shrink-0" />
-                                          <span className="truncate">{cls.gradeClass}</span>
+                                      {/* Time & Room Location - Single row without wrapping */}
+                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100 print:border-slate-300 print:mt-1 print:pt-0.5 flex items-center justify-between text-[9px] text-slate-600 gap-1">
+                                        <div className="flex items-center gap-0.5 font-mono font-medium text-slate-700 whitespace-nowrap text-[9px]">
+                                          <Clock className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                                          <span>{cls.startTime} - {cls.endTime}</span>
                                         </div>
-                                        <div className="flex items-center gap-1 text-slate-500 print:text-slate-700 font-medium">
-                                          <MapPin className="w-3 h-3 text-slate-400 print:text-slate-600 shrink-0" />
-                                          <span className="truncate">{cls.room}</span>
+                                        <div className="flex items-center gap-0.5 font-bold text-slate-800 bg-slate-50 px-1 py-0.5 rounded border border-slate-200/80 whitespace-nowrap text-[9px]">
+                                          <MapPin className="w-2 h-2 text-slate-500 shrink-0" />
+                                          <span className="truncate max-w-[65px]">{cls.room}</span>
                                         </div>
                                       </div>
 
-                                      {/* Teacher Name & Avatar */}
-                                      <div className="mt-2 pt-2 border-t border-slate-100 print:border-slate-300 print:mt-1.5 print:pt-1 flex items-center gap-1.5">
-                                        {teacher?.photoUrl?.trim() ? (
-                                          <img
-                                            src={teacher.photoUrl.trim()}
-                                            alt={cls.teacherName}
-                                            className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
-                                          />
-                                        ) : (
-                                          <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[9px] flex items-center justify-center shrink-0 print:border print:border-slate-400">
-                                            {cls.teacherName.charAt(0)}
-                                          </div>
-                                        )}
-                                        <span className="text-[11px] font-bold text-slate-800 truncate print:text-[10px]">
-                                          {isKhmer && cls.khmerTeacherName ? cls.khmerTeacherName : cls.teacherName}
-                                        </span>
-                                      </div>
+                                      {/* ONLY show Teacher row if NOT in teacher view mode */}
+                                      {!isTeacherAccount && !effectiveLockedTeacher && (
+                                        <div className="mt-1 pt-1 border-t border-slate-100 print:border-slate-300 flex items-center gap-1">
+                                          {teacher?.photoUrl?.trim() ? (
+                                            <img
+                                              src={teacher.photoUrl.trim()}
+                                              alt={cls.teacherName}
+                                              className="w-3.5 h-3.5 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
+                                            />
+                                          ) : (
+                                            <div className="w-3.5 h-3.5 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[7px] flex items-center justify-center shrink-0">
+                                              {cls.teacherName.charAt(0)}
+                                            </div>
+                                          )}
+                                          <span className="text-[9px] font-semibold text-slate-700 truncate">
+                                            {isKhmer && cls.khmerTeacherName ? cls.khmerTeacherName : cls.teacherName}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
                               </div>
                             ) : (
-                              /* Empty Cell Slot */
-                              <div className="h-full min-h-[100px] print:min-h-0 print:border-none print:p-0 rounded-2xl border-2 border-dashed border-slate-200/80 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all flex flex-col items-center justify-center p-2 group text-slate-300 hover:text-indigo-600">
+                              /* Clean Minimalist Empty Cell Slot */
+                              <div className="h-full min-h-[64px] sm:min-h-[72px] print:min-h-0 print:border-none print:p-0 rounded-2xl border border-dashed border-slate-200/70 bg-slate-50/20 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all flex flex-col items-center justify-center p-2 group text-slate-300 hover:text-indigo-600">
                                 {canCreate && onAddForSlot ? (
                                   <>
                                     <button
@@ -876,7 +1021,7 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                     <span className="hidden print:inline text-slate-300 text-[10px] font-medium">-</span>
                                   </>
                                 ) : (
-                                  <span className="text-slate-300 text-[10px] font-medium">-</span>
+                                  <span className="text-slate-300/80 text-[10px] font-mono select-none">·</span>
                                 )}
                               </div>
                             )}
@@ -952,6 +1097,8 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
             <span>Synchronized with Faculty Attendance System</span>
           </div>
         </div>
+      </div>
+    )}
 
         {/* Quick Add/Edit Period Modal */}
         {isQuickPeriodModalOpen && (

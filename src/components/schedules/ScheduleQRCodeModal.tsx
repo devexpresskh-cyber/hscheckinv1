@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useMemo } from 'react';
 import {
   QrCode,
   Download,
@@ -27,6 +27,7 @@ import { StorageService } from '../../services/storageService.ts';
 import { ScheduleQrService } from '../../services/scheduleQrService.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 const escapeHtml = (str?: string | null): string => {
   if (!str) return '';
@@ -555,7 +556,10 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
 }) => {
   const { isKhmer } = useLanguage();
   const { showToast } = useNotification();
+  const { currentUser } = useAuth();
   const printSectionId = useId();
+
+  const isTeacher = currentUser?.role === 'teacher';
 
   const [subjectSchedules, setSubjectSchedules] = useState<TeacherSubjectSchedule[]>(() =>
     StorageService.getSubjectSchedules()
@@ -567,10 +571,44 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
   const [periods, setPeriods] = useState<TimetablePeriod[]>(() => StorageService.getPeriods());
   const [settings, setSettings] = useState(() => StorageService.getSystemSettings());
 
+  // Resolve linked teacher for teacher accounts (strictly locked to logged-in teacher if role is teacher)
+  const ownTeacher = useMemo(() => {
+    if (!currentUser) return null;
+    // For teacher accounts, strictly resolve their own profile first to prevent unauthorized QR generation
+    if (isTeacher) {
+      if (currentUser.personId) {
+        const match = teachers.find(
+          t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase()
+        );
+        if (match) return match;
+      }
+      if (currentUser.email) {
+        const match = teachers.find(t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase());
+        if (match) return match;
+      }
+      if (currentUser.fullName) {
+        const match = teachers.find(t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase());
+        if (match) return match;
+      }
+      return initialTeacher || teachers[0] || null;
+    }
+    // For admins
+    if (initialTeacher) return initialTeacher;
+    if (currentUser.personId) {
+      const match = teachers.find(
+        t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase()
+      );
+      if (match) return match;
+    }
+    return teachers[0] || null;
+  }, [initialTeacher, currentUser, teachers, isTeacher]);
+
   // Selection state: 'teacher' | 'room' | 'subject' | 'general'
-  const [mode, setMode] = useState<'teacher' | 'room' | 'subject' | 'general'>(
-    initialTeacher ? 'teacher' : initialSubjectSchedule ? 'subject' : initialSchedule ? 'general' : 'teacher'
-  );
+  // When isTeacher is true, mode is ALWAYS locked to 'teacher'
+  const [mode, setMode] = useState<'teacher' | 'room' | 'subject' | 'general'>(() => {
+    if (isTeacher) return 'teacher';
+    return initialTeacher ? 'teacher' : initialSubjectSchedule ? 'subject' : initialSchedule ? 'general' : 'teacher';
+  });
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
     initialSubjectSchedule?.id || subjectSchedules[0]?.id || ''
@@ -579,9 +617,14 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
     initialSchedule?.id || schedules[0]?.id || ''
   );
   const [selectedRoom, setSelectedRoom] = useState<string>('Room 204');
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
-    initialTeacher?.id || initialSubjectSchedule?.teacherId || teachers[0]?.id || ''
-  );
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
+    if (isTeacher && ownTeacher) return ownTeacher.id;
+    return initialTeacher?.id || initialSubjectSchedule?.teacherId || teachers[0]?.id || '';
+  });
+
+  // Effective mode and teacher ID (strictly locked for teachers)
+  const effectiveMode = isTeacher ? 'teacher' : mode;
+  const effectiveTeacherId = isTeacher && ownTeacher ? ownTeacher.id : selectedTeacherId;
 
   // QR Customization
   const [qrColor, setQrColor] = useState<string>('#1e1b4b'); // deep indigo
@@ -607,7 +650,14 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
       setPeriods(StorageService.getPeriods());
       setSettings(StorageService.getSystemSettings());
 
-      if (initialTeacher) {
+      if (isTeacher) {
+        setMode('teacher');
+        if (ownTeacher) {
+          setSelectedTeacherId(ownTeacher.id);
+        } else if (currentUser.personId) {
+          setSelectedTeacherId(currentUser.personId);
+        }
+      } else if (initialTeacher) {
         setMode('teacher');
         setSelectedTeacherId(initialTeacher.id);
       } else if (initialSubjectSchedule) {
@@ -625,12 +675,14 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
         }
       }
     }
-  }, [isOpen, initialSubjectSchedule, initialSchedule, initialTeacher]);
+  }, [isOpen, initialSubjectSchedule, initialSchedule, initialTeacher, isTeacher, ownTeacher, currentUser]);
 
   // Resolve current active targets
   const currentSubject = subjectSchedules.find(s => s.id === selectedSubjectId);
   const currentGeneral = schedules.find(s => s.id === selectedGeneralId);
-  const currentTeacher = teachers.find(t => t.id === selectedTeacherId) || teachers[0];
+  const currentTeacher = isTeacher && ownTeacher
+    ? ownTeacher
+    : (teachers.find(t => t.id === effectiveTeacherId) || teachers[0]);
 
   // All schedules for currently selected teacher (multi-period)
   const teacherAllSchedules = subjectSchedules
@@ -923,16 +975,22 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black tracking-tight">
-                  {isKhmer ? 'បង្កើត និងបោះពុម្ពកូដ QR កាលវិភាគ' : 'Teacher Schedule QR & Print Station'}
+                  {isTeacher
+                    ? (isKhmer ? 'កាតកូដ QR ផ្ទាល់ខ្លួនរបស់ខ្ញុំ' : 'My Smart Teacher QR Code')
+                    : (isKhmer ? 'បង្កើត និងបោះពុម្ពកូដ QR កាលវិភាគ' : 'Teacher Schedule QR & Print Station')}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  {isKhmer ? 'ស្កេនដោយមិនបាច់ Login' : 'No-Login Scan'}
+                  {isTeacher ? (isKhmer ? 'កូដផ្ទាល់ខ្លួន' : 'My Verified QR') : (isKhmer ? 'ស្កេនដោយមិនបាច់ Login' : 'No-Login Scan')}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                {isKhmer
-                  ? 'គ្រូគ្រាន់តែស្កេន QR និងផ្ទៀងផ្ទាត់លេខសម្ងាត់ PIN ៤ ខ្ទង់ដើម្បីចុះវត្តមានភ្លាមៗ'
-                  : 'Faculty scan with mobile camera & confirm 4-digit PIN for instant wage logging'}
+                {isTeacher
+                  ? (isKhmer
+                      ? 'កូដ QR ផ្ទាល់ខ្លួនរបស់អ្នកសម្រាប់ស្កេនវត្តមាន និងពិនិត្យកាលវិភាគគ្រប់ម៉ោងបង្រៀន'
+                      : 'Your personal QR code card for instant check-in across all your scheduled classes')
+                  : (isKhmer
+                      ? 'គ្រូគ្រាន់តែស្កេន QR និងផ្ទៀងផ្ទាត់លេខសម្ងាត់ PIN ៤ ខ្ទង់ដើម្បីចុះវត្តមានភ្លាមៗ'
+                      : 'Faculty scan with mobile camera & confirm 4-digit PIN for instant wage logging')}
               </p>
             </div>
           </div>
@@ -950,85 +1008,108 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
           {/* Left Column: Form & Configuration (5 cols, hidden in print) */}
           <div className="lg:col-span-5 space-y-4 print:hidden">
             
-            {/* Target Type Selector */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                <span>{isKhmer ? 'ប្រភេទកាលវិភាគ ៖' : 'Schedule Type:'}</span>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {isKhmer ? 'ជ្រើសរើសទម្រង់ QR ដែលសមស្រប' : 'Select QR Workflow'}
+            {/* Target Type Selector (Hidden for Teachers) */}
+            {isTeacher ? (
+              <div className="p-3.5 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-600/20">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-indigo-950 block">
+                      {currentTeacher?.fullName} {currentTeacher?.khmerName ? `(${currentTeacher.khmerName})` : ''}
+                    </span>
+                    <span className="text-[11px] text-indigo-700 font-medium">
+                      {currentTeacher?.teacherId ? `ID: ${currentTeacher.teacherId}` : 'Faculty Member'} • {currentTeacher?.department || 'Academic Department'}
+                    </span>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-white text-indigo-900 border border-indigo-200 shadow-2xs">
+                  {isKhmer ? 'កូដផ្ទាល់ខ្លួន' : 'My QR Card'}
                 </span>
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
-                <button
-                  type="button"
-                  onClick={() => setMode('teacher')}
-                  className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
-                    mode === 'teacher'
-                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="1 Smart QR for all periods of a teacher"
-                >
-                  {isKhmer ? '🎓 គ្រូ (ម៉ោងច្រើន)' : '🎓 Teacher Smart'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('subject')}
-                  className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
-                    mode === 'subject'
-                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {isKhmer ? '📚 មុខវិជ្ជា/ថ្នាក់' : '📚 Class Subject'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('room')}
-                  className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
-                    mode === 'room'
-                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {isKhmer ? '🏫 បន្ទប់រៀន' : '🏫 Room Door'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('general')}
-                  className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
-                    mode === 'general'
-                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {isKhmer ? '⏱️ វេនទូទៅ' : '⏱️ General Shift'}
-                </button>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>{isKhmer ? 'ប្រភេទកាលវិភាគ ៖' : 'Schedule Type:'}</span>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {isKhmer ? 'ជ្រើសរើសទម្រង់ QR ដែលសមស្រប' : 'Select QR Workflow'}
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 p-1 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode('teacher')}
+                    className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
+                      effectiveMode === 'teacher'
+                        ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="1 Smart QR for all periods of a teacher"
+                  >
+                    {isKhmer ? '🎓 គ្រូ (ម៉ោងច្រើន)' : '🎓 Teacher Smart'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('subject')}
+                    className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
+                      effectiveMode === 'subject'
+                        ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {isKhmer ? '📚 មុខវិជ្ជា/ថ្នាក់' : '📚 Class Subject'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('room')}
+                    className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
+                      effectiveMode === 'room'
+                        ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {isKhmer ? '🏫 បន្ទប់រៀន' : '🏫 Room Door'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('general')}
+                    className={`py-2 px-2 rounded-xl transition-all text-center truncate ${
+                      effectiveMode === 'general'
+                        ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/80 font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {isKhmer ? '⏱️ វេនទូទៅ' : '⏱️ General Shift'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* If Teacher Mode: Universal Master QR for Multiple Periods */}
-            {mode === 'teacher' && (
+            {effectiveMode === 'teacher' && (
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>{isKhmer ? 'ជ្រើសរើសគ្រូបង្រៀន (Faculty Member) ៖' : 'Select Faculty Member:'}</span>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      {isKhmer ? 'កូដ QR តែ១ សម្រាប់គ្រប់ម៉ោង' : '1 QR for All Periods'}
-                    </span>
-                  </label>
-                  <select
-                    value={selectedTeacherId}
-                    onChange={e => setSelectedTeacherId(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none shadow-xs"
-                  >
-                    {teachers.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!isTeacher && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                      <span>{isKhmer ? 'ជ្រើសរើសគ្រូបង្រៀន (Faculty Member) ៖' : 'Select Faculty Member:'}</span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        {isKhmer ? 'កូដ QR តែ១ សម្រាប់គ្រប់ម៉ោង' : '1 QR for All Periods'}
+                      </span>
+                    </label>
+                    <select
+                      value={selectedTeacherId}
+                      onChange={e => setSelectedTeacherId(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none shadow-xs"
+                    >
+                      {teachers.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Multi-Period Schedule Breakdown for this Teacher */}
                 <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 text-xs space-y-2.5">
@@ -1212,74 +1293,107 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
               </div>
             )}
 
-            {/* QR Code Appearance & Styling Controls */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                <Palette className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{isKhmer ? 'រចនាបថ និងពណ៌ QR កូដ' : 'QR Code Styling & Format'}</span>
-              </div>
+            {/* QR Code Appearance & Styling Controls (Admins only - restricted from teachers) */}
+            {!isTeacher ? (
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                  <Palette className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{isKhmer ? 'រចនាបថ និងពណ៌ QR កូដ' : 'QR Code Styling & Format'}</span>
+                </div>
 
-              {/* Color picker */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-slate-500">Color:</span>
-                <div className="flex items-center gap-1.5">
-                  {colorOptions.map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setQrColor(opt.value)}
-                      className={`w-6 h-6 rounded-full ${opt.bg} transition-all flex items-center justify-center text-white ${
-                        qrColor === opt.value
-                          ? 'ring-2 ring-indigo-500 ring-offset-2 scale-110'
-                          : 'opacity-70 hover:opacity-100'
-                      }`}
-                      title={opt.label}
-                    >
-                      {qrColor === opt.value && <Check className="w-3 h-3" />}
-                    </button>
-                  ))}
+                {/* Color picker */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-500">Color:</span>
+                  <div className="flex items-center gap-1.5">
+                    {colorOptions.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setQrColor(opt.value)}
+                        className={`w-6 h-6 rounded-full ${opt.bg} transition-all flex items-center justify-center text-white ${
+                          qrColor === opt.value
+                            ? 'ring-2 ring-indigo-500 ring-offset-2 scale-110'
+                            : 'opacity-70 hover:opacity-100'
+                        }`}
+                        title={opt.label}
+                      >
+                        {qrColor === opt.value && <Check className="w-3 h-3" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Format selection */}
+                <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-white border border-slate-200 font-semibold text-slate-700">
+                    <input
+                      type="radio"
+                      name="qrFormat"
+                      checked={qrFormat === 'url'}
+                      onChange={() => setQrFormat('url')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      {isKhmer ? 'Web Link (ទូរស័ព្ទស្កេន)' : 'Camera Deep-Link'}
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-white border border-slate-200 font-semibold text-slate-700">
+                    <input
+                      type="radio"
+                      name="qrFormat"
+                      checked={qrFormat === 'json'}
+                      onChange={() => setQrFormat('json')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      {isKhmer ? 'Offline JSON Payload' : 'Offline JSON'}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Toggle Logo */}
+                <label className="flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer pt-1">
+                  <span>{isKhmer ? 'បង្ហាញរូបសញ្ញាសាលា (School Crest)' : 'Show School Center Badge'}</span>
+                  <input
+                    type="checkbox"
+                    checked={showLogo}
+                    onChange={e => setShowLogo(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                </label>
+              </div>
+            ) : (
+              /* For Teacher accounts: Personal Fast Export / Print Panel */
+              <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200/80 space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-bold text-indigo-950">
+                  <span className="flex items-center gap-1.5">
+                    <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'ជម្រើសបោះពុម្ព និងទាញយកប័ណ្ណ' : 'Print & Download Options'}</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full font-bold">
+                    {isKhmer ? 'ត្រៀមជាស្រេច' : 'Ready'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handlePrint('badge')}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>{isKhmer ? 'បោះពុម្ពកាត' : 'Print Badge'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPng}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white hover:bg-indigo-50 text-indigo-900 border border-indigo-200 font-bold transition-all shadow-2xs cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{isKhmer ? 'ទាញយក PNG' : 'Save PNG'}</span>
+                  </button>
                 </div>
               </div>
-
-              {/* Format selection */}
-              <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-white border border-slate-200 font-semibold text-slate-700">
-                  <input
-                    type="radio"
-                    name="qrFormat"
-                    checked={qrFormat === 'url'}
-                    onChange={() => setQrFormat('url')}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span>
-                    {isKhmer ? 'Web Link (ទូរស័ព្ទស្កេន)' : 'Camera Deep-Link'}
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-white border border-slate-200 font-semibold text-slate-700">
-                  <input
-                    type="radio"
-                    name="qrFormat"
-                    checked={qrFormat === 'json'}
-                    onChange={() => setQrFormat('json')}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span>
-                    {isKhmer ? 'Offline JSON Payload' : 'Offline JSON'}
-                  </span>
-                </label>
-              </div>
-
-              {/* Toggle Logo */}
-              <label className="flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer pt-1">
-                <span>{isKhmer ? 'បង្ហាញរូបសញ្ញាសាលា (School Crest)' : 'Show School Center Badge'}</span>
-                <input
-                  type="checkbox"
-                  checked={showLogo}
-                  onChange={e => setShowLogo(e.target.checked)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
-                />
-              </label>
-            </div>
+            )}
 
           </div>
 
