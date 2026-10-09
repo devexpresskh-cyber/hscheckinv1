@@ -800,67 +800,92 @@ export const RealInterfaceActionWalkthrough: React.FC<{
               </div>
             )}
 
-            {/* MODULE 3: Weekly Schedule Timeline */}
+            {/* MODULE 3: Monthly & Weekly Schedule Matching Screenshot */}
             {currentModule === 3 && (
-              <div className="max-w-2xl mx-auto w-full space-y-3">
-                {/* Day Strip */}
-                <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-1 overflow-x-auto">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <button
-                      key={day}
-                      onClick={() => setSelectedDay(day)}
-                      className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                        selectedDay === day
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {day} {day === 'Wed' ? '14' : ''}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Timeline Class Cards */}
-                <div className="space-y-2">
-                  <div
-                    className={`p-4 rounded-2xl border transition-all ${
-                      selectedClassCard || selectedDay === 'Wed'
-                        ? 'bg-blue-50/90 border-blue-300 ring-2 ring-blue-500/20 shadow-md'
-                        : 'bg-white border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-lg bg-blue-600 text-white text-[10px] font-black">
-                          08:00 - 09:30 AM
-                        </span>
-                        <span className="text-xs font-bold text-slate-900">
-                          CS-201 Data Structures & Algorithms
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-lg">
-                        Room 304
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
-                      <span>Faculty: Dr. Sovann Vichea</span>
-                      <span className="text-emerald-600 font-bold">● Active Class Today</span>
+              <div className="max-w-md mx-auto w-full bg-[#09152b] rounded-3xl overflow-hidden border border-blue-900/60 shadow-2xl flex flex-col">
+                {/* Upper Dark Midnight Navy Calendar */}
+                <div className="p-4 text-white space-y-3 bg-[#09152b]">
+                  {/* Top Bar */}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-slate-400">June, 21 Wednesday</span>
+                    <div className="bg-[#13223f] px-3 py-1 rounded-xl text-[11px] font-bold border border-blue-900/50">
+                      &lt; March 2026 &gt;
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-white border border-slate-200 opacity-70">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-lg bg-slate-200 text-slate-700 text-[10px] font-black">
-                          10:00 - 11:30 AM
-                        </span>
-                        <span className="text-xs font-bold text-slate-800">
-                          CS-305 Database Systems Management
+                  {/* Day of Week */}
+                  <div className="grid grid-cols-7 text-center font-bold text-[9px] text-slate-400 tracking-wider">
+                    {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(d => (
+                      <span key={d}>{d}</span>
+                    ))}
+                  </div>
+
+                  {/* Date Grid with Connected Capsule Range (14 to 18) and Status Dots */}
+                  <div className="grid grid-cols-7 gap-y-1 text-center text-[11px] font-bold">
+                    {[
+                      { num: 1 }, { num: 2 }, { num: 3 }, { num: 4 }, { num: 5 }, { num: 6 }, { num: 7 },
+                      { num: 8 }, { num: 9 }, { num: 10 }, { num: 11 }, { num: 12 },
+                      { num: 13, green: true },
+                      { num: 14, rangeStart: true },
+                      { num: 15, range: true },
+                      { num: 16, range: true },
+                      { num: 17, range: true },
+                      { num: 18, rangeEnd: true },
+                      { num: 19 }, { num: 20 }, { num: 21 }, { num: 22 }, { num: 23 }, { num: 24 }, { num: 25 },
+                      { num: 26 }, { num: 27 },
+                      { num: 28, orange: true }
+                    ].map((d, i) => (
+                      <div key={i} className="relative flex items-center justify-center h-7">
+                        {(d.range || d.rangeStart || d.rangeEnd) && (
+                          <div
+                            className={`absolute inset-y-0.5 bg-[#2563eb]/25 ${
+                              d.rangeStart ? 'left-0.5 right-0 rounded-l-full' : d.rangeEnd ? 'left-0 right-0.5 rounded-r-full' : 'inset-x-0'
+                            }`}
+                          />
+                        )}
+                        <span
+                          className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                            d.rangeStart || d.rangeEnd
+                              ? 'bg-[#3b82f6] text-white shadow-md'
+                              : d.green
+                              ? 'bg-[#10b981] text-white shadow-md'
+                              : d.orange
+                              ? 'bg-[#f97316] text-white shadow-md'
+                              : 'text-slate-200'
+                          }`}
+                        >
+                          {d.num}
                         </span>
                       </div>
-                      <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-                        Lab 2
+                    ))}
+                  </div>
+                </div>
+
+                {/* Lower Curved White Sheet */}
+                <div className="bg-white rounded-t-[28px] p-3.5 shadow-xl space-y-2.5">
+                  <div className="w-8 h-1 bg-slate-200 rounded-full mx-auto" />
+
+                  {/* Class Card (Left Screenshot Style) */}
+                  <div className="bg-white border border-slate-200 p-2.5 rounded-2xl shadow-2xs space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xs">
+                          SV
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-slate-900 leading-tight">CS-201 Data Structures</div>
+                          <div className="text-[10px] text-slate-400">Tue 14 March • 08:00 - 09:30 AM</div>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200">
+                        ONGOING
                       </span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-blue-50 text-blue-600">Computer Science</span>
+                      <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-emerald-50 text-emerald-600">Room 304</span>
+                      <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-amber-50 text-amber-700">Year 2</span>
                     </div>
                   </div>
                 </div>

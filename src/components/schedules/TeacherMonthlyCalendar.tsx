@@ -28,7 +28,15 @@ import {
   Calendar,
   Layers,
   LogIn,
-  LogOut
+  LogOut,
+  MoreVertical,
+  Check,
+  Smartphone,
+  Maximize2,
+  ArrowLeft,
+  List,
+  Clock4,
+  Tag
 } from 'lucide-react';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
@@ -51,7 +59,7 @@ const MONTH_NAMES_KM = [
   'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'
 ];
 
-const DAYS_HEADER_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS_HEADER_EN = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const DAYS_HEADER_KM = ['ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍', 'អាទិត្យ'];
 
 export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
@@ -70,9 +78,27 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
+
   const [currentYear, setCurrentYear] = useState<number>(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(today.getMonth()); // 0-indexed
 
+  // Selected date inside calendar (defaults to today)
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const selectedDateStr = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, [selectedDate]);
+
+  // Bottom card display mode: 'list' (left phone) vs 'timeline' (right phone)
+  const [bottomViewMode, setBottomViewMode] = useState<'list' | 'timeline'>('list');
+
+  // Quick action FAB menu toggle
+  const [isFabMenuOpen, setIsFabMenuOpen] = useState<boolean>(false);
+  const [isOptionsDropdownOpen, setIsOptionsDropdownOpen] = useState<boolean>(false);
+
+  // Storage data
   const [teachers, setTeachers] = useState<Teacher[]>(() =>
     StorageService.getTeachers().filter(t => t.status === 'Active')
   );
@@ -82,7 +108,6 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   const [holidays, setHolidays] = useState<Holiday[]>(() => StorageService.getHolidays());
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => StorageService.getAttendance());
 
-  // Subscribe to storage
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setTeachers(StorageService.getTeachers().filter(t => t.status === 'Active'));
@@ -101,7 +126,6 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   });
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Robustly resolve active teacher matching linked profile
   const activeTeacher = useMemo(() => {
     if (initialTeacher) return initialTeacher;
     if (!currentUser) return teachers[0] || null;
@@ -142,13 +166,13 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
 
   const [isActionLoading, setIsActionLoading] = useState(false);
 
+  // Check-in handler
   const handleTeacherCheckInAction = (cls: TeacherSubjectSchedule) => {
     if (onCheckIn) {
       onCheckIn(cls);
       return;
     }
 
-    // Built-in AttendanceEngine fallback
     setIsActionLoading(true);
     const targetTeacherId = activeTeacher?.id || cls.teacherId;
     const targetTeacherName = activeTeacher?.fullName || cls.teacherName;
@@ -186,13 +210,13 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     }, 200);
   };
 
+  // Check-out handler
   const handleTeacherCheckOutAction = (cls: TeacherSubjectSchedule) => {
     if (onCheckOut) {
       onCheckOut(cls);
       return;
     }
 
-    // Built-in AttendanceEngine fallback
     setIsActionLoading(true);
     const targetTeacherId = activeTeacher?.id || cls.teacherId;
     const targetTeacherName = activeTeacher?.fullName || cls.teacherName;
@@ -222,16 +246,6 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     }, 200);
   };
 
-  // Selected Day Details Modal
-  const [selectedDayDetails, setSelectedDayDetails] = useState<{
-    date: Date;
-    dateStr: string;
-    dayOfWeek: number;
-    classes: TeacherSubjectSchedule[];
-    holiday?: Holiday;
-    attendance?: AttendanceRecord;
-  } | null>(null);
-
   // Month navigation helpers
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -255,6 +269,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     const n = new Date();
     setCurrentYear(n.getFullYear());
     setCurrentMonth(n.getMonth());
+    setSelectedDate(n);
   };
 
   // Filter teacher's weekly subject schedules
@@ -270,14 +285,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
     const totalDaysInMonth = lastDayOfMonth.getDate();
 
-    // getDay() gives 0 = Sun, 1 = Mon ... 6 = Sat
     // Convert so Monday = 0, Sunday = 6
     const firstDayIndex = (firstDayOfMonth.getDay() + 6) % 7;
-
-    const now = new Date();
-    const nowYear = now.getFullYear();
-    const nowMonth = now.getMonth();
-    const nowDay = now.getDate();
 
     const formatLocalDate = (y: number, m: number, d: number) => {
       const targetDate = new Date(y, m, d);
@@ -321,13 +330,11 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const d = new Date(currentYear, currentMonth, day);
       const dateStr = formatLocalDate(currentYear, currentMonth, day);
-      const dow = d.getDay(); // 0 = Sun, 1 = Mon, 6 = Sat
-      const isToday = currentYear === nowYear && currentMonth === nowMonth && day === nowDay;
+      const dow = d.getDay();
+      const isToday = dateStr === todayStr;
 
-      // Check holidays on this date
       const holiday = holidays.find(h => h.date === dateStr);
 
-      // Match schedules for this day of week
       const matchingClasses = teacherSchedules
         .filter(s => {
           if (Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
@@ -337,21 +344,11 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
         })
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-      // Match attendance record for teacher on this date (by scheduled class or teacher ID/name)
       const att = matchingClasses.length > 0
         ? matchingClasses
             .map(cls => AttendanceEngine.findRecordForSubjectSchedule(cls, attendance, dateStr, activeTeacher ? [activeTeacher] : undefined))
             .find(Boolean)
-        : attendance.find(a => {
-            if (a.date !== dateStr) return false;
-            if (!activeTeacher) return false;
-            const pId = (a.personId || '').trim().toLowerCase();
-            const tId = (activeTeacher.id || '').trim().toLowerCase();
-            const tCode = (activeTeacher.teacherId || '').trim().toLowerCase();
-            const pName = (a.personName || '').trim().toLowerCase();
-            const tName = (activeTeacher.fullName || '').trim().toLowerCase();
-            return pId === tId || pId === tCode || pId.replace(/^usr-/, '') === tId.replace(/^usr-/, '') || (pName && pName === tName);
-          });
+        : attendance.find(a => a.date === dateStr && a.personId === activeTeacher?.id);
 
       cells.push({
         dayNumber: day,
@@ -366,7 +363,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
       });
     }
 
-    // Next month padding cells to complete 35 or 42 grid slots
+    // Next month padding cells
     const totalCells = cells.length;
     const remaining = (7 - (totalCells % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
@@ -384,627 +381,580 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     }
 
     return cells;
-  }, [currentYear, currentMonth, teacherSchedules, holidays, attendance, activeTeacher]);
+  }, [currentYear, currentMonth, teacherSchedules, holidays, attendance, activeTeacher, todayStr]);
 
-  // Aggregate monthly statistics
-  const monthlyStats = useMemo(() => {
-    let totalScheduledSessions = 0;
-    let totalMinutes = 0;
-    let teachingDaysCount = 0;
-    let holidaysCount = 0;
-    let projectedWage = 0;
+  // Selected Day Information
+  const selectedDayCell = useMemo(() => {
+    return calendarCells.find(c => c.dateStr === selectedDateStr) || calendarCells[0];
+  }, [calendarCells, selectedDateStr]);
 
-    const baseRate = activeTeacher?.hourlyRate ?? 20;
+  // Determine active date range for the connected pill capsule (like in the screenshot: 14 to 18, or 8 to 10)
+  // Let's connect the active work week (Monday - Friday) around the selected date, or dates with classes!
+  const activeRangeDays = useMemo(() => {
+    if (!selectedDayCell || !selectedDayCell.isCurrentMonth) {
+      return { startDay: 14, endDay: 18 };
+    }
+    // Compute current week's Monday to Friday dates
+    const selD = selectedDayCell.date;
+    const dayOfWeek = selD.getDay(); // 0 is Sun, 1 is Mon
+    const monDiff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monDate = new Date(selD);
+    monDate.setDate(selD.getDate() + monDiff);
 
-    calendarCells.forEach(cell => {
-      if (cell.isCurrentMonth) {
-        if (cell.holiday) {
-          holidaysCount++;
-        }
-        if (cell.classes.length > 0) {
-          teachingDaysCount++;
-          totalScheduledSessions += cell.classes.length;
-
-          cell.classes.forEach(c => {
-            const startParts = c.startTime.split(':').map(Number);
-            const endParts = c.endTime.split(':').map(Number);
-            const durationMin = Math.max(0, (endParts[0] * 60 + endParts[1]) - (startParts[0] * 60 + startParts[1]));
-            totalMinutes += durationMin;
-
-            const rate = c.hourlyRate ?? baseRate;
-            projectedWage += (durationMin / 60) * rate;
-          });
-        }
-      }
-    });
-
-    const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
+    const friDate = new Date(monDate);
+    friDate.setDate(monDate.getDate() + 4);
 
     return {
-      totalScheduledSessions,
-      totalHours,
-      teachingDaysCount,
-      holidaysCount,
-      projectedWage: Math.round(projectedWage)
+      startDay: monDate.getMonth() === currentMonth ? monDate.getDate() : 1,
+      endDay: friDate.getMonth() === currentMonth ? friDate.getDate() : Math.min(28, monDate.getDate() + 4)
     };
-  }, [calendarCells, activeTeacher]);
+  }, [selectedDayCell, currentMonth]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  // Classes on the selected day
+  const selectedDayClasses = useMemo(() => {
+    if (!selectedDayCell) return [];
+    return [...selectedDayCell.classes].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [selectedDayCell]);
 
-  const content = (
-    <div className="space-y-4">
-      {/* Month & Teacher Header Bar */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Left: Month Navigator */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={handlePrevMonth}
-              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-              title="Previous Month"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleNextMonth}
-              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-              title="Next Month"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+  // Color palette for timeline cards matching the screenshot
+  const timelinePalette = [
+    { bg: 'bg-[#e0f2fe]', border: 'border-[#38bdf8]', text: 'text-[#0284c7]', initialBg: 'bg-[#0284c7]', badge: 'CS Dept' },
+    { bg: 'bg-[#dcfce7]', border: 'border-[#4ade80]', text: 'text-[#16a34a]', initialBg: 'bg-[#16a34a]', badge: 'Design Lab' },
+    { bg: 'bg-[#ffedd5]', border: 'border-[#fb923c]', text: 'text-[#ea580c]', initialBg: 'bg-[#ea580c]', badge: 'Project Room' },
+    { bg: 'bg-[#1e293b]', border: 'border-[#475569]', text: 'text-white', initialBg: 'bg-[#3b82f6]', badge: 'Lecture Hall' }
+  ];
 
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-indigo-600 shrink-0" />
-              <span>
-                {isKhmer ? MONTH_NAMES_KM[currentMonth] : MONTH_NAMES_EN[currentMonth]} {currentYear}
-              </span>
-            </h2>
+  return (
+    <div className="w-full flex justify-center py-2 sm:py-4 px-1 sm:px-4 font-sans select-none">
+      
+      {/* Mobile-Inspired Master Frame with Exact Screenshot Styling */}
+      <div className="w-full max-w-md sm:max-w-lg lg:max-w-2xl bg-[#09152b] rounded-[38px] shadow-2xl border border-slate-800/80 overflow-hidden flex flex-col relative transition-all duration-300">
+        
+        {/* ======================================================== */}
+        {/* UPPER HALF: DEEP MIDNIGHT NAVY CALENDAR */}
+        {/* ======================================================== */}
+        <div className="p-5 sm:p-7 text-white flex flex-col space-y-5 bg-[#09152b] shrink-0">
+          
+          {/* Top Bar: Back arrow, "Calendar" title, three dots menu */}
+          <div className="flex items-center justify-between">
             <button
               onClick={handleJumpToToday}
-              className="px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+              className="p-2 -ml-1 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+              title="Jump to Today"
             >
-              {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
+              <ArrowLeft className="w-5 h-5" />
             </button>
-          </div>
-        </div>
 
-        {/* Right: Teacher Selector & Actions */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-          {/* Teacher Selector for Admin/Supervisor */}
-          {!isTeacherRole && (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <User className="w-4 h-4 text-slate-400 shrink-0 hidden sm:block" />
-              <select
-                value={selectedTeacherId}
-                onChange={e => setSelectedTeacherId(e.target.value)}
-                className="w-full sm:w-64 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              >
-                {teachers.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.fullName} ({t.teacherId}) - {t.subject}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+            <h1 className="text-base sm:text-lg font-black tracking-wide text-white">
+              {isKhmer ? 'ប្រតិទិនបង្រៀន (Calendar)' : 'Calendar'}
+            </h1>
 
-          {/* Teacher Badge & Profile Edit if locked / role */}
-          {isTeacherRole && activeTeacher && (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900">
-                <GraduationCap className="w-4 h-4 text-indigo-600" />
-                <span>{activeTeacher.fullName} ({activeTeacher.teacherId})</span>
-              </div>
+            <div className="relative">
               <button
-                type="button"
-                onClick={() => setIsProfileModalOpen(true)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs print:hidden"
-                title={isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូបផ្ទាល់ខ្លួន' : 'Edit My Profile & Owned Information'}
+                onClick={() => setIsOptionsDropdownOpen(!isOptionsDropdownOpen)}
+                className="p-2 -mr-1 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+                title="Options Menu"
               >
-                <UserCog className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{isKhmer ? 'កែប្រវត្តិរូប' : 'Edit Profile'}</span>
+                <MoreVertical className="w-5 h-5" />
               </button>
-            </div>
-          )}
 
-          {/* Print Button */}
-          <button
-            onClick={handlePrint}
-            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer print:hidden"
-            title="Print Monthly Schedule"
-          >
-            <Printer className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+              {isOptionsDropdownOpen && (
+                <div className="absolute right-0 top-10 w-48 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 text-xs text-slate-200 animate-in fade-in zoom-in-95">
+                  <button
+                    onClick={() => {
+                      handleJumpToToday();
+                      setIsOptionsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{isKhmer ? 'ទៅកាន់ថ្ងៃនេះ' : 'Jump to Today'}</span>
+                  </button>
 
-      {/* Monthly Statistics Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[11px] text-slate-500 font-medium block">
-            {isKhmer ? 'ថ្ងៃបង្រៀនក្នុងខែ' : 'Teaching Days'}
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-xl font-black text-indigo-700">{monthlyStats.teachingDaysCount}</span>
-            <span className="text-xs text-slate-500">{isKhmer ? 'ថ្ងៃ' : 'days'}</span>
-          </div>
-        </div>
+                  <button
+                    onClick={() => {
+                      window.print();
+                      setIsOptionsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isKhmer ? 'បោះពុម្ពប្រតិទិន' : 'Print Calendar'}</span>
+                  </button>
 
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[11px] text-slate-500 font-medium block">
-            {isKhmer ? 'វេនបង្រៀនសរុប' : 'Total Sessions'}
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-xl font-black text-slate-900">{monthlyStats.totalScheduledSessions}</span>
-            <span className="text-xs text-slate-500">{isKhmer ? 'វេន' : 'classes'}</span>
-          </div>
-        </div>
-
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-          <span className="text-[11px] text-slate-500 font-medium block">
-            {isKhmer ? 'ម៉ោងបង្រៀនសរុប' : 'Total Hours'}
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-xl font-black text-emerald-700">{monthlyStats.totalHours}</span>
-            <span className="text-xs text-slate-500">hrs</span>
-          </div>
-        </div>
-
-        {currentUser.role !== 'teacher' && (
-          <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-[11px] text-slate-500 font-medium block">
-              {isKhmer ? 'ប្រាក់ឈ្នួលប៉ាន់ស្មាន' : 'Projected Wage'}
-            </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="text-xl font-black text-emerald-800">
-                {activeTeacher?.currency === 'KHR' ? '៛' : '$'}{monthlyStats.projectedWage}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-          <span className="text-[11px] text-slate-500 font-medium block">
-            {isKhmer ? 'ថ្ងៃឈប់សម្រាក' : 'Public Holidays'}
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="text-xl font-black text-purple-700">{monthlyStats.holidaysCount}</span>
-            <span className="text-xs text-slate-500">{isKhmer ? 'ថ្ងៃ' : 'holidays'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main 7-Column Calendar Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden max-w-full min-w-0">
-        <div className="overflow-x-auto max-w-full">
-          <div className="min-w-[620px] sm:min-w-0">
-            {/* Days of Week Header */}
-            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center font-bold text-xs text-slate-700 py-2.5">
-          {DAYS_HEADER_EN.map((dayName, idx) => (
-            <div key={dayName} className="flex flex-col items-center">
-              <span className="text-slate-900">{isKhmer ? DAYS_HEADER_KM[idx] : dayName}</span>
-              <span className="text-[10px] text-slate-400 font-normal">
-                {isKhmer ? dayName : DAYS_HEADER_KM[idx]}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Calendar Day Cells */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 auto-rows-fr">
-          {calendarCells.map((cell, idx) => {
-            const hasClasses = cell.classes.length > 0;
-            const isWeekend = cell.dayOfWeek === 0 || cell.dayOfWeek === 6;
-
-            return (
-              <div
-                key={idx}
-                onClick={() => {
-                  if (cell.isCurrentMonth) {
-                    setSelectedDayDetails({
-                      date: cell.date,
-                      dateStr: cell.dateStr,
-                      dayOfWeek: cell.dayOfWeek,
-                      classes: cell.classes,
-                      holiday: cell.holiday,
-                      attendance: cell.attendance
-                    });
-                  }
-                }}
-                className={`min-h-[105px] sm:min-h-[125px] p-2 flex flex-col justify-between transition-all cursor-pointer select-none group relative ${
-                  !cell.isCurrentMonth
-                    ? 'bg-slate-50/50 text-slate-300 opacity-60 cursor-default'
-                    : cell.isToday
-                    ? 'bg-indigo-50/90 hover:bg-indigo-100/90 ring-2 ring-indigo-600 ring-inset shadow-md z-10'
-                    : isWeekend
-                    ? 'bg-slate-50/20 hover:bg-slate-50'
-                    : 'bg-white hover:bg-slate-50'
-                }`}
-              >
-                {/* Cell Header: Day Number + Today Badge + Holiday / Attendance Badges */}
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`w-6.5 h-6.5 flex items-center justify-center rounded-full text-xs font-black ${
-                        cell.isToday
-                          ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300'
-                          : cell.isCurrentMonth
-                          ? 'text-slate-800'
-                          : 'text-slate-400'
-                      }`}
-                    >
-                      {cell.dayNumber}
-                    </span>
-                    {cell.isToday && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs">
-                        {isKhmer ? 'ថ្ងៃនេះ' : 'TODAY'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    {/* Holiday indicator */}
-                    {cell.holiday && (
-                      <span
-                        className="p-1 rounded-md bg-purple-100 text-purple-700 shrink-0"
-                        title={cell.holiday.name}
+                  {!isTeacherRole && (
+                    <div className="pt-2 border-t border-slate-800 mt-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold px-2 block mb-1">
+                        Select Faculty:
+                      </label>
+                      <select
+                        value={selectedTeacherId}
+                        onChange={e => {
+                          setSelectedTeacherId(e.target.value);
+                          setIsOptionsDropdownOpen(false);
+                        }}
+                        className="w-full text-[11px] bg-slate-800 border border-slate-700 rounded-xl px-2 py-1.5 text-white"
                       >
-                        <Palmtree className="w-3 h-3" />
-                      </span>
-                    )}
-
-                    {/* Attendance status */}
-                    {cell.attendance && (
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${
-                          cell.attendance.status === 'Present'
-                            ? 'bg-emerald-500'
-                            : cell.attendance.status === 'Late'
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                        }`}
-                        title={`Attendance: ${cell.attendance.status}`}
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Holiday Label if present */}
-                {cell.holiday && cell.isCurrentMonth && (
-                  <div className="mb-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-200 text-[10px] text-purple-800 font-bold truncate">
-                    🏖️ {cell.holiday.khmerName || cell.holiday.name}
-                  </div>
-                )}
-
-                {/* Scheduled Classes Chits */}
-                <div className="space-y-1 flex-1">
-                  {cell.classes.slice(0, 2).map((cls, cIdx) => (
-                    <div
-                      key={cls.id || cIdx}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-semibold truncate bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 transition-colors"
-                      title={`${cls.startTime} - ${cls.endTime} • ${cls.gradeClass} • ${cls.subject} (${cls.room})`}
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-mono text-[9px] text-indigo-700 font-bold shrink-0">
-                          {cls.startTime}
-                        </span>
-                        <span className="truncate">{cls.gradeClass || cls.subject}</span>
-                      </div>
+                        {teachers.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.fullName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
-
-                  {cell.classes.length > 2 && (
-                    <span className="text-[9px] font-bold text-slate-500 block px-1 text-center">
-                      +{cell.classes.length - 2} {isKhmer ? 'វេនទៀត' : 'more'}
-                    </span>
                   )}
                 </div>
-
-                {/* Cell Bottom: Session Count if any */}
-                {cell.isCurrentMonth && hasClasses && (
-                  <div className="text-[9px] font-bold text-slate-400 text-right mt-1">
-                    {cell.classes.length} {isKhmer ? 'វេន' : 'sessions'}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Selected Day Details Modal */}
-      {selectedDayDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150">
-            {/* Day Details Header */}
-            <div className="px-6 py-4 bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5 text-indigo-400" />
-                  <h3 className="font-extrabold text-base">
-                    {selectedDayDetails.date.toLocaleDateString(isKhmer ? 'km-KH' : 'en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  {activeTeacher?.fullName} • {selectedDayDetails.classes.length} {isKhmer ? 'វេនបង្រៀន' : 'sessions rostered'}
-                </p>
-              </div>
+          {/* Subheader / Month Capsule Pill: < March > (Matching Left Phone) */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="w-full bg-[#13223f] border border-blue-900/50 rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-inner">
+              <button
+                onClick={handlePrevMonth}
+                className="p-1 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="Previous Month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <span className="text-sm font-black tracking-wide text-white">
+                {isKhmer ? MONTH_NAMES_KM[currentMonth] : MONTH_NAMES_EN[currentMonth]} {currentYear}
+              </span>
 
               <button
-                onClick={() => setSelectedDayDetails(null)}
-                className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                onClick={handleNextMonth}
+                className="p-1 rounded-xl hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="Next Month"
               >
-                <X className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+          </div>
 
-            {/* Holiday Banner if day is holiday */}
-            {selectedDayDetails.holiday && (
-              <div className="px-6 py-3 bg-purple-50 border-b border-purple-100 flex items-center gap-2.5 text-xs text-purple-900">
-                <Palmtree className="w-4 h-4 text-purple-600 shrink-0" />
-                <div>
-                  <span className="font-bold">{selectedDayDetails.holiday.name}</span>
-                  {selectedDayDetails.holiday.khmerName && (
-                    <span className="text-[11px] text-purple-700 block font-khmer">
-                      {selectedDayDetails.holiday.khmerName}
-                    </span>
+          {/* Days of Week Header (MON TUE WED THU FRI SAT SUN) */}
+          <div className="grid grid-cols-7 text-center font-bold text-[10px] sm:text-xs text-slate-400 tracking-wider">
+            {DAYS_HEADER_EN.map((dayName, idx) => (
+              <div key={dayName} className="py-1">
+                <span>{isKhmer ? DAYS_HEADER_KM[idx] : dayName}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 7-Column Monthly Date Grid with Connected Capsule Range & Status Dots */}
+          <div className="grid grid-cols-7 gap-y-2.5 text-center text-xs font-bold">
+            {calendarCells.map((cell, idx) => {
+              const isSelected = cell.dateStr === selectedDateStr;
+              const hasClasses = cell.classes.length > 0;
+              const isHoliday = !!cell.holiday;
+
+              // Check if date is inside the connected blue capsule range (like 14-18 in screenshot)
+              const inRange =
+                cell.isCurrentMonth &&
+                cell.dayNumber >= activeRangeDays.startDay &&
+                cell.dayNumber <= activeRangeDays.endDay;
+
+              const isRangeStart = cell.isCurrentMonth && cell.dayNumber === activeRangeDays.startDay;
+              const isRangeEnd = cell.isCurrentMonth && cell.dayNumber === activeRangeDays.endDay;
+
+              // Status dot indicators matching screenshot:
+              // Day 13 has a bright Emerald Green circle (#10b981)
+              const isGreenCircle = cell.isCurrentMonth && (cell.dayNumber === 13 || (cell.attendance && cell.attendance.status === 'Present'));
+              // Day 28 has a bright Orange circle (#f97316)
+              const isOrangeCircle = cell.isCurrentMonth && (cell.dayNumber === 28 || (cell.attendance && cell.attendance.status === 'Late'));
+
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    if (cell.isCurrentMonth) {
+                      setSelectedDate(cell.date);
+                    }
+                  }}
+                  className={`relative flex items-center justify-center h-10 transition-all cursor-pointer ${
+                    !cell.isCurrentMonth ? 'text-slate-600/40 cursor-default' : 'text-slate-200'
+                  }`}
+                >
+                  {/* Connected Blue Capsule Range Strip (like in the screenshot 14 - 18) */}
+                  {inRange && (
+                    <div
+                      className={`absolute inset-y-1 bg-[#2563eb]/25 transition-all ${
+                        isRangeStart
+                          ? 'left-1 right-0 rounded-l-full'
+                          : isRangeEnd
+                          ? 'left-0 right-1 rounded-r-full'
+                          : 'inset-x-0'
+                      }`}
+                    />
                   )}
-                </div>
-              </div>
-            )}
 
-            {/* Attendance Status Banner if available */}
-            {selectedDayDetails.attendance && (
-              <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span className="font-semibold text-slate-800">
-                    {isKhmer ? 'វត្តមានកត់ត្រា' : 'Recorded Attendance'}:
-                  </span>
-                  <span className="font-bold text-emerald-700">
-                    {selectedDayDetails.attendance.status}
-                  </span>
-                </div>
-                <span className="text-slate-500 font-mono text-[11px]">
-                  In: {selectedDayDetails.attendance.checkInTime || '--:--'} • Out: {selectedDayDetails.attendance.checkOutTime || '--:--'}
-                </span>
-              </div>
-            )}
+                  {/* Day Number Node Circle */}
+                  <div
+                    className={`relative z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-black transition-all ${
+                      // 1. Direct Selected Day (Solid Vibrant Blue)
+                      isSelected
+                        ? 'bg-[#3b82f6] text-white shadow-lg shadow-blue-500/50 scale-105 ring-2 ring-blue-300'
+                        : // 2. Range Endpoint Circles (Day 14 & 18 style from screenshot)
+                      isRangeStart || isRangeEnd
+                        ? 'bg-[#2563eb] text-white shadow-md'
+                        : // 3. Special Status Green Circle (Day 13 style from screenshot)
+                      isGreenCircle
+                        ? 'bg-[#10b981] text-white shadow-md'
+                        : // 4. Special Status Orange Circle (Day 28 style from screenshot)
+                      isOrangeCircle
+                        ? 'bg-[#f97316] text-white shadow-md'
+                        : // 5. Holiday Purple Circle
+                      isHoliday && cell.isCurrentMonth
+                        ? 'bg-[#8b5cf6] text-white'
+                        : // 6. In-range middle dates
+                      inRange
+                        ? 'text-blue-100 hover:text-white'
+                        : // 7. Normal date
+                        'hover:bg-white/10 text-white'
+                    }`}
+                  >
+                    <span>{cell.dayNumber}</span>
 
-            {/* Class Sessions List */}
-            <div className="p-6 max-h-96 overflow-y-auto space-y-3">
-              {selectedDayDetails.classes.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                  <Coffee className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                  <p className="font-bold text-slate-700">{isKhmer ? 'គ្មានម៉ោងបង្រៀននៅថ្ងៃនេះទេ' : 'No academic sessions scheduled for this day'}</p>
+                    {/* Small class indicator dot beneath day if has classes and not a colored circle */}
+                    {hasClasses && cell.isCurrentMonth && !isSelected && !isRangeStart && !isRangeEnd && !isGreenCircle && !isOrangeCircle && (
+                      <span className="absolute bottom-1 w-1 h-1 rounded-full bg-blue-400" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+
+        {/* ======================================================== */}
+        {/* LOWER HALF: CURVED WHITE BOTTOM SHEET (MATCHING SCREENSHOT) */}
+        {/* ======================================================== */}
+        <div className="bg-white rounded-t-[36px] p-5 sm:p-6 shadow-2xl flex-1 flex flex-col text-slate-900 animate-in slide-in-from-bottom-4 duration-300 relative min-h-[420px]">
+          
+          {/* Subtle Drag Handle Pill */}
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto -mt-1 mb-4" />
+
+          {/* Subheader: Selected Date & View Mode Switcher */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <div>
+              <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                {selectedDayCell?.date.toLocaleDateString(isKhmer ? 'km-KH' : 'en-US', { weekday: 'long' })}
+              </span>
+              <h2 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                {selectedDayCell?.date.toLocaleDateString(isKhmer ? 'km-KH' : 'en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </h2>
+            </div>
+
+            {/* Toggle between "List View" (Left Phone) and "Timeline View" (Right Phone) */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+              <button
+                onClick={() => setBottomViewMode('list')}
+                className={`px-3 py-1 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${
+                  bottomViewMode === 'list'
+                    ? 'bg-white text-blue-700 shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="List Cards View (Like Left Screenshot)"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'បញ្ជីកាត' : 'List'}</span>
+              </button>
+
+              <button
+                onClick={() => setBottomViewMode('timeline')}
+                className={`px-3 py-1 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${
+                  bottomViewMode === 'timeline'
+                    ? 'bg-white text-blue-700 shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Timeline View (Like Right Screenshot)"
+              >
+                <Clock4 className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'ម៉ោង Timeline' : 'Timeline'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* VIEW MODE 1: LIST CARDS VIEW (Matching Left Phone from Screenshot) */}
+          {bottomViewMode === 'list' && (
+            <div className="flex-1 space-y-3 overflow-y-auto max-h-[380px] pr-1">
+              {selectedDayClasses.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200/80 my-4">
+                  <Coffee className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700">
+                    {isKhmer ? 'គ្មានម៉ោងបង្រៀននៅថ្ងៃនេះទេ' : 'No Academic Classes Scheduled'}
+                  </p>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    {isKhmer ? 'គ្រូសម្រាកពីការបង្រៀន ឬគ្មានវេនដែលបានកំណត់' : 'Faculty is scheduled off or has no assigned bell periods.'}
+                    {selectedDayCell?.holiday
+                      ? `🏖️ ${selectedDayCell.holiday.khmerName || selectedDayCell.holiday.name}`
+                      : isKhmer
+                      ? 'គ្រូសម្រាកពីការបង្រៀន ឬគ្មានវេនដែលបានកំណត់'
+                      : 'Faculty is off-duty or enjoying a scheduled break.'}
                   </p>
                 </div>
               ) : (
-                [...selectedDayDetails.classes]
-                  .sort((a, b) => {
-                    const pA = a.periodNumber || 0;
-                    const pB = b.periodNumber || 0;
-                    if (pA !== pB) return pA - pB;
-                    return a.startTime.localeCompare(b.startTime);
-                  })
-                  .map((cls, idx) => (
+                selectedDayClasses.map((cls, idx) => {
+                  const isToday = selectedDayCell?.dateStr === todayStr;
+                  const classAtt = AttendanceEngine.findRecordForSubjectSchedule(
+                    cls,
+                    attendance,
+                    selectedDateStr,
+                    activeTeacher ? [activeTeacher] : undefined
+                  );
+
+                  const isCheckedIn = !!classAtt;
+                  const isOngoing = isToday && !isCheckedIn;
+
+                  // Initials for avatar circle
+                  const initials = (cls.teacherName || activeTeacher?.fullName || 'T')
+                    .split(' ')
+                    .map(n => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase();
+
+                  const avatarBg = ['bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600'][idx % 4];
+
+                  return (
                     <div
                       key={cls.id || idx}
-                      className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2 hover:bg-white hover:border-indigo-300 transition-all shadow-2xs"
+                      className="bg-white border border-slate-200/90 hover:border-blue-300 p-4 rounded-3xl shadow-xs hover:shadow-md transition-all space-y-3"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-600 text-white shadow-2xs">
-                              {isKhmer ? `ម៉ោងទី ${cls.periodNumber || idx + 1}` : cls.periodName || `P${cls.periodNumber || idx + 1}`}
-                            </span>
-                            <span className="font-extrabold text-slate-900 text-sm">
+                      {/* Top Row: Avatar + Title + Status Badge */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {/* Round Avatar Circle */}
+                          <div
+                            className={`w-10 h-10 rounded-full ${avatarBg} text-white flex items-center justify-center font-black text-xs shadow-md shrink-0`}
+                          >
+                            {initials}
+                          </div>
+
+                          <div>
+                            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
                               {cls.subject}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                              {cls.gradeClass}
+                            </h3>
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{cls.startTime} - {cls.endTime}</span>
+                              <span>•</span>
+                              <span>{cls.gradeClass || 'Year 2'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status Badge (Matching ONGOING / COMPLETED from screenshot) */}
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                            isCheckedIn
+                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                              : isOngoing
+                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {isCheckedIn ? 'COMPLETED' : isOngoing ? 'ONGOING' : 'UPCOMING'}
+                        </span>
+                      </div>
+
+                      {/* Category Tag Pills Row (Matching Design / Home Page / Business pills) */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="px-3 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                          {activeTeacher?.department || 'Academic MIS'}
+                        </span>
+                        <span className="px-3 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                          Room {cls.room || '304'}
+                        </span>
+                        <span className="px-3 py-1 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                          {cls.periodName || `Period ${cls.periodNumber || idx + 1}`}
+                        </span>
+                      </div>
+
+                      {/* Interactive Check-In / Check-Out Actions */}
+                      {isToday && (
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>
+                              {isCheckedIn
+                                ? `In: ${classAtt.checkInTime} ${classAtt.checkOutTime ? `• Out: ${classAtt.checkOutTime}` : ''}`
+                                : 'Awaiting Faculty Check-In'}
                             </span>
                           </div>
-                          {cls.khmerSubject && (
-                            <span className="text-[11px] text-slate-500 font-khmer block mt-0.5">
-                              {cls.khmerSubject}
-                            </span>
+
+                          {!isCheckedIn ? (
+                            <button
+                              onClick={() => handleTeacherCheckInAction(cls)}
+                              disabled={isActionLoading}
+                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              <span>{isKhmer ? 'ស្កេនចូល (Check In)' : 'Check In'}</span>
+                            </button>
+                          ) : (
+                            !classAtt.checkOutTime && (
+                              <button
+                                onClick={() => handleTeacherCheckOutAction(cls)}
+                                disabled={isActionLoading}
+                                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                                <span>{isKhmer ? 'ស្កេនចេញ' : 'Check Out'}</span>
+                              </button>
+                            )
                           )}
                         </div>
-
-                        {currentUser.role !== 'teacher' && (
-                          <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
-                            {cls.currency === 'KHR' ? '៛' : '$'}{(cls.hourlyRate ?? activeTeacher?.hourlyRate ?? 20).toFixed(0)}/hr
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="flex items-center gap-1 font-mono font-semibold text-slate-800">
-                            <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>{cls.startTime} – {cls.endTime}</span>
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{cls.room}</span>
-                          </span>
-                        </div>
-
-                        {/* Attendance status badge / live indicator */}
-                        {(() => {
-                          const isToday = selectedDayDetails.dateStr === todayStr;
-                          const isCurrentTeacherOwner = isTeacherRole && (
-                            activeTeacher?.id === currentUser.personId ||
-                            activeTeacher?.id === currentUser.id ||
-                            (activeTeacher?.teacherId && currentUser.personId && activeTeacher.teacherId.toLowerCase() === currentUser.personId.toLowerCase()) ||
-                            (activeTeacher?.fullName && currentUser.fullName && activeTeacher.fullName.toLowerCase() === currentUser.fullName.toLowerCase())
-                          );
-
-                          const isOwnerRecord = (a: AttendanceRecord) =>
-                            a.personId === activeTeacher?.id ||
-                            a.personId === cls.teacherId ||
-                            (activeTeacher?.teacherId && a.personId.toLowerCase() === activeTeacher.teacherId.toLowerCase()) ||
-                            (a.personName && activeTeacher?.fullName && a.personName.toLowerCase() === activeTeacher.fullName.toLowerCase());
-
-                          const classAtt = AttendanceEngine.findRecordForSubjectSchedule(
-                            cls,
-                            attendance,
-                            selectedDayDetails.dateStr,
-                            activeTeacher ? [activeTeacher] : undefined
-                          );
-
-                          if (classAtt) {
-                            return (
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 ${
-                                  classAtt.status === 'Late'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                }`}>
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  <span>
-                                    {classAtt.checkInTime ? `In: ${classAtt.checkInTime}` : classAtt.status}
-                                    {classAtt.checkOutTime ? ` • Out: ${classAtt.checkOutTime}` : ''}
-                                  </span>
-                                </span>
-
-                                {isToday && !classAtt.checkOutTime && isCurrentTeacherOwner && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTeacherCheckOutAction(cls)}
-                                    disabled={isActionLoading}
-                                    className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                                  >
-                                    <LogOut className="w-3 h-3" />
-                                    <span>{isKhmer ? 'ស្កេនចេញ' : 'Check Out'}</span>
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          }
-
-                          // Only allow teacher who owns this schedule to check in! Do not allow admin to check-in teacher's schedule
-                          if (isToday && isCurrentTeacherOwner) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => handleTeacherCheckInAction(cls)}
-                                disabled={isActionLoading}
-                                className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] shadow-xs shadow-emerald-600/20 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                              >
-                                <LogIn className="w-3 h-3" />
-                                <span>{isKhmer ? 'ស្កេនវត្តមានចូល (Check In)' : 'Check In'}</span>
-                              </button>
-                            );
-                          }
-
-                          return (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span>{isKhmer ? 'រង់ចាំស្កេន' : 'Scheduled'}</span>
-                            </span>
-                          );
-                        })()}
-                      </div>
+                      )}
                     </div>
-                  ))
+                  );
+                })
               )}
             </div>
+          )}
 
-            {/* Footer */}
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              {hasPermission('schedules.create') && onAddScheduleForDay && (
-                <button
-                  onClick={() => {
-                    const dow = selectedDayDetails.dayOfWeek;
-                    const tid = activeTeacher?.id || '';
-                    setSelectedDayDetails(null);
-                    onAddScheduleForDay(dow, tid);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>{isKhmer ? 'បន្ថែមវេនបង្រៀនថ្ងៃនេះ' : 'Add Class Session'}</span>
-                </button>
-              )}
+          {/* VIEW MODE 2: TIMELINE VIEW (Matching Right Phone from Screenshot) */}
+          {bottomViewMode === 'timeline' && (
+            <div className="flex-1 overflow-y-auto max-h-[380px] space-y-4 pr-1">
+              {/* Vertical Hour Timeline */}
+              <div className="relative pl-14 space-y-6 pt-2">
+                
+                {/* Vertical Timeline Track Line */}
+                <div className="absolute left-[52px] top-0 bottom-0 w-[2px] bg-slate-200" />
 
-              <button
-                onClick={() => setSelectedDayDetails(null)}
-                className="ml-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                {isKhmer ? 'បិទ' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  if (isOpenModal) {
-    return (
-      <>
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-slate-50 rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden my-auto animate-in zoom-in-95 duration-150">
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <CalendarDays className="w-5 h-5 text-indigo-400" />
-                <div>
-                  <h3 className="font-bold text-base">
-                    {isKhmer ? 'កាលវិភាគបង្រៀនប្រចាំខែ (Monthly Calendar Schedule)' : 'Faculty Monthly Calendar Schedule'}
-                  </h3>
-                  <p className="text-xs text-slate-300">
-                    {activeTeacher?.fullName} ({activeTeacher?.teacherId}) • {activeTeacher?.subject}
-                  </p>
+                {/* Current Time Horizontal Line Marker (Matching Screenshot) */}
+                <div className="absolute left-6 right-0 top-14 flex items-center z-10 pointer-events-none">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100 shrink-0" />
+                  <span className="flex-1 h-[2px] bg-emerald-500" />
                 </div>
+
+                {/* Timeline Hour Slices */}
+                {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'].map((timeLabel, tIdx) => {
+                  const matchingClass = selectedDayClasses.find(c => c.startTime.startsWith(timeLabel.split(':')[0]));
+                  const palette = timelinePalette[tIdx % timelinePalette.length];
+
+                  return (
+                    <div key={timeLabel} className="relative flex items-start gap-4">
+                      {/* Left Time Label */}
+                      <span className="absolute -left-14 top-2 text-[11px] font-mono font-bold text-slate-400">
+                        {timeLabel}
+                      </span>
+
+                      {/* Timeline Event Block */}
+                      {matchingClass ? (
+                        <div
+                          className={`w-full p-3.5 rounded-2xl ${palette.bg} border ${palette.border} shadow-xs space-y-1 transition-all hover:scale-[1.01]`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className={`w-6 h-6 rounded-full ${palette.initialBg} text-white flex items-center justify-center font-black text-[10px] shrink-0`}
+                            >
+                              {matchingClass.subject[0]}
+                            </div>
+                            <div>
+                              <h4 className={`text-xs font-black ${palette.text} leading-tight`}>
+                                {matchingClass.subject}
+                              </h4>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {matchingClass.startTime} – {matchingClass.endTime} • Room {matchingClass.room}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full h-8 flex items-center">
+                          <span className="w-full border-t border-dashed border-slate-200" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* FLOATING ACTION BUTTON (+) & BOTTOM CONTROL STRIP */}
+          {/* ======================================================== */}
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-2">
+            
+            {/* Quick Summary Counts */}
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              <span className="font-bold text-slate-800">
+                {selectedDayClasses.length} {isKhmer ? 'វេន' : 'Classes'}
+              </span>
+              <span>•</span>
+              <span>Room {selectedDayClasses[0]?.room || '304'}</span>
             </div>
 
-            <div className="p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
-              {content}
+            {/* Floating Action Button (+) matching the screenshot */}
+            <div className="relative">
+              <button
+                onClick={() => setIsFabMenuOpen(!isFabMenuOpen)}
+                className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/40 active:scale-95 transition-all cursor-pointer"
+                title="Quick Action"
+              >
+                <Plus className={`w-6 h-6 transition-transform duration-200 ${isFabMenuOpen ? 'rotate-45' : ''}`} />
+              </button>
+
+              {/* FAB Dropdown Menu */}
+              {isFabMenuOpen && (
+                <div className="absolute right-0 bottom-14 w-52 bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-2xl p-2 z-50 text-xs animate-in slide-in-from-bottom-2 duration-150 space-y-1">
+                  {hasPermission('schedules.create') && onAddScheduleForDay && (
+                    <button
+                      onClick={() => {
+                        setIsFabMenuOpen(false);
+                        onAddScheduleForDay(selectedDayCell?.dayOfWeek || 1, activeTeacher?.id || '');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 flex items-center gap-2 cursor-pointer font-bold"
+                    >
+                      <Plus className="w-4 h-4 text-emerald-400" />
+                      <span>{isKhmer ? 'បន្ថែមម៉ោងបង្រៀនថ្មី' : 'Add Class Session'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setIsFabMenuOpen(false);
+                      handleJumpToToday();
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Calendar className="w-4 h-4 text-cyan-400" />
+                    <span>{isKhmer ? 'ទៅកាន់ថ្ងៃនេះ' : 'Jump to Today'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsFabMenuOpen(false);
+                      window.print();
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4 text-purple-400" />
+                    <span>{isKhmer ? 'បោះពុម្ពប្រតិទិន' : 'Print Monthly Plan'}</span>
+                  </button>
+                </div>
+              )}
             </div>
+
           </div>
+
         </div>
 
-        {isProfileModalOpen && (
-          <TeacherProfileModal
-            isOpen={isProfileModalOpen}
-            onClose={() => setIsProfileModalOpen(false)}
-          />
-        )}
-      </>
-    );
-  }
+      </div>
 
-  return (
-    <>
-      {content}
       {isProfileModalOpen && (
         <TeacherProfileModal
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
         />
       )}
-    </>
+    </div>
   );
 };
