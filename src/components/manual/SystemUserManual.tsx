@@ -26,10 +26,12 @@ import {
   ArrowRight,
   Bell,
   Volume2,
-  Play
+  Play,
+  Video
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 import { ScheduleAlertService } from '../../services/scheduleAlertService.ts';
+import { TeacherVideoManualModal } from './TeacherVideoManualModal.tsx';
 
 interface ManualSection {
   id: string;
@@ -50,6 +52,7 @@ export const SystemUserManual: React.FC = () => {
   const [activeSectionId, setActiveSectionId] = useState<string>('kiosk');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeLangMode, setActiveLangMode] = useState<'both' | 'km' | 'en'>(isKhmer ? 'km' : 'en');
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState<boolean>(false);
 
   const manualSections: ManualSection[] = [
     {
@@ -603,12 +606,72 @@ export const SystemUserManual: React.FC = () => {
           </div>
 
           <button
+            onClick={() => setIsVideoModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+            title={isKhmer ? 'ទាញយកវីដេអូណែនាំសម្រាប់គ្រូ (Full HD 1080p)' : 'Download Teacher Video Manual (Full HD 1080p)'}
+          >
+            <Video className="w-4 h-4 text-white" />
+            <span>{isKhmer ? 'វីដេអូណែនាំ (Video Manual)' : 'Video Manual (MP4)'}</span>
+          </button>
+
+          <button
             onClick={handlePrintManual}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs shadow-md transition-all active:scale-95"
           >
             <Printer className="w-4 h-4 text-indigo-600" />
             <span>{isKhmer ? 'បោះពុម្ពសៀវភៅណែនាំ' : 'Print User Manual'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* Teacher Video Manual Feature Banner (Installation till End - Download Only) */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-lg border border-blue-800/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 print:hidden">
+        <div className="flex items-start gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0">
+            <Video className="w-7 h-7" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/30 text-blue-200 border border-blue-400/30">
+                Teacher Video Manual
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                1080p Full HD • MP4
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
+                7 Modules (Start till End)
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-white">
+              {isKhmer
+                ? 'វីដេអូណែនាំការប្រើប្រាស់សម្រាប់គ្រូបង្រៀន (ចាប់ពីដំឡើងរហូតដល់បញ្ចប់)'
+                : 'Complete Teacher Video Manual: Installation till End'}
+            </h3>
+            <p className="text-xs text-blue-200/90 mt-0.5 max-w-xl">
+              {isKhmer
+                ? 'វីដេអូបង្រៀនកម្រិត Full HD 1080p គ្របដណ្តប់ពីការដំឡើងលើទូរស័ព្ទ (PWA), ចូលគណនី, កាលវិភាគបង្រៀន, ស្កេនវត្តមាន GPS, កូដ QR, សុំច្បាប់ និងប្រាក់ឈ្នួល។'
+                : 'Step-by-step Full HD training video covering PWA install, PIN login, weekly timetable, GPS campus check-in, personal QR badge, leaves & wages.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 flex-wrap sm:flex-nowrap">
+          <button
+            onClick={() => setIsVideoModalOpen(true)}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors border border-white/15 cursor-pointer"
+          >
+            <Play className="w-4 h-4 text-cyan-300" />
+            <span>{isKhmer ? 'មើលមាតិកាជំពូក' : 'View Syllabus'}</span>
+          </button>
+
+          <a
+            href="/downloads/teacher-video-manual.mp4"
+            download="EduTrack_Teacher_Video_Manual_1080p.mp4"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-xs shadow-lg shadow-blue-600/30 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+          >
+            <Download className="w-4 h-4" />
+            <span>{isKhmer ? 'ទាញយកវីដេអូ (MP4)' : 'Download Video (MP4)'}</span>
+          </a>
         </div>
       </div>
 
@@ -871,6 +934,12 @@ export const SystemUserManual: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Teacher Video Manual Syllabus & Download Modal */}
+      <TeacherVideoManualModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+      />
 
     </div>
   );

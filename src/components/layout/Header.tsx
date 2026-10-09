@@ -23,7 +23,10 @@ import {
   ShieldCheck,
   Calendar,
   UserCog,
-  Camera
+  Camera,
+  Video,
+  Download,
+  Play
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -420,7 +423,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                   {/* Quick User Manual Link */}
                   {onOpenManual && (
-                    <div className="pb-1">
+                    <div className="pb-1 space-y-1">
                       <button
                         onClick={() => {
                           setIsUserMenuOpen(false);
@@ -430,6 +433,21 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                         <span>{isKhmer ? 'សៀវភៅណែនាំប្រព័ន្ធ (User Manual)' : 'System User Manual (Khmer/EN)'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          window.dispatchEvent(new CustomEvent('edutrack:open-video-manual'));
+                        }}
+                        className="w-full flex items-center justify-between py-2 px-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-2xs transition-all cursor-pointer"
+                        title={isKhmer ? 'វីដេអូណែនាំសម្រាប់គ្រូ (សកម្មភាពលើផ្ទាំងពិត & MP4)' : 'Teacher Video Manual (Real Action & MP4)'}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Video className="w-3.5 h-3.5 shrink-0" />
+                          <span>{isKhmer ? 'វីដេអូណែនាំគ្រូ (Video Manual)' : 'Teacher Video Manual'}</span>
+                        </div>
+                        <Play className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
                       </button>
                     </div>
                   )}

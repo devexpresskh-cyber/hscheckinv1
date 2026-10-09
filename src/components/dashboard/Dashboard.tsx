@@ -28,7 +28,10 @@ import {
   Clock,
   Activity,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Video,
+  Download,
+  Play
 } from 'lucide-react';
 
 export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn?: () => void }> = ({ onNavigate, onOpenCheckIn }) => {
@@ -268,8 +271,18 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
           )}
 
           <button
+            onClick={() => window.dispatchEvent(new CustomEvent('edutrack:open-video-manual'))}
+            className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+            title={isKhmer ? 'វីដេអូណែនាំសម្រាប់គ្រូ (សកម្មភាពលើផ្ទាំងពិត & MP4)' : 'Teacher Video Manual (Real Action & MP4)'}
+          >
+            <Video className="w-3.5 h-3.5 text-white shrink-0" />
+            <span className="hidden sm:inline">{isKhmer ? 'វីដេអូណែនាំ' : 'Video Manual'}</span>
+            <Play className="w-3.5 h-3.5 text-cyan-200 shrink-0" />
+          </button>
+
+          <button
             onClick={() => onNavigate('manual')}
-            className="flex items-center gap-2 px-3 sm:px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all active:scale-95"
+            className="flex items-center gap-2 px-3 sm:px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all active:scale-95 cursor-pointer"
             title={isKhmer ? 'បើកសៀវភៅណែនាំការប្រើប្រាស់ប្រព័ន្ធ (Khmer/English)' : 'Open System User Manual (Khmer/English)'}
           >
             <BookOpen className="w-3.5 h-3.5 text-indigo-300 shrink-0" />

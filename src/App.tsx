@@ -22,6 +22,7 @@ import { UserManagement } from './components/users/UserManagement.tsx';
 import { AuditLogViewer } from './components/audit/AuditLogViewer.tsx';
 import { SystemSettingsView } from './components/settings/SystemSettingsView.tsx';
 import { SystemUserManual } from './components/manual/SystemUserManual.tsx';
+import { TeacherVideoManualModal } from './components/manual/TeacherVideoManualModal.tsx';
 import { EmployeeStaffCalendar } from './components/schedules/EmployeeStaffCalendar.tsx';
 import { EmployeeMonthlyPresentCalendar } from './components/schedules/EmployeeMonthlyPresentCalendar.tsx';
 import { StorageService } from './services/storageService.ts';
@@ -82,7 +83,14 @@ const MainLayout: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>(() => (isTeacher ? 'schedules' : isEmployee ? 'monthly_calendar' : 'dashboard'));
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const { isKhmer } = useLanguage();
+
+  React.useEffect(() => {
+    const handleOpenVideo = () => setIsVideoModalOpen(true);
+    window.addEventListener('edutrack:open-video-manual', handleOpenVideo);
+    return () => window.removeEventListener('edutrack:open-video-manual', handleOpenVideo);
+  }, []);
 
   const isRestrictedStaff = isTeacher || isEmployee;
 
@@ -313,6 +321,12 @@ const MainLayout: React.FC = () => {
 
       {/* Popup Alert on Home Screen at First Logged-in for App Installation */}
       <FirstLoginInstallModal />
+
+      {/* Teacher Video Manual Modal with Real Interface Action & 1080p Player */}
+      <TeacherVideoManualModal
+        isOpen={isVideoModalOpen}
+        onClose={() => setIsVideoModalOpen(false)}
+      />
 
       {/* Global Notifications */}
       <ToastContainer />

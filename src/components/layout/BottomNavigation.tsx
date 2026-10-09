@@ -22,7 +22,10 @@ import {
   ChevronRight,
   ShieldCheck,
   Building,
-  History
+  History,
+  Video,
+  Download,
+  Play
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
@@ -425,6 +428,32 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Teacher Video Manual (Full HD 1080p MP4 & Real Action Walkthrough) */}
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setIsMoreSheetOpen(false);
+                    window.dispatchEvent(new CustomEvent('edutrack:open-video-manual'));
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-950 text-white shadow-sm border border-blue-800 text-left cursor-pointer active:scale-98 transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0">
+                      <Video className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block leading-tight text-white">
+                        {isKhmer ? 'វីដេអូណែនាំសម្រាប់គ្រូ (Video Manual)' : 'Teacher Video Manual'}
+                      </span>
+                      <span className="text-[10px] text-blue-200">
+                        {isKhmer ? 'សកម្មភាពលើផ្ទាំងពិត & ចាក់វីដេអូ 1080p' : 'Real Interface Action • Full HD 1080p'}
+                      </span>
+                    </div>
+                  </div>
+                  <Play className="w-4 h-4 text-cyan-300 shrink-0" />
+                </button>
+              </div>
 
               {/* Install App to Mobile Home Screen */}
               <div className="pt-2 border-t border-slate-100">

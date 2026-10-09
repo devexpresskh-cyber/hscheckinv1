@@ -22,7 +22,8 @@ import {
   X,
   LogOut,
   DollarSign,
-  Languages
+  Languages,
+  Video
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
@@ -329,17 +330,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
           section: 'overview' as const
         };
       }
+      if (item.id === 'manual') {
+        return {
+          ...item,
+          label: 'Teacher Manual & Video',
+          khmer: 'សៀវភៅ & វីដេអូណែនាំគ្រូ',
+          badge: 'Video',
+          icon: Video,
+          section: 'overview' as const
+        };
+      }
     }
     return item;
   }).filter(item => {
-    // If logged in as an Employee, show Monthly Present Calendar, Staff Shifts, Check-in History, Leave Requests, and Holidays
+    // If logged in as an Employee, show Monthly Present Calendar, Staff Shifts, Check-in History, Leave Requests, Holidays, and Manual
     if (isEmployee) {
-      return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'leave' || item.id === 'holidays';
+      return item.id === 'monthly_calendar' || item.id === 'schedules' || item.id === 'attendance' || item.id === 'leave' || item.id === 'holidays' || item.id === 'manual';
     }
 
-    // If logged in as a Teacher, show Daily Teacher Schedule first, then Monthly Calendar, Attendance History, Holidays, and Leave
+    // If logged in as a Teacher, show Daily Teacher Schedule first, then Monthly Calendar, Attendance History, Holidays, Leave, and Manual & Video
     if (currentUser.role === 'teacher') {
-      return item.id === 'schedules' || item.id === 'monthly_calendar' || item.id === 'attendance' || item.id === 'holidays' || item.id === 'leave';
+      return item.id === 'schedules' || item.id === 'monthly_calendar' || item.id === 'attendance' || item.id === 'holidays' || item.id === 'leave' || item.id === 'manual';
     }
 
     // Explicitly disallow teachers and employees from accessing telegram setting and system setting
@@ -350,7 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return hasPermission(item.permission as any);
   }).sort((a, b) => {
     if (currentUser.role === 'teacher') {
-      const order: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'holidays', 'leave'];
+      const order: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'holidays', 'leave', 'manual'];
       const idxA = order.indexOf(a.id);
       const idxB = order.indexOf(b.id);
       return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);

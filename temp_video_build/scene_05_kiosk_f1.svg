@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  
+  <defs>
+    <linearGradient id="bgNavy" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="40%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="appHeaderGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="50%" stop-color="#4338ca"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="timelineDeepBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b2a5e"/>
+      <stop offset="50%" stop-color="#09224c"/>
+      <stop offset="100%" stop-color="#071b38"/>
+    </linearGradient>
+    <linearGradient id="qrModalHeader" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="50%" stop-color="#3730a3"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="emeraldBtn" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+    <filter id="softShadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="cardShadow" x="-3%" y="-3%" width="106%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bgNavy)"/>
+
+  
+  <!-- Left Side: Step-by-Step Training Instruction Panel -->
+  <g transform="translate(100, 140)">
+    <!-- Module Badge -->
+    <rect x="0" y="0" width="140" height="36" rx="18" fill="#3b82f6" fill-opacity="0.2" stroke="#60a5fa" stroke-width="1.5"/>
+    <text x="70" y="24" fill="#93c5fd" font-size="14" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">MODULE 04</text>
+
+    <!-- Module Title -->
+    <text x="0" y="75" fill="#ffffff" font-size="34" font-weight="900" font-family="Liberation Sans, sans-serif">Classroom Attendance &amp;amp; GPS Kiosk</text>
+    <text x="0" y="112" fill="#93c5fd" font-size="22" font-weight="bold" font-family="Liberation Sans, sans-serif">ការស្កេនវត្តមានចូល-ចេញ និងផ្ទៀងផ្ទាត់ GPS បរិវេណសាលា</text>
+
+    <!-- Steps Stack -->
+    <g transform="translate(0, 140)">
+      <!-- Step 1 -->
+      <rect x="0" y="0" width="760" height="135" rx="18" fill="#ffffff" fill-opacity="0.06" stroke="#3b82f6" stroke-width="1.5"/>
+      <circle cx="50" cy="67" r="26" fill="#2563eb"/>
+      <text x="50" y="75" fill="#ffffff" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">1</text>
+      <text x="95" y="45" fill="#ffffff" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif">Auto-Detects Faculty Profile</text>
+      <text x="95" y="75" fill="#93c5fd" font-size="15" font-family="Liberation Sans, sans-serif">Check-in terminal instantly maps the logged-in teacher and their assigned class.</text>
+      <text x="95" y="105" fill="#cbd5e1" font-size="13" font-family="Liberation Sans, sans-serif">ស្ថានីយស្កេនកំណត់អត្តសញ្ញាណគ្រូបង្រៀន និងមុខវិជ្ជាត្រូវបង្រៀនដោយស្វ័យប្រវត្តិ</text>
+
+      <!-- Step 2 -->
+      <rect x="0" y="155" width="760" height="135" rx="18" fill="#ffffff" fill-opacity="0.06" stroke="#3b82f6" stroke-width="1.5"/>
+      <circle cx="50" cy="222" r="26" fill="#2563eb"/>
+      <text x="50" y="230" fill="#ffffff" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">2</text>
+      <text x="95" y="200" fill="#ffffff" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif">GPS Perimeter Boundary Check (&amp;lt; 500m)</text>
+      <text x="95" y="230" fill="#93c5fd" font-size="15" font-family="Liberation Sans, sans-serif">Verifies the teacher is physically inside campus before recording check-in.</text>
+      <text x="95" y="260" fill="#cbd5e1" font-size="13" font-family="Liberation Sans, sans-serif">ផ្ទៀងផ្ទាត់ទីតាំង GPS ពិតប្រាកដក្នុងបរិវេណសាលា (កាំ ៥០០ ម៉ែត្រ) ធានាសុពលភាព</text>
+
+      <!-- Step 3 -->
+      <rect x="0" y="310" width="760" height="135" rx="18" fill="#ffffff" fill-opacity="0.06" stroke="#3b82f6" stroke-width="1.5"/>
+      <circle cx="50" cy="377" r="26" fill="#2563eb"/>
+      <text x="50" y="385" fill="#ffffff" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">3</text>
+      <text x="95" y="355" fill="#ffffff" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif">1-Tap CHECK IN Button</text>
+      <text x="95" y="385" fill="#93c5fd" font-size="15" font-family="Liberation Sans, sans-serif">One tap registers attendance at 07:58 AM on-time with verified audio confirmation.</text>
+      <text x="95" y="415" fill="#cbd5e1" font-size="13" font-family="Liberation Sans, sans-serif">ចុចប៊ូតុង &quot;CHECK IN&quot; តែមួយដង កត់ត្រាវត្តមានទាន់ពេលវេលាភ្លាមៗ</text>
+
+      <!-- Step 4 / Pro Tip -->
+      <rect x="0" y="465" width="760" height="135" rx="18" fill="#047857" fill-opacity="0.2" stroke="#10b981" stroke-width="2"/>
+      <circle cx="50" cy="532" r="26" fill="#10b981"/>
+      <text x="50" y="540" fill="#ffffff" font-size="22" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">✓</text>
+      <text x="95" y="510" fill="#34d399" font-size="20" font-weight="bold" font-family="Liberation Sans, sans-serif">Instant Telegram Group Notification</text>
+      <text x="95" y="540" fill="#a7f3d0" font-size="15" font-family="Liberation Sans, sans-serif">Dispatches instant broadcast to school Telegram group for coordinator visibility.</text>
+      <text x="95" y="570" fill="#e2e8f0" font-size="13" font-family="Liberation Sans, sans-serif">ប្រព័ន្ធបញ្ជូនសារដំណឹងស្វ័យប្រវត្តិទៅកាន់ Telegram ក្រុមសាលាភ្លាមៗ</text>
+    </g>
+  </g>
+  
+
+  <!-- Right: Check-In Terminal Card -->
+  <g transform="translate(1000, 110)">
+    <rect width="520" height="880" rx="36" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" filter="url(#softShadow)"/>
+
+    <rect width="520" height="90" rx="36" fill="#0f172a"/>
+    <text x="30" y="52" fill="#ffffff" font-size="22" font-weight="900" font-family="Liberation Sans, sans-serif">Classroom Attendance Kiosk</text>
+    <rect x="380" y="28" width="110" height="34" rx="12" fill="#10b981" fill-opacity="0.25"/>
+    <text x="435" y="50" fill="#34d399" font-size="13" font-weight="black" font-family="Liberation Sans, sans-serif" text-anchor="middle">ONLINE</text>
+
+    <!-- Faculty Card -->
+    <g transform="translate(25, 110)">
+      <rect width="470" height="100" rx="20" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+      <circle cx="50" cy="50" r="30" fill="#2563eb"/>
+      <text x="50" y="58" fill="#ffffff" font-size="20" font-weight="900" font-family="Liberation Sans, sans-serif" text-anchor="middle">SV</text>
+      <text x="95" y="44" fill="#0f172a" font-size="18" font-weight="900" font-family="Liberation Sans, sans-serif">Dr. Sovann Vichea</text>
+      <text x="95" y="68" fill="#64748b" font-size="13" font-family="Liberation Sans, sans-serif">CS-201 Data Structures • Room 304</text>
+    </g>
+
+    <!-- GPS Verified Card -->
+    <g transform="translate(25, 230)">
+      <rect width="470" height="90" rx="20" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="2"/>
+      <circle cx="45" cy="45" r="22" fill="#10b981"/>
+      <text x="45" y="52" fill="#ffffff" font-size="20" font-family="Liberation Sans, sans-serif" text-anchor="middle">📍</text>
+      <text x="80" y="38" fill="#065f46" font-size="15" font-weight="900" font-family="Liberation Sans, sans-serif">GPS Verified: Inside Campus Perimeter</text>
+      <text x="80" y="62" fill="#047857" font-size="12" font-family="Liberation Sans, sans-serif">11.5564° N, 104.9282° E • 18m from building (&lt; 500m boundary)</text>
+    </g>
+
+    <!-- Giant Green CHECK IN Button -->
+    <g transform="translate(25, 345)">
+      <rect width="470" height="74" rx="22" fill="#059669" filter="url(#cardShadow)"/>
+      <text x="235" y="46" fill="#ffffff" font-size="22" font-weight="900" font-family="Liberation Sans, sans-serif" text-anchor="middle" letter-spacing="1">
+        ✓ CHECK IN NOW (ស្កេនចូល)
+      </text>
+    </g>
+
+    
+  </g>
+
+  
+  <!-- Animated Action Cursor Overlay -->
+  <g transform="translate(1235, 685)">
+    
+    <path d="M 0 0 L 0 28 L 7 21 L 15 32 L 19 30 L 11 19 L 21 19 Z" fill="#2563eb" stroke="#ffffff" stroke-width="2.5" filter="url(#softShadow)"/>
+    
+      <rect x="24" y="-12" width="224" height="28" rx="8" fill="#0f172a" fill-opacity="0.95" stroke="#38bdf8" stroke-width="1.5"/>
+      <text x="136" y="7" fill="#38bdf8" font-size="12" font-weight="bold" font-family="Liberation Sans, sans-serif" text-anchor="middle">GPS Verifying Coordinates</text>
+    
+  </g>
+  
+</svg>
