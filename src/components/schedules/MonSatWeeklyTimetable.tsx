@@ -133,7 +133,9 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   const [selectedRoom, setSelectedRoom] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [includeSunday, setIncludeSunday] = useState<boolean>(false);
-  const [viewLayout, setViewLayout] = useState<'timeline' | 'table'>('table');
+  const [viewLayout, setViewLayout] = useState<'timeline' | 'table'>(() => {
+    return isTeacherAccount ? 'timeline' : 'table';
+  });
 
   useEffect(() => {
     if (effectiveLockedTeacher) {

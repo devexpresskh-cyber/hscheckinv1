@@ -25,6 +25,7 @@ import { SystemUserManual } from './components/manual/SystemUserManual.tsx';
 import { TeacherVideoManualModal } from './components/manual/TeacherVideoManualModal.tsx';
 import { EmployeeStaffCalendar } from './components/schedules/EmployeeStaffCalendar.tsx';
 import { EmployeeMonthlyPresentCalendar } from './components/schedules/EmployeeMonthlyPresentCalendar.tsx';
+import { StaffMobileAppHome } from './components/mobile/StaffMobileAppHome.tsx';
 import { StorageService } from './services/storageService.ts';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator.tsx';
 import { FirstLoginInstallModal } from './components/pwa/FirstLoginInstallModal.tsx';
@@ -94,28 +95,31 @@ const MainLayout: React.FC = () => {
 
   const isRestrictedStaff = isTeacher || isEmployee;
 
-  // Automatically enforce guard: teacher lands directly on Daily Schedule; employee on Monthly Calendar
+  // Automatically enforce guard: teacher and employee land on mobile app home (StaffMobileAppHome) by default
   React.useEffect(() => {
     if (isEmployee) {
-      const allowedEmployeeTabs: NavTab[] = ['monthly_calendar', 'schedules', 'attendance', 'leave', 'holidays', 'manual'];
+      const allowedEmployeeTabs: NavTab[] = ['dashboard', 'monthly_calendar', 'schedules', 'attendance', 'leave', 'holidays', 'manual'];
       if (!allowedEmployeeTabs.includes(currentTab)) {
-        setCurrentTab('monthly_calendar');
+        setCurrentTab('dashboard');
       }
       return;
     }
 
     if (isTeacher) {
-      const allowedTeacherTabs: NavTab[] = ['schedules', 'monthly_calendar', 'attendance', 'holidays', 'leave', 'manual'];
+      const allowedTeacherTabs: NavTab[] = ['dashboard', 'schedules', 'monthly_calendar', 'attendance', 'holidays', 'leave', 'manual'];
       if (!allowedTeacherTabs.includes(currentTab)) {
-        setCurrentTab('schedules');
+        setCurrentTab('dashboard');
       }
       return;
     }
   }, [isEmployee, isTeacher, currentUser.id]);
 
   const renderContent = () => {
-    // If logged in as Employee, allow Monthly Present Calendar, Staff Shifts, Check-in History, Leave Requests, and Holidays
+    // If logged in as Employee, show Mobile App Home by default (matching user's screenshot)
     if (isEmployee) {
+      if (currentTab === 'monthly_calendar') {
+        return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
+      }
       if (currentTab === 'attendance') {
         return <AttendanceList />;
       }
@@ -131,28 +135,17 @@ const MainLayout: React.FC = () => {
       if (currentTab === 'manual') {
         return <SystemUserManual />;
       }
-      if (currentTab === 'dashboard') {
-        return (
-          <Dashboard
-            onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
-            onOpenCheckIn={() => setIsCheckInModalOpen(true)}
-          />
-        );
-      }
-      // Monthly Present Calendar directly
-      return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
+      // Default: Staff Mobile App Home (Matching screenshot)
+      return (
+        <StaffMobileAppHome
+          onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
+          onOpenCheckIn={() => setIsCheckInModalOpen(true)}
+        />
+      );
     }
 
-    // If logged in as Teacher, allow Dashboard (Home), Monthly Schedule Calendar, Attendance History, Holidays, and Leave
+    // If logged in as Teacher, show Mobile App Home by default (matching user's screenshot)
     if (isTeacher) {
-      if (currentTab === 'dashboard') {
-        return (
-          <Dashboard
-            onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
-            onOpenCheckIn={() => setIsCheckInModalOpen(true)}
-          />
-        );
-      }
       if (currentTab === 'monthly_calendar') {
         return <ScheduleManagement initialView="monthly_calendar" />;
       }
@@ -171,9 +164,9 @@ const MainLayout: React.FC = () => {
       if (currentTab === 'manual') {
         return <SystemUserManual />;
       }
-      // Default: Dashboard / Mobile Home Page directly
+      // Default: Staff Mobile App Home (Matching screenshot)
       return (
-        <Dashboard
+        <StaffMobileAppHome
           onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
           onOpenCheckIn={() => setIsCheckInModalOpen(true)}
         />
@@ -278,11 +271,13 @@ const MainLayout: React.FC = () => {
               e.currentTarget.scrollLeft = 0;
             }
           }}
-          className="flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden [overscroll-behavior-x:none] p-3 sm:p-5 lg:p-6 pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block"
+          className="flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden [overscroll-behavior-x:none] p-0 sm:p-5 lg:p-6 pb-20 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block"
         >
           <div className="w-full max-w-full min-w-0 overflow-hidden">
             {/* Real-time Schedule Alert & Countdown Widget */}
-            <TeacherScheduleAlertBanner onOpenCheckIn={() => setIsCheckInModalOpen(true)} />
+            {currentTab !== 'dashboard' && (
+              <TeacherScheduleAlertBanner onOpenCheckIn={() => setIsCheckInModalOpen(true)} />
+            )}
             {renderContent()}
           </div>
         </main>

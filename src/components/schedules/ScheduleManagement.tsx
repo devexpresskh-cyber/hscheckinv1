@@ -1987,7 +1987,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       {/* Monthly Calendar Schedule View */}
       {viewMode === 'monthly_calendar' && (
         <TeacherMonthlyCalendar
-          initialTeacher={activeTeacher}
+          initialTeacher={isTeacher ? activeTeacher : undefined}
           onCheckIn={isTeacher ? handleTeacherClassCheckIn : undefined}
           onCheckOut={isTeacher ? handleTeacherClassCheckOut : undefined}
           onAddScheduleForDay={hasPermission('schedules.create') && !isTeacher ? (dayOfWeek) => {

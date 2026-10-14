@@ -170,19 +170,19 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           {/* TAB 1: HOME / MONTHLY CALENDAR */}
           {isEmployee ? (
             <button
-              onClick={() => handleTabClick('monthly_calendar')}
+              onClick={() => handleTabClick('dashboard')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'monthly_calendar' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'dashboard' ? 'text-blue-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
-                <CalendarDays className={`w-5 h-5 transition-transform ${currentTab === 'monthly_calendar' ? 'scale-110' : ''}`} />
-                {currentTab === 'monthly_calendar' && (
-                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                <LayoutDashboard className={`w-5 h-5 transition-transform ${currentTab === 'dashboard' ? 'scale-110' : ''}`} />
+                {currentTab === 'dashboard' && (
+                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-600" />
                 )}
               </div>
               <span className={`text-[10px] mt-1 font-bold truncate max-w-[65px] ${isKhmer ? 'font-khmer' : ''}`}>
-                {isKhmer ? 'វត្តមានប្រចាំខែ' : 'Present'}
+                {isKhmer ? 'ទំព័រដើម' : 'Home'}
               </span>
             </button>
           ) : isTeacher ? (
@@ -276,21 +276,18 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           )}
 
           {/* TAB 3: CENTER QUICK CHECK-IN ACTION (Elevated floating button) */}
-          <div className="flex-1 flex flex-col items-center justify-center -mt-5">
+          <div className="flex-1 flex flex-col items-center justify-center -mt-4">
             <button
               onClick={onOpenCheckInModal}
-              className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-lg shadow-indigo-600/35 flex flex-col items-center justify-center ring-4 ring-white active:scale-90 transition-all duration-150 group"
-              title={isKhmer ? 'ស្កេនចូល / ចេញ' : 'Quick Check In / Out'}
+              className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white shadow-lg shadow-blue-600/30 flex flex-col items-center justify-center ring-4 ring-white active:scale-95 transition-all duration-150 group cursor-pointer"
+              title={isKhmer ? 'ស្កេនវត្តមានចូល / ចេញ' : 'Scan Check In / Out'}
               aria-label="Scan attendance check in"
             >
-              <Clock className="w-6 h-6 group-hover:scale-110 transition-transform" />
-              <span className="text-[8px] font-black tracking-tight leading-none mt-0.5">
+              <Clock className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="text-[9px] font-black tracking-tight leading-none mt-0.5">
                 {isKhmer ? 'ស្កេន' : 'SCAN'}
               </span>
             </button>
-            <span className={`text-[9px] font-bold text-slate-700 mt-1 ${isKhmer ? 'font-khmer' : ''}`}>
-              {isKhmer ? 'វត្តមាន' : 'Check In'}
-            </span>
           </div>
 
           {/* TAB 4: ATTENDANCE / HISTORY */}
