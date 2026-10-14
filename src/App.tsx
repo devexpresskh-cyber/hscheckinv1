@@ -131,12 +131,28 @@ const MainLayout: React.FC = () => {
       if (currentTab === 'manual') {
         return <SystemUserManual />;
       }
+      if (currentTab === 'dashboard') {
+        return (
+          <Dashboard
+            onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
+            onOpenCheckIn={() => setIsCheckInModalOpen(true)}
+          />
+        );
+      }
       // Monthly Present Calendar directly
       return <EmployeeMonthlyPresentCalendar onNavigateToHistory={() => setCurrentTab('attendance')} />;
     }
 
-    // If logged in as Teacher, show Daily Teacher Schedule by default, and allow Monthly Schedule Calendar, Attendance History, Holidays, and Leave
+    // If logged in as Teacher, allow Dashboard (Home), Monthly Schedule Calendar, Attendance History, Holidays, and Leave
     if (isTeacher) {
+      if (currentTab === 'dashboard') {
+        return (
+          <Dashboard
+            onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
+            onOpenCheckIn={() => setIsCheckInModalOpen(true)}
+          />
+        );
+      }
       if (currentTab === 'monthly_calendar') {
         return <ScheduleManagement initialView="monthly_calendar" />;
       }
@@ -155,8 +171,13 @@ const MainLayout: React.FC = () => {
       if (currentTab === 'manual') {
         return <SystemUserManual />;
       }
-      // Default: Daily Teacher Schedule directly
-      return <ScheduleManagement initialView="daily_schedule" />;
+      // Default: Dashboard / Mobile Home Page directly
+      return (
+        <Dashboard
+          onNavigate={(tab: any) => setCurrentTab(tab as NavTab)}
+          onOpenCheckIn={() => setIsCheckInModalOpen(true)}
+        />
+      );
     }
 
     switch (currentTab) {

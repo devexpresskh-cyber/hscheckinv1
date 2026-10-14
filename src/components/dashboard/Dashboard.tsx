@@ -39,7 +39,12 @@ import {
   UserCheck,
   UserPlus,
   User,
-  FileText
+  FileText,
+  Smartphone,
+  LayoutDashboard,
+  CalendarDays,
+  QrCode,
+  ShieldCheck
 } from 'lucide-react';
 
 export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn?: () => void }> = ({ onNavigate, onOpenCheckIn }) => {
@@ -141,6 +146,99 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   const currentlyInClass = useMemo(() => {
     return liveTeachingSessions.filter(s => s.isInSession);
   }, [liveTeachingSessions]);
+
+  // Current Week Days (Mon to Sun) for Mobile App Weekday Capsule Strip (Matching Screenshot Design)
+  const currentWeekDays = useMemo(() => {
+    const today = new Date();
+    const curDow = today.getDay(); // 0 is Sun, 1 is Mon...
+    const mondayDiff = curDow === 0 ? -6 : 1 - curDow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayDiff);
+
+    const days = [];
+    const enDayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const kmDayShort = ['ចន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហ', 'សុក្រ', 'សៅរ៍', 'អាទិត្យ'];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${dayNum}`;
+      const dowIndex = d.getDay();
+      const isSelected = dateStr === selectedDate;
+      const isCurrentDay = dateStr === todayStr;
+
+      // Count active classes on this day
+      const dayClassesCount = subjectSchedules.filter(sub => {
+        if (!sub.isActive) return false;
+        if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
+          return sub.daysOfWeek.includes(dowIndex);
+        }
+        return sub.dayOfWeek === dowIndex;
+      }).length;
+
+      // Attendance records on this day
+      const dayAttendance = allAttendance.filter(a => a.date === dateStr);
+      const hasPresent = dayAttendance.some(a => a.status === 'Present');
+      const hasLate = dayAttendance.some(a => a.status === 'Late');
+      const hasAbsent = dayAttendance.some(a => a.status === 'Absent');
+
+      days.push({
+        date: d,
+        dateStr,
+        dayNumber: d.getDate(),
+        dowIndex,
+        labelEn: enDayShort[i],
+        labelKm: kmDayShort[i],
+        isSelected,
+        isCurrentDay,
+        dayClassesCount,
+        hasPresent,
+        hasLate,
+        hasAbsent
+      });
+    }
+    return days;
+  }, [selectedDate, todayStr, subjectSchedules, allAttendance]);
+
+  // Selected Day Classes for Mobile App Timeline
+  const selectedDayClasses = useMemo(() => {
+    const selDateObj = new Date(selectedDate);
+    const selDow = isNaN(selDateObj.getTime()) ? todayDayIndex : selDateObj.getDay();
+
+    const matched = subjectSchedules.filter(sub => {
+      if (!sub.isActive) return false;
+      if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
+        return sub.daysOfWeek.includes(selDow);
+      }
+      return sub.dayOfWeek === selDow;
+    });
+
+    return matched.map(sub => {
+      const rec = AttendanceEngine.findRecordForSubjectSchedule(sub, allAttendance, selectedDate, teachers);
+      const isCheckedIn = Boolean(rec?.checkInTime);
+      const isCheckedOut = Boolean(rec?.checkOutTime);
+      const sStart = AttendanceEngine.timeToMinutes(sub.startTime);
+      const sEnd = AttendanceEngine.timeToMinutes(sub.endTime);
+
+      const isToday = selectedDate === todayStr;
+      const isInSession = isToday && ((isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut));
+      const isUpcoming = isToday && (curMins < sStart && !isCheckedIn);
+      const isCompleted = isCheckedOut || (isToday && curMins >= sEnd && isCheckedIn);
+
+      return {
+        schedule: sub,
+        record: rec,
+        isCheckedIn,
+        isCheckedOut,
+        isInSession,
+        isUpcoming,
+        isCompleted
+      };
+    }).sort((a, b) => a.schedule.startTime.localeCompare(b.schedule.startTime));
+  }, [selectedDate, subjectSchedules, allAttendance, teachers, todayStr, todayDayIndex, curMins]);
 
   // Filter attendance records
   const filteredAttendance = useMemo(() => {

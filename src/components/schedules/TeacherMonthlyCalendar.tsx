@@ -37,7 +37,11 @@ import {
   ArrowLeft,
   List,
   Clock4,
-  Tag
+  Tag,
+  Search,
+  Building2,
+  Download,
+  BookOpen
 } from 'lucide-react';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
@@ -122,10 +126,18 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   // Determine selected teacher
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
     if (initialTeacher) return initialTeacher.id;
-    if (currentUser.personId) return currentUser.personId;
-    return teachers[0]?.id || '';
+    if (currentUser.role === 'teacher') {
+      if (currentUser.personId) return currentUser.personId;
+      return teachers[0]?.id || '';
+    }
+    return 'All';
   });
+  const [selectedDept, setSelectedDept] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedDayForModal, setSelectedDayForModal] = useState<any>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  const departments = useMemo(() => StorageService.getDepartments(), []);
 
   const activeTeacher = useMemo(() => {
     if (initialTeacher) return initialTeacher;
@@ -342,11 +354,26 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     setSelectedDate(n);
   };
 
-  // Filter teacher's weekly subject schedules
-  const teacherSchedules = useMemo(() => {
-    if (!activeTeacher) return [];
-    return subjectSchedules.filter(s => s.teacherId === activeTeacher.id && s.isActive);
-  }, [subjectSchedules, activeTeacher]);
+  // Filter subject schedules based on faculty and department
+  const filteredSchedules = useMemo(() => {
+    return subjectSchedules.filter(s => {
+      if (!s.isActive) return false;
+      if (selectedTeacherId !== 'All' && s.teacherId !== selectedTeacherId) return false;
+      if (selectedDept !== 'All') {
+        const teacher = teachers.find(t => t.id === s.teacherId || t.teacherId === s.teacherId);
+        if (teacher && teacher.department !== selectedDept) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesSub = s.subject.toLowerCase().includes(q) || (s.khmerSubject && s.khmerSubject.toLowerCase().includes(q));
+        const matchesTeacher = s.teacherName.toLowerCase().includes(q);
+        const matchesRoom = s.room.toLowerCase().includes(q);
+        const matchesClass = s.gradeClass.toLowerCase().includes(q);
+        if (!matchesSub && !matchesTeacher && !matchesRoom && !matchesClass) return false;
+      }
+      return true;
+    });
+  }, [subjectSchedules, selectedTeacherId, selectedDept, searchQuery, teachers]);
 
   // Calendar Day computation for current month
   // Monday is column 0, Sunday is column 6
@@ -405,7 +432,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
 
       const holiday = holidays.find(h => h.date === dateStr);
 
-      const matchingClasses = teacherSchedules
+      const matchingClasses = filteredSchedules
         .filter(s => {
           if (Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
             return s.daysOfWeek.includes(dow);
@@ -451,22 +478,58 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     }
 
     return cells;
-  }, [currentYear, currentMonth, teacherSchedules, holidays, attendance, activeTeacher, todayStr]);
+  }, [currentYear, currentMonth, filteredSchedules, holidays, attendance, activeTeacher, todayStr]);
 
   // Selected Day Information
   const selectedDayCell = useMemo(() => {
     return calendarCells.find(c => c.dateStr === selectedDateStr) || calendarCells[0];
   }, [calendarCells, selectedDateStr]);
 
+  // Monthly statistics for desktop admin view
+  const desktopMonthlyStats = useMemo(() => {
+    let totalClassesCount = 0;
+    let totalMinutes = 0;
+    const activeTeacherIds = new Set<string>();
+
+    calendarCells.forEach(cell => {
+      if (cell.isCurrentMonth) {
+        totalClassesCount += cell.classes.length;
+        cell.classes.forEach(c => {
+          activeTeacherIds.add(c.teacherId);
+          if (c.startTime && c.endTime && c.startTime.includes(':') && c.endTime.includes(':')) {
+            const [sh, sm] = c.startTime.split(':').map(Number);
+            const [eh, em] = c.endTime.split(':').map(Number);
+            if (!isNaN(sh) && !isNaN(eh)) {
+              const diff = (eh * 60 + em) - (sh * 60 + sm);
+              if (diff > 0) totalMinutes += diff;
+            }
+          }
+        });
+      }
+    });
+
+    const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
+    const holidaysInMonth = holidays.filter(h => {
+      if (!h.date) return false;
+      const hd = new Date(h.date);
+      return hd.getFullYear() === currentYear && hd.getMonth() === currentMonth;
+    }).length;
+
+    return {
+      totalClasses: totalClassesCount,
+      activeTeachers: activeTeacherIds.size,
+      totalHours,
+      holidaysCount: holidaysInMonth
+    };
+  }, [calendarCells, holidays, currentYear, currentMonth]);
+
   // Determine active date range for the connected pill capsule (like in the screenshot: 14 to 18, or 8 to 10)
-  // Let's connect the active work week (Monday - Friday) around the selected date, or dates with classes!
   const activeRangeDays = useMemo(() => {
     if (!selectedDayCell || !selectedDayCell.isCurrentMonth) {
       return { startDay: 14, endDay: 18 };
     }
-    // Compute current week's Monday to Friday dates
     const selD = selectedDayCell.date;
-    const dayOfWeek = selD.getDay(); // 0 is Sun, 1 is Mon
+    const dayOfWeek = selD.getDay();
     const monDiff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monDate = new Date(selD);
     monDate.setDate(selD.getDate() + monDiff);
@@ -493,6 +556,421 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     { bg: 'bg-[#ffedd5]', border: 'border-[#fb923c]', text: 'text-[#ea580c]', initialBg: 'bg-[#ea580c]', badge: 'Project Room' },
     { bg: 'bg-[#1e293b]', border: 'border-[#475569]', text: 'text-white', initialBg: 'bg-[#3b82f6]', badge: 'Lecture Hall' }
   ];
+
+  // =========================================================================
+  // IF NOT TEACHER ROLE (ADMIN, SUPER ADMIN, HR, SUPERVISOR):
+  // RENDER THE FULL-WIDTH OLD STYLE DESKTOP MONTHLY CALENDAR
+  // =========================================================================
+  if (!isTeacherRole) {
+    return (
+      <div className="w-full space-y-4 font-sans select-none">
+        
+        {/* 1. Header Toolbar (Old Style Desktop Layout) */}
+        <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">
+          
+          {/* Left: Month Navigation & Today Jump */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-indigo-600/20 shrink-0">
+              <CalendarDays className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <h2 className="text-base sm:text-lg font-black text-slate-900 min-w-[170px] text-center">
+                  {isKhmer ? MONTH_NAMES_KM[currentMonth] : MONTH_NAMES_EN[currentMonth]} {currentYear}
+                </h2>
+
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 transition-colors cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleJumpToToday}
+                  className="ml-1 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-colors cursor-pointer"
+                >
+                  {isKhmer ? 'ថ្ងៃនេះ' : 'Today'}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {isKhmer ? 'ប្រតិទិនកាលវិភាគបង្រៀនប្រចាំខែ (ទិដ្ឋភាពពេញលេញ)' : 'Monthly Teaching Timetable Calendar (Full Desktop Grid)'}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: Faculty Filter, Department Filter, Search & Print */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Faculty Selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-600 hidden sm:inline">
+                {isKhmer ? 'គ្រូ៖' : 'Faculty:'}
+              </span>
+              <select
+                value={selectedTeacherId}
+                onChange={e => setSelectedTeacherId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 max-w-[190px]"
+              >
+                <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Faculty)' : 'All Faculty'}</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Department Selector */}
+            <select
+              value={selectedDept}
+              onChange={e => setSelectedDept(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 hidden md:block max-w-[170px]"
+            >
+              <option value="All">{isKhmer ? 'គ្រប់ដេប៉ាតឺម៉ង់ (All Depts)' : 'All Departments'}</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.name}>{d.name}</option>
+              ))}
+            </select>
+
+            {/* Search Input */}
+            <div className="relative w-44">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder={isKhmer ? 'ស្វែងរកមុខវិជ្ជា...' : 'Search subject, room...'}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+
+            {/* Print Button */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+              title="Print Monthly Calendar"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+          </div>
+
+        </div>
+
+        {/* 2. Monthly Summary Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 print:hidden">
+          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold">
+              <span>{isKhmer ? 'ម៉ោងបង្រៀនក្នុងខែ' : 'Total Sessions in Month'}</span>
+              <Calendar className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-2xl font-black text-slate-900">{desktopMonthlyStats.totalClasses}</span>
+              <span className="text-xs text-slate-400">{isKhmer ? 'ម៉ោង' : 'classes'}</span>
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold">
+              <span>{isKhmer ? 'គ្រូបង្រៀនសកម្ម' : 'Active Teachers'}</span>
+              <GraduationCap className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-2xl font-black text-emerald-700">{desktopMonthlyStats.activeTeachers}</span>
+              <span className="text-xs text-slate-400">/{teachers.length} {isKhmer ? 'នាក់' : 'faculty'}</span>
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold">
+              <span>{isKhmer ? 'ម៉ោងបង្រៀនប៉ាន់ស្មាន' : 'Est. Teaching Hours'}</span>
+              <Clock className="w-4 h-4 text-sky-600" />
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-2xl font-black text-sky-700">{desktopMonthlyStats.totalHours}</span>
+              <span className="text-xs text-slate-400">hrs</span>
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-500 text-[11px] font-bold">
+              <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ' : 'Holidays This Month'}</span>
+              <Palmtree className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className="text-2xl font-black text-amber-700">{desktopMonthlyStats.holidaysCount}</span>
+              <span className="text-xs text-slate-400">{isKhmer ? 'ថ្ងៃ' : 'days'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Spacious 7-Column Desktop Calendar Grid */}
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+          
+          {/* Weekday Column Headers: Mon through Sun */}
+          <div className="grid grid-cols-7 bg-slate-50/90 border-b border-slate-200 text-center font-black text-xs text-slate-700 py-3">
+            {[
+              { en: 'Monday', km: 'ចន្ទ', off: false },
+              { en: 'Tuesday', km: 'អង្គារ', off: false },
+              { en: 'Wednesday', km: 'ពុធ', off: false },
+              { en: 'Thursday', km: 'ព្រហស្បតិ៍', off: false },
+              { en: 'Friday', km: 'សុក្រ', off: false },
+              { en: 'Saturday', km: 'សៅរ៍', off: false },
+              { en: 'Sunday', km: 'អាទិត្យ', off: true },
+            ].map((d, idx) => (
+              <div key={idx} className={`flex flex-col items-center justify-center ${d.off ? 'text-rose-600' : ''}`}>
+                <span>{isKhmer ? d.km : d.en}</span>
+                <span className="text-[10px] font-normal text-slate-400 hidden sm:inline">
+                  {d.off ? (isKhmer ? 'ឈប់សម្រាក' : 'Weekly Off') : d.en.slice(0, 3)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Days Grid Cells */}
+          <div className="grid grid-cols-7 divide-x divide-y divide-slate-100">
+            {calendarCells.map((cell, idx) => {
+              const isSunday = cell.dayOfWeek === 0;
+              const isHoliday = !!cell.holiday;
+              const hasClasses = cell.classes.length > 0;
+
+              return (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    if (cell.isCurrentMonth && (hasClasses || isHoliday)) {
+                      setSelectedDayForModal(cell);
+                    }
+                  }}
+                  className={`min-h-[140px] p-2 flex flex-col justify-between transition-colors group relative ${
+                    !cell.isCurrentMonth
+                      ? 'bg-slate-50/50 text-slate-400'
+                      : isSunday
+                      ? 'bg-rose-50/20'
+                      : 'bg-white hover:bg-slate-50/80 cursor-pointer'
+                  } ${cell.isToday ? 'ring-2 ring-indigo-500 ring-inset bg-indigo-50/30' : ''}`}
+                >
+                  {/* Top Header of Day Cell */}
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span
+                      className={`text-xs font-black inline-flex items-center justify-center w-6 h-6 rounded-full ${
+                        cell.isToday
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : cell.isCurrentMonth
+                          ? isSunday
+                            ? 'text-rose-600'
+                            : 'text-slate-800'
+                          : 'text-slate-300'
+                      }`}
+                    >
+                      {cell.dayNumber}
+                    </span>
+
+                    {/* Holiday Chip */}
+                    {isHoliday && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 truncate max-w-[85px]"
+                        title={cell.holiday?.name}
+                      >
+                        {isKhmer ? cell.holiday?.khmerName || cell.holiday?.name : cell.holiday?.name}
+                      </span>
+                    )}
+
+                    {/* Add button for admin on hover */}
+                    {cell.isCurrentMonth && onAddScheduleForDay && !isHoliday && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddScheduleForDay(cell.dayOfWeek, selectedTeacherId !== 'All' ? selectedTeacherId : (teachers[0]?.id || ''));
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:opacity-100 p-0.5 rounded text-indigo-600 hover:bg-indigo-50 transition-opacity"
+                        title="Add Class"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Middle: Class Session Chips */}
+                  <div className="flex-1 space-y-1 overflow-hidden">
+                    {cell.classes.slice(0, 3).map((cls, cIdx) => {
+                      const colors = [
+                        'bg-sky-50 text-sky-800 border-l-2 border-l-sky-500',
+                        'bg-emerald-50 text-emerald-800 border-l-2 border-l-emerald-500',
+                        'bg-amber-50 text-amber-800 border-l-2 border-l-amber-500',
+                        'bg-purple-50 text-purple-800 border-l-2 border-l-purple-500'
+                      ];
+                      const colorClass = colors[cIdx % colors.length];
+
+                      return (
+                        <div
+                          key={cls.id || cIdx}
+                          className={`p-1 rounded-md text-[10px] font-medium leading-tight shadow-2xs ${colorClass}`}
+                          title={`${cls.startTime}-${cls.endTime}: ${cls.subject} (${cls.teacherName}) - Room ${cls.room}`}
+                        >
+                          <div className="flex items-center justify-between gap-1 font-bold">
+                            <span className="truncate">{cls.startTime}</span>
+                            <span className="text-[9px] font-semibold text-slate-500 shrink-0 truncate">{cls.room}</span>
+                          </div>
+                          <div className="truncate font-bold">
+                            {cls.subject}
+                          </div>
+                          {selectedTeacherId === 'All' && (
+                            <div className="truncate text-[9px] opacity-80">
+                              {cls.teacherName.split(' ')[0]} • {cls.gradeClass}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {cell.classes.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedDayForModal(cell);
+                        }}
+                        className="w-full text-center text-[10px] font-black text-indigo-600 hover:text-indigo-800 hover:underline pt-0.5 cursor-pointer"
+                      >
+                        +{cell.classes.length - 3} {isKhmer ? 'ថ្នាក់ទៀត' : 'more'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Bottom Day Indicators */}
+                  <div className="pt-1 flex items-center justify-between text-[10px] text-slate-400">
+                    {hasClasses ? (
+                      <span className="font-semibold text-slate-600">
+                        {cell.classes.length} {isKhmer ? 'ម៉ោង' : 'cls'}
+                      </span>
+                    ) : isSunday ? (
+                      <span className="text-rose-500 text-[9px]">{isKhmer ? 'សម្រាក' : 'Off'}</span>
+                    ) : (
+                      <span />
+                    )}
+                    {cell.attendance && (
+                      <span className={`w-2 h-2 rounded-full ${cell.attendance.status === 'Present' ? 'bg-emerald-500' : cell.attendance.status === 'Late' ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                    )}
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+
+        {/* 4. Day Detail Modal */}
+        {selectedDayForModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] flex flex-col">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    {isKhmer
+                      ? `កាលវិភាគថ្ងៃទី ${selectedDayForModal.dayNumber} ${MONTH_NAMES_KM[currentMonth]} ${currentYear}`
+                      : `Schedule for ${MONTH_NAMES_EN[currentMonth]} ${selectedDayForModal.dayNumber}, ${currentYear}`}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {selectedDayForModal.classes.length} {isKhmer ? 'ម៉ោងបង្រៀនត្រូវបានកំណត់' : 'classes scheduled on this day'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayForModal(null)}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body: Class Items */}
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                {selectedDayForModal.classes.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6">
+                    {isKhmer ? 'គ្មានកាលវិភាគបង្រៀននៅថ្ងៃនេះទេ' : 'No classes scheduled on this day.'}
+                  </p>
+                ) : (
+                  selectedDayForModal.classes.map((cls: TeacherSubjectSchedule, idx: number) => (
+                    <div
+                      key={cls.id || idx}
+                      className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                            {cls.startTime} - {cls.endTime}
+                          </span>
+                          <span className="text-xs font-bold text-slate-600">
+                            {cls.periodName}
+                          </span>
+                        </div>
+                        <h4 className="font-black text-sm text-slate-900 mt-1">
+                          {cls.subject} {cls.khmerSubject ? `(${cls.khmerSubject})` : ''}
+                        </h4>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                          <span>{cls.teacherName}</span>
+                          <span>•</span>
+                          <span>{cls.gradeClass}</span>
+                          <span>•</span>
+                          <span>Room: {cls.room}</span>
+                        </div>
+                      </div>
+
+                      {hasPermission('schedules.create') && onAddScheduleForDay && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDayForModal(null);
+                            onAddScheduleForDay(selectedDayForModal.dayOfWeek, cls.teacherId);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all shrink-0 cursor-pointer"
+                        >
+                          {isKhmer ? 'កែប្រែ' : 'Manage'}
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs text-slate-500">
+                  {selectedDayForModal.holiday?.name ? `Holiday: ${selectedDayForModal.holiday.name}` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayForModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  {isKhmer ? 'បិទ' : 'Close'}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+      </div>
+    );
+  }
 
   return (
     <div className="w-full flex justify-center py-2 sm:py-4 px-1 sm:px-4 font-sans select-none">
