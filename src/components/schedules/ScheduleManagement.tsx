@@ -1483,13 +1483,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           )}
 
           {isTeacher && (
-            <div className="flex flex-wrap items-center gap-2 max-w-full">
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
               <button
                 onClick={() => setIsQRScanModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer shrink-0"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-sm shadow-emerald-600/25 transition-all active:scale-95 cursor-pointer"
                 title="Scan Classroom QR Code with PIN confirmation"
               >
-                <Camera className="w-3.5 h-3.5 shrink-0" />
+                <Camera className="w-4 h-4 shrink-0" />
                 <span>{isKhmer ? 'ស្កេន QR' : 'Scan Class QR'}</span>
               </button>
 
@@ -1499,24 +1499,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   setSelectedTeacherForQR(activeTeacher || null);
                   setIsQRCodeModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer shrink-0"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-50 text-indigo-700 text-xs font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
                 title="View & Download My Smart QR Card for all classes"
               >
-                <QrCode className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                <QrCode className="w-4 h-4 shrink-0 text-indigo-600" />
                 <span>{isKhmer ? 'កូដ QR របស់ខ្ញុំ' : 'My QR Card'}</span>
               </button>
-
-              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-2xl text-indigo-900 shadow-2xs max-w-full min-w-0">
-                <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
-                <div className="text-left min-w-0">
-                  <span className="text-xs font-black block leading-tight truncate max-w-[130px] sm:max-w-xs">
-                    {activeTeacher?.fullName || currentUser.fullName}
-                  </span>
-                  <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block truncate">
-                    {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned Schedule Only'}
-                  </span>
-                </div>
-              </div>
             </div>
           )}
         </div>
