@@ -1359,7 +1359,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             <button
               onClick={() => setViewMode('daily_schedule')}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'daily_schedule' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
+                viewMode === 'daily_schedule' ? 'bg-blue-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <Clock className="w-3.5 h-3.5 shrink-0" />
@@ -1368,7 +1368,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             <button
               onClick={() => setViewMode('weekly_timetable')}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'weekly_timetable' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
+                viewMode === 'weekly_timetable' ? 'bg-blue-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <Calendar className="w-3.5 h-3.5 shrink-0" />
@@ -1377,7 +1377,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             <button
               onClick={() => setViewMode('monthly_calendar')}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'monthly_calendar' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
+                viewMode === 'monthly_calendar' ? 'bg-blue-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <CalendarDays className="w-3.5 h-3.5 shrink-0" />
@@ -1386,7 +1386,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             <button
               onClick={() => setViewMode('subject_schedules')}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                viewMode === 'subject_schedules' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
+                viewMode === 'subject_schedules' ? 'bg-blue-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900 bg-white/60'
               }`}
             >
               <BookOpen className="w-3.5 h-3.5 shrink-0" />

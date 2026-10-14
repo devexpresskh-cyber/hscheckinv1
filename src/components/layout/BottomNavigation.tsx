@@ -189,7 +189,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <button
               onClick={() => handleTabClick('dashboard')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'dashboard' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'dashboard' ? 'text-blue-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
@@ -206,7 +206,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <button
               onClick={() => handleTabClick('dashboard')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'dashboard' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'dashboard' ? 'text-blue-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
@@ -226,7 +226,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <button
               onClick={() => handleTabClick('schedules')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'schedules' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'schedules' ? 'text-blue-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
@@ -243,13 +243,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <button
               onClick={() => handleTabClick('monthly_calendar')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'monthly_calendar' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'monthly_calendar' ? 'text-blue-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
                 <CalendarDays className={`w-5 h-5 transition-transform ${currentTab === 'monthly_calendar' ? 'scale-110' : ''}`} />
                 {currentTab === 'monthly_calendar' && (
-                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-600" />
                 )}
               </div>
               <span className={`text-[10px] mt-1 font-bold truncate max-w-[65px] ${isKhmer ? 'font-khmer' : ''}`}>
@@ -260,13 +260,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             <button
               onClick={() => handleTabClick('monthly_calendar')}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-                currentTab === 'monthly_calendar' || currentTab === 'schedules' ? 'text-indigo-600 font-black' : 'text-slate-400 hover:text-slate-600'
+                currentTab === 'monthly_calendar' || currentTab === 'schedules' ? 'text-blue-600 font-black' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
               <div className="relative">
                 <CalendarDays className={`w-5 h-5 transition-transform ${currentTab === 'monthly_calendar' || currentTab === 'schedules' ? 'scale-110' : ''}`} />
                 {(currentTab === 'monthly_calendar' || currentTab === 'schedules') && (
-                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-600" />
                 )}
               </div>
               <span className={`text-[10px] mt-1 font-bold truncate max-w-[65px] ${isKhmer ? 'font-khmer' : ''}`}>
@@ -294,7 +294,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           <button
             onClick={() => handleTabClick('attendance')}
             className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-              currentTab === 'attendance' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+              currentTab === 'attendance' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
             }`}
           >
             <div className="relative">
@@ -304,7 +304,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
                 <CheckCircle2 className={`w-5 h-5 transition-transform ${currentTab === 'attendance' ? 'scale-110' : ''}`} />
               )}
               {currentTab === 'attendance' && (
-                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-600" />
               )}
             </div>
             <span className={`text-[10px] mt-1 font-bold truncate max-w-[65px] ${isKhmer ? 'font-khmer' : ''}`}>
@@ -316,7 +316,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           <button
             onClick={handleMoreClick}
             className={`flex-1 flex flex-col items-center justify-center py-1 transition-all active:scale-95 ${
-              isMoreSheetOpen ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+              isMoreSheetOpen ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
             }`}
           >
             <div className="relative">

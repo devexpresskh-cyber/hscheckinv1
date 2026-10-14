@@ -271,7 +271,9 @@ const MainLayout: React.FC = () => {
               e.currentTarget.scrollLeft = 0;
             }
           }}
-          className="flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden [overscroll-behavior-x:none] p-0 sm:p-5 lg:p-6 pb-20 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block"
+          className={`flex-1 min-w-0 max-w-full h-full overflow-y-auto overflow-x-hidden [overscroll-behavior-x:none] pb-24 md:pb-6 print:p-0 print:overflow-visible print:h-auto print:block ${
+            currentTab === 'dashboard' ? 'p-0 sm:p-4' : 'px-3.5 sm:px-5 lg:px-6 py-3 sm:py-5'
+          }`}
         >
           <div className="w-full max-w-full min-w-0 overflow-hidden">
             {/* Real-time Schedule Alert & Countdown Widget */}

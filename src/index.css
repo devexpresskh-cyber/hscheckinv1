@@ -10,7 +10,9 @@
     width: 100%;
     position: relative;
     overscroll-behavior-x: none;
-    font-family: 'Plus Jakarta Sans', 'Kantumruy Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Kantumruy Pro', 'Noto Sans Khmer', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   #root {
     max-width: 100%;
@@ -22,6 +24,31 @@
   code, pre {
     font-family: 'JetBrains Mono', monospace;
   }
+}
+
+/* Explicit Khmer Font Hierarchy (Premium Kantumruy Pro & Noto Sans Khmer) */
+.font-khmer,
+body.font-khmer,
+[lang="km"],
+html[lang="km"] {
+  font-family: 'Kantumruy Pro', 'Noto Sans Khmer', 'Battambang', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  line-height: 1.55;
+  letter-spacing: 0.005em;
+}
+
+/* Ensure Khmer buttons, pills and inputs use the crisp Khmer font with no clipping */
+.font-khmer input,
+.font-khmer button,
+.font-khmer select,
+.font-khmer textarea,
+button.font-khmer,
+span.font-khmer,
+p.font-khmer,
+h1.font-khmer,
+h2.font-khmer,
+h3.font-khmer,
+h4.font-khmer {
+  font-family: 'Kantumruy Pro', 'Noto Sans Khmer', 'Battambang', sans-serif !important;
 }
 
 /* Custom scrollbars */
