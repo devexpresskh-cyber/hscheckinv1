@@ -4,6 +4,8 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { StorageService } from '../../services/storageService.ts';
+import { GeoService } from '../../services/geoService.ts';
+import { AdminRecordAttendanceModal } from '../attendance/AdminRecordAttendanceModal.tsx';
 import { TeacherSubjectSchedule } from '../../types/index.ts';
 import confetti from 'canvas-confetti';
 import {
@@ -12,6 +14,10 @@ import {
   MapPin,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
+  RotateCw,
+  UserCheck,
+  UserPlus,
   LogOut,
   Calendar,
   Building,
@@ -66,8 +72,32 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
   const [deviceCoords, setDeviceCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [gpsMode, setGpsMode] = useState<'simulated' | 'device'>('simulated');
+  const [gpsMode, setGpsMode] = useState<'simulated' | 'device'>('device');
   const [geoDistance, setGeoDistance] = useState<number | null>(null);
+  const [isGpsRefreshing, setIsGpsRefreshing] = useState<boolean>(false);
+  const [adminSelectedStaffId, setAdminSelectedStaffId] = useState<string>('');
+  const [isAdminRecordModalOpen, setIsAdminRecordModalOpen] = useState<boolean>(false);
+
+  const handleRefreshGps = async () => {
+    setIsGpsRefreshing(true);
+    try {
+      const pos = await GeoService.getCurrentPosition({ highAccuracy: true, timeout: 8000, maximumAge: 0 });
+      setDeviceCoords(pos);
+      setGpsMode('device');
+      const check = AttendanceEngine.verifyLocation(pos.latitude, pos.longitude, systemSettings);
+      setGeoDistance(check.distance);
+      showToast(
+        check.inside
+          ? (isKhmer ? `GPS ត្រឹមត្រូវ៖ ក្នុងបរិវេណសាលា (${check.distance}ម)` : `GPS Verified: Inside campus (${check.distance}m)`)
+          : (isKhmer ? `ក្រៅបរិវេណសាលា៖ ចម្ងាយ ${check.distance.toLocaleString()}ម (លើស ${systemSettings.geofenceRadiusMeters}ម)` : `Outside Campus: ${check.distance.toLocaleString()}m (Allowed: ${systemSettings.geofenceRadiusMeters}m)`),
+        check.inside ? 'success' : 'warning'
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Failed to get GPS location', 'error');
+    } finally {
+      setIsGpsRefreshing(false);
+    }
+  };
 
   // Kiosk In-Terminal Teacher Login States (When user is not authenticated as a teacher)
   const [kioskIdentifier, setKioskIdentifier] = useState<string>('');
@@ -158,6 +188,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude
           });
+          setGpsMode('device');
           const check = AttendanceEngine.verifyLocation(
             pos.coords.latitude,
             pos.coords.longitude,
@@ -165,11 +196,10 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
           );
           setGeoDistance(check.distance);
         },
-        () => {
-          // Fallback to simulated if device location denied
-          setGpsMode('simulated');
+        err => {
+          console.warn('GPS position query notice:', err);
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     }
   }, [systemSettings]);
@@ -213,9 +243,22 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     }))
   ];
 
-  // Strictly lock attendance to authenticated user's owned profile (No switching allowed)
+  const isAdmin =
+    currentUser?.role === 'super_admin' ||
+    currentUser?.role === 'admin_hr' ||
+    currentUser?.role === 'supervisor' ||
+    (!['teacher', 'employee'].includes(currentUser?.role || ''));
+
+  // Strictly lock attendance to authenticated user's owned profile (No switching allowed for staff),
+  // BUT allow Admins to freely select any faculty teacher to record attendance on their behalf!
   const activeStaff = React.useMemo(() => {
     if (!currentUser) return null;
+
+    // 0. If Admin mode and admin has selected a staff member
+    if (isAdmin && adminSelectedStaffId) {
+      const match = staffList.find(s => s.id === adminSelectedStaffId);
+      if (match) return match;
+    }
 
     // 1. By linked personId
     if (currentUser.personId) {
@@ -241,9 +284,13 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       if (byName) return byName;
     }
 
-    // 4. Do not default to other teachers for admin accounts
+    // 4. For Admin accounts: default to the first teacher so admin can record attendance immediately
+    if (isAdmin && staffList.length > 0) {
+      return staffList.find(s => s.type === 'teacher') || staffList[0];
+    }
+
     return null;
-  }, [currentUser, staffList]);
+  }, [currentUser, staffList, isAdmin, adminSelectedStaffId]);
 
   // Keep selectedStaffId locked to activeStaff.id
   useEffect(() => {
@@ -568,17 +615,39 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
     setIsSubmitting(true);
 
-    // Determine GPS coordinates (real device or simulated)
-    let lat: number;
-    let lng: number;
+    // Determine GPS coordinates
+    let lat = deviceCoords?.latitude;
+    let lng = deviceCoords?.longitude;
 
-    if (gpsMode === 'device' && deviceCoords) {
-      lat = deviceCoords.latitude;
-      lng = deviceCoords.longitude;
+    // Strict Geofence Verification when enforceGeofence is enabled
+    if (systemSettings.enforceGeofence) {
+      if (lat === undefined || lng === undefined) {
+        setIsSubmitting(false);
+        showToast(
+          isKhmer
+            ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីផ្ទៀងផ្ទាត់ថាលោកអ្នកស្ថិតនៅក្នុងបរិវេណសាលា (${systemSettings.geofenceRadiusMeters}ម)។ សូមចុច Refresh GPS ឬបើកសិទ្ធិទីតាំងក្នុងឧបករណ៍របស់អ្នក។`
+            : `Check-in denied: GPS location is required to verify campus attendance (${systemSettings.geofenceRadiusMeters}m radius). Please enable location permission or tap Refresh GPS.`,
+          'error'
+        );
+        return;
+      }
+
+      const geo = AttendanceEngine.verifyLocation(lat, lng, systemSettings);
+      if (!geo.inside) {
+        setIsSubmitting(false);
+        showToast(
+          isKhmer
+            ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${geo.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាតគឺ ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Check-in denied: You are ${geo.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
     } else {
-      const isOnCampus = gpsSimulated === 'on_campus';
-      lat = isOnCampus ? systemSettings.defaultLocationLatitude : systemSettings.defaultLocationLatitude + 0.05;
-      lng = isOnCampus ? systemSettings.defaultLocationLongitude : systemSettings.defaultLocationLongitude + 0.05;
+      if (lat === undefined || lng === undefined) {
+        lat = systemSettings.defaultLocationLatitude;
+        lng = systemSettings.defaultLocationLongitude;
+      }
     }
 
     const effectiveShift = shiftType || employeeSelectedShift;
@@ -596,7 +665,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         session: !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
         customTime: effectiveTime,
         latitude: lat,
-        longitude: lng
+        longitude: lng,
+        bypassGeofence: false
       });
 
       setIsSubmitting(false);
@@ -655,8 +725,44 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       }
     }
 
-    const effectiveShift = shiftType || employeeSelectedShift;
     setIsSubmitting(true);
+
+    // Determine GPS coordinates for checkout
+    let lat = deviceCoords?.latitude;
+    let lng = deviceCoords?.longitude;
+
+    // Strict Geofence Verification for checkout
+    if (systemSettings.enforceGeofence) {
+      if (lat === undefined || lng === undefined) {
+        setIsSubmitting(false);
+        showToast(
+          isKhmer
+            ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីផ្ទៀងផ្ទាត់ថាលោកអ្នកស្ថិតនៅក្នុងបរិវេណសាលា (${systemSettings.geofenceRadiusMeters}ម)។ សូមចុច Refresh GPS ឬបើកសិទ្ធិទីតាំងក្នុងឧបករណ៍របស់អ្នក។`
+            : `Check-out denied: GPS location is required to verify campus attendance (${systemSettings.geofenceRadiusMeters}m radius). Please enable location permission or tap Refresh GPS.`,
+          'error'
+        );
+        return;
+      }
+
+      const geo = AttendanceEngine.verifyLocation(lat, lng, systemSettings);
+      if (!geo.inside) {
+        setIsSubmitting(false);
+        showToast(
+          isKhmer
+            ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${geo.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាតគឺ ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Check-out denied: You are ${geo.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    } else {
+      if (lat === undefined || lng === undefined) {
+        lat = systemSettings.defaultLocationLatitude;
+        lng = systemSettings.defaultLocationLongitude;
+      }
+    }
+
+    const effectiveShift = shiftType || employeeSelectedShift;
 
     setTimeout(() => {
       const result = AttendanceEngine.processCheckOut({
@@ -666,7 +772,10 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         shiftType: !isTeacher ? effectiveShift : undefined,
         session: !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
         customTime: shouldAutoSetToEnd && targetSubject ? targetSubject.endTime : effectiveTime,
-        autoSetToEndOfSchedule: shouldAutoSetToEnd
+        autoSetToEndOfSchedule: shouldAutoSetToEnd,
+        latitude: lat,
+        longitude: lng,
+        bypassGeofence: false
       });
 
       setIsSubmitting(false);
@@ -694,7 +803,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     if (!activeStaff) return;
 
     const targetShift = shiftType || employeeSelectedShift;
-    if (systemSettings.requirePinForKiosk !== false) {
+    if (systemSettings.requirePinForKiosk !== false && !isAdmin) {
       setPinError(null);
       setEnteredPin('');
       setPinModal({
@@ -714,7 +823,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     if (!activeStaff) return;
 
     const targetShift = shiftType || employeeSelectedShift;
-    if (systemSettings.requirePinForKiosk !== false) {
+    if (systemSettings.requirePinForKiosk !== false && !isAdmin) {
       setPinError(null);
       setEnteredPin('');
       setPinModal({
@@ -824,7 +933,112 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         {/* Terminal Content Body */}
         <div className={isMobileModal ? 'p-1 sm:p-2 space-y-4' : 'p-4 sm:p-7 space-y-5 sm:space-y-6'}>
 
-          {!activeStaff && (
+          {/* GPS Geofence Real-time Verification Bar */}
+          {systemSettings.enforceGeofence && (
+            <div className={`p-3 sm:p-3.5 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-3 ${
+              geoDistance !== null && geoDistance <= systemSettings.geofenceRadiusMeters
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : geoDistance !== null
+                ? 'bg-rose-50 border-rose-200 text-rose-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {geoDistance !== null && geoDistance <= systemSettings.geofenceRadiusMeters ? (
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                ) : geoDistance !== null ? (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                ) : (
+                  <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <span className="font-bold block truncate">
+                    {geoDistance !== null && geoDistance <= systemSettings.geofenceRadiusMeters
+                      ? (isKhmer ? `📍 ក្នុងបរិវេណសាលា (ចម្ងាយ ${geoDistance}ម • កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)` : `📍 Inside Campus Boundary (${geoDistance}m / max ${systemSettings.geofenceRadiusMeters}m)`)
+                      : geoDistance !== null
+                      ? (isKhmer ? `⚠️ ក្រៅបរិវេណសាលា (ចម្ងាយ ${geoDistance.toLocaleString()}ម • កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)` : `⚠️ Outside Campus Boundary (${geoDistance.toLocaleString()}m / max ${systemSettings.geofenceRadiusMeters}m)`)
+                      : (isKhmer ? '🔄 កំពុងផ្ទៀងផ្ទាត់ទីតាំង GPS...' : '🔄 Acquiring device GPS location...')}
+                  </span>
+                  <span className="text-[11px] opacity-80 block truncate">
+                    {geoDistance !== null && geoDistance <= systemSettings.geofenceRadiusMeters
+                      ? (isKhmer ? 'វត្តមានត្រូវបានផ្ទៀងផ្ទាត់តាម GPS ត្រឹមត្រូវ' : 'Attendance verified via physical geofence')
+                      : geoDistance !== null
+                      ? (isKhmer ? 'ការស្កេនចូល/ចេញត្រូវបានរឹតបន្តឹងដោយសារទីតាំងនៅក្រៅសាលា' : 'Check-in is restricted outside campus boundaries')
+                      : (isKhmer ? 'សូមរង់ចាំ ឬចុច Refresh GPS' : 'Please allow location permission or tap refresh')}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRefreshGps}
+                disabled={isGpsRefreshing}
+                className="px-2.5 py-1.5 rounded-xl bg-white/90 hover:bg-white text-slate-700 text-xs font-bold border border-slate-300 shadow-xs flex items-center gap-1 shrink-0 active:scale-95 cursor-pointer"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${isGpsRefreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isKhmer ? 'ពិនិត្យ GPS ឡើងវិញ' : 'Refresh GPS'}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Admin Mode Header & Faculty Switcher */}
+          {isAdmin && (
+            <div className="p-4 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl text-white shadow-md border border-indigo-700/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
+                  <UserCheck className="w-5 h-5 text-indigo-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-400 text-slate-950">
+                      Admin Mode
+                    </span>
+                    <span className="text-xs font-bold text-white">
+                      {isKhmer ? 'កត់ត្រាវត្តមានឱ្យគ្រូបង្រៀន' : 'Record Attendance for Teacher'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-200 mt-0.5">
+                    {isKhmer
+                      ? 'ជ្រើសរើសគ្រូបង្រៀន ឬបុគ្គលិក ដើម្បីកត់ត្រាស្កេនចូល/ចេញជំនួសដោយផ្ទាល់'
+                      : 'Select any teacher or staff member below to view schedule & punch attendance.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Staff Selector Dropdown */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={activeStaff?.id || ''}
+                  onChange={e => setAdminSelectedStaffId(e.target.value)}
+                  className="bg-slate-800 text-white border border-indigo-500/40 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                >
+                  <optgroup label={isKhmer ? 'គ្រូបង្រៀន (Teachers)' : 'Teachers'}>
+                    {teachers.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.fullName} ({t.khmerName || t.teacherId}) - {t.department}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label={isKhmer ? 'បុគ្គលិកទូទៅ (Employees)' : 'Employees'}>
+                    {employees.map(e => (
+                      <option key={e.id} value={e.id}>
+                        {e.fullName} ({e.khmerName || e.employeeId}) - {e.department}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAdminRecordModalOpen(true)}
+                  className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-xs transition-all whitespace-nowrap active:scale-95 cursor-pointer"
+                >
+                  <span>{isKhmer ? 'ទម្រង់លម្អិត' : 'Full Form'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!activeStaff && !isAdmin && (
             <div className="bg-gradient-to-br from-indigo-50/90 via-white to-slate-50 rounded-3xl p-6 sm:p-8 border-2 border-indigo-200/90 shadow-sm space-y-6">
               <div className="text-center max-w-md mx-auto space-y-2">
                 <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-600/30">
@@ -1916,6 +2130,19 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
           </div>
         </div>
+      )}
+
+      {/* Admin Record Attendance for Teacher Modal */}
+      {isAdminRecordModalOpen && (
+        <AdminRecordAttendanceModal
+          isOpen={isAdminRecordModalOpen}
+          onClose={() => setIsAdminRecordModalOpen(false)}
+          initialTeacherId={activeStaff?.id}
+          initialSubjectScheduleId={selectedSubjectId}
+          onSuccess={() => {
+            setAttendanceList(StorageService.getAttendance());
+          }}
+        />
       )}
 
     </div>

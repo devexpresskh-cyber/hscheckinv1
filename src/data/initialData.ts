@@ -659,7 +659,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   defaultLocationLatitude: 11.5564,
   defaultLocationLongitude: 104.9282,
   geofenceRadiusMeters: 500,
-  enforceGeofence: false,
+  enforceGeofence: true,
   allowSelfCorrection: true,
   requirePinForKiosk: true,
   allowSwitchStaffInKiosk: false,

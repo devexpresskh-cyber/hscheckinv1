@@ -57,6 +57,7 @@ import { ScheduleSubstituteModal } from './ScheduleSubstituteModal.tsx';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
+import { GeoService } from '../../services/geoService.ts';
 
 interface ScheduleManagementProps {
   initialView?: 'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards';
@@ -819,7 +820,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     { index: 0, shortEn: 'Sun', shortKm: 'អាទិត្យ', fullEn: 'Sunday', fullKm: 'ថ្ងៃអាទិត្យ' }
   ];
 
-  const handleTeacherClassCheckIn = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
+  const handleTeacherClassCheckIn = async (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
     // Only teachers or authorized admins/supervisors can check in
     if (!isTeacher && !canAdminManageAttendance) {
       showToast(
@@ -874,6 +875,35 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       return;
     }
 
+    // Verify geofence when active
+    let checkInLat: number | undefined;
+    let checkInLng: number | undefined;
+    if (systemSettings?.enforceGeofence) {
+      try {
+        const pos = await GeoService.getCurrentPosition({ highAccuracy: true, timeout: 8000, maximumAge: 0 });
+        checkInLat = pos.latitude;
+        checkInLng = pos.longitude;
+        const geoCheck = AttendanceEngine.verifyLocation(pos.latitude, pos.longitude, systemSettings);
+        if (!geoCheck.inside) {
+          showToast(
+            isKhmer
+              ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${geoCheck.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+              : `Check-in denied: You are ${geoCheck.distance.toLocaleString()}m away from campus (Allowed: ${systemSettings.geofenceRadiusMeters}m).`,
+            'error'
+          );
+          return;
+        }
+      } catch (err: any) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please enable location permission.',
+          'error'
+        );
+        return;
+      }
+    }
+
     const result = AttendanceEngine.processCheckIn({
       personId: targetTeacherId,
       personName: targetTeacherName,
@@ -882,6 +912,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       department: targetDept,
       subjectScheduleId: sub.id,
       customTime: curTime,
+      latitude: checkInLat,
+      longitude: checkInLng,
       allowEarlyCheckInMinutes: 30,
       bypassScheduleWindow: canOverride
     });
@@ -900,7 +932,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     }
   };
 
-  const handleTeacherClassCheckOut = (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
+  const handleTeacherClassCheckOut = async (sub: TeacherSubjectSchedule, forceAdminOverride = false) => {
     // Only teachers or authorized admins/supervisors can check out
     if (!isTeacher && !canAdminManageAttendance) {
       showToast(
@@ -938,12 +970,43 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       return;
     }
 
+    // Verify geofence when active
+    let checkOutLat: number | undefined;
+    let checkOutLng: number | undefined;
+    if (systemSettings?.enforceGeofence) {
+      try {
+        const pos = await GeoService.getCurrentPosition({ highAccuracy: true, timeout: 8000, maximumAge: 0 });
+        checkOutLat = pos.latitude;
+        checkOutLng = pos.longitude;
+        const geoCheck = AttendanceEngine.verifyLocation(pos.latitude, pos.longitude, systemSettings);
+        if (!geoCheck.inside) {
+          showToast(
+            isKhmer
+              ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${geoCheck.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+              : `Check-out denied: You are ${geoCheck.distance.toLocaleString()}m away from campus (Allowed: ${systemSettings.geofenceRadiusMeters}m).`,
+            'error'
+          );
+          return;
+        }
+      } catch (err: any) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please enable location permission.',
+          'error'
+        );
+        return;
+      }
+    }
+
     const isAutoSetToEnd = isTeacher && curMins >= endMins;
     const result = AttendanceEngine.processCheckOut({
       personId: targetTeacherId,
       personName: targetTeacherName,
       subjectScheduleId: sub.id,
       customTime: isAutoSetToEnd ? sub.endTime : curTime,
+      latitude: checkOutLat,
+      longitude: checkOutLng,
       autoSetToEndOfSchedule: isAutoSetToEnd
     });
 

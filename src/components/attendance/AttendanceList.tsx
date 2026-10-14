@@ -8,6 +8,7 @@ import { AttendanceRecord, AttendanceCorrectionRequest, AttendanceStatus, Teache
 import { AttendanceCorrectionModal } from './AttendanceCorrectionModal.tsx';
 import { Attendance31DaysSheet } from './Attendance31DaysSheet.tsx';
 import { AttendancePeriodGrid } from './AttendancePeriodGrid.tsx';
+import { AdminRecordAttendanceModal } from './AdminRecordAttendanceModal.tsx';
 import { ScheduleSubstituteModal } from '../schedules/ScheduleSubstituteModal.tsx';
 import {
   CheckCircle2,
@@ -308,6 +309,12 @@ export const AttendanceList: React.FC = () => {
   const [substituteTargetSchedule, setSubstituteTargetSchedule] = useState<TeacherSubjectSchedule | null>(null);
   const [substituteTargetExisting, setSubstituteTargetExisting] = useState<ScheduleSubstitution | null>(null);
   const [substituteTargetDate, setSubstituteTargetDate] = useState<string>(AttendanceEngine.getCurrentDateString());
+
+  // Admin Record Attendance Modal State
+  const [isAdminRecordModalOpen, setIsAdminRecordModalOpen] = useState(false);
+  const [adminRecordTeacherId, setAdminRecordTeacherId] = useState<string | undefined>(undefined);
+  const [adminRecordScheduleId, setAdminRecordScheduleId] = useState<string | undefined>(undefined);
+  const [adminRecordDate, setAdminRecordDate] = useState<string | undefined>(undefined);
 
   const handleOpenSubstituteForRecord = (record: AttendanceRecord) => {
     const schedId = record.subjectScheduleId || record.scheduleId;
@@ -782,6 +789,23 @@ export const AttendanceList: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Admin Record Attendance for Teacher Button */}
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  setAdminRecordTeacherId(undefined);
+                  setAdminRecordScheduleId(undefined);
+                  setAdminRecordDate(selectedDate || AttendanceEngine.getCurrentDateString());
+                  setIsAdminRecordModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black shadow-md shadow-emerald-600/25 transition-all cursor-pointer active:scale-95 shrink-0"
+                title={isKhmer ? 'កត់ត្រាវត្តមានសម្រាប់គ្រូបង្រៀន (Admin Record Attendance)' : 'Admin: Record Attendance for Teacher'}
+              >
+                <UserCheck className="w-4 h-4 text-emerald-200" />
+                <span>{isKhmer ? 'កត់ត្រាវត្តមានឱ្យគ្រូ' : 'Record for Teacher'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleExportCSV}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors shrink-0 cursor-pointer"
@@ -1666,6 +1690,24 @@ export const AttendanceList: React.FC = () => {
           employees={employees}
           currentUser={currentUser}
           existingSubstitution={substituteTargetExisting}
+          onSuccess={() => {
+            setAttendanceList(StorageService.getAttendance());
+          }}
+        />
+      )}
+
+      {/* Admin Record Attendance for Teacher Modal */}
+      {isAdminRecordModalOpen && (
+        <AdminRecordAttendanceModal
+          isOpen={isAdminRecordModalOpen}
+          onClose={() => {
+            setIsAdminRecordModalOpen(false);
+            setAdminRecordTeacherId(undefined);
+            setAdminRecordScheduleId(undefined);
+          }}
+          initialTeacherId={adminRecordTeacherId}
+          initialSubjectScheduleId={adminRecordScheduleId}
+          initialDate={adminRecordDate}
           onSuccess={() => {
             setAttendanceList(StorageService.getAttendance());
           }}

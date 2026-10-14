@@ -4,6 +4,7 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
 import { ScheduleAlertService } from '../../services/scheduleAlertService.ts';
+import { GeoService } from '../../services/geoService.ts';
 import { SystemSettings } from '../../types/index.ts';
 import {
   Settings,
@@ -595,6 +596,32 @@ export const SystemSettingsView: React.FC = () => {
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-mono font-bold"
                 />
               </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const pos = await GeoService.getCurrentPosition({ highAccuracy: true });
+                    setSettings({
+                      ...settings,
+                      defaultLocationLatitude: Number(pos.latitude.toFixed(6)),
+                      defaultLocationLongitude: Number(pos.longitude.toFixed(6))
+                    });
+                    showToast('Captured your current GPS coordinates as campus location!', 'success');
+                  } catch (err: any) {
+                    showToast(err.message || 'Failed to detect current GPS location', 'error');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>Set to My Current GPS Location</span>
+              </button>
+              <span className="text-[11px] text-slate-500">
+                Calibrates campus center to where you are standing right now.
+              </span>
             </div>
           </div>
 

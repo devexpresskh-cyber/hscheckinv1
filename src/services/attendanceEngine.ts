@@ -574,16 +574,22 @@ export const AttendanceEngine = {
 
     // Geofencing verification
     let locationVerified = true;
-    if (params.latitude && params.longitude) {
+    if (params.latitude !== undefined && params.longitude !== undefined && params.latitude !== null && params.longitude !== null) {
       const geo = this.verifyLocation(params.latitude, params.longitude, systemSettings);
       locationVerified = geo.inside;
       if (systemSettings.enforceGeofence && !params.bypassGeofence && !geo.inside) {
         return {
           success: false,
-          message: `Check-in denied: You are ${geo.distance}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`
+          message: `Check-in denied: You are ${geo.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`
         };
       }
     } else {
+      if (systemSettings.enforceGeofence && !params.bypassGeofence) {
+        return {
+          success: false,
+          message: `Check-in denied: GPS location is required to verify that you are within campus boundaries (${systemSettings.geofenceRadiusMeters}m radius). Please allow location permissions in your browser.`
+        };
+      }
       params.latitude = systemSettings.defaultLocationLatitude;
       params.longitude = systemSettings.defaultLocationLongitude;
       locationVerified = true;
@@ -692,9 +698,31 @@ export const AttendanceEngine = {
     shiftType?: 'morning' | 'evening';
     session?: 'morning' | 'afternoon' | 'evening';
     autoSetToEndOfSchedule?: boolean;
+    latitude?: number;
+    longitude?: number;
+    bypassGeofence?: boolean;
   }): CheckOutResult {
     const today = this.getCurrentDateString();
     let currentTime = params.customTime || this.getCurrentTimeString();
+    const systemSettings = StorageService.getSettings();
+
+    // Geofencing verification for checkout
+    if (params.latitude !== undefined && params.longitude !== undefined && params.latitude !== null && params.longitude !== null) {
+      const geo = this.verifyLocation(params.latitude, params.longitude, systemSettings);
+      if (systemSettings.enforceGeofence && !params.bypassGeofence && !geo.inside) {
+        return {
+          success: false,
+          message: `Check-out denied: You are ${geo.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`
+        };
+      }
+    } else {
+      if (systemSettings.enforceGeofence && !params.bypassGeofence) {
+        return {
+          success: false,
+          message: `Check-out denied: GPS location is required to verify that you are within campus boundaries (${systemSettings.geofenceRadiusMeters}m radius). Please allow location permissions in your browser.`
+        };
+      }
+    }
     
     // Find matching record
     let existing: AttendanceRecord | undefined;

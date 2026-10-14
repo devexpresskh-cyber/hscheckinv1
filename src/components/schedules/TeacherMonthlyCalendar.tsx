@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Teacher, TeacherSubjectSchedule, Holiday, AttendanceRecord } from '../../types/index.ts';
 import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
+import { GeoService } from '../../services/geoService.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
@@ -167,7 +168,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Check-in handler
-  const handleTeacherCheckInAction = (cls: TeacherSubjectSchedule) => {
+  // Check-in handler
+  const handleTeacherCheckInAction = async (cls: TeacherSubjectSchedule) => {
     if (onCheckIn) {
       onCheckIn(cls);
       return;
@@ -179,6 +181,38 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     const targetTeacherKhmer = activeTeacher?.khmerName || cls.khmerTeacherName;
     const targetDept = activeTeacher?.department || 'Academic & Curriculum';
     const curTime = AttendanceEngine.getCurrentTimeString();
+    const settings = StorageService.getSettings();
+
+    // Verify geofence when active
+    let checkInLat: number | undefined;
+    let checkInLng: number | undefined;
+    if (settings?.enforceGeofence) {
+      try {
+        const pos = await GeoService.getCurrentPosition({ highAccuracy: true, timeout: 8000, maximumAge: 0 });
+        checkInLat = pos.latitude;
+        checkInLng = pos.longitude;
+        const geoCheck = AttendanceEngine.verifyLocation(pos.latitude, pos.longitude, settings);
+        if (!geoCheck.inside) {
+          setIsActionLoading(false);
+          showToast(
+            isKhmer
+              ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${geoCheck.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${settings.geofenceRadiusMeters}ម)។`
+              : `Check-in denied: You are ${geoCheck.distance.toLocaleString()}m away from campus (Allowed: ${settings.geofenceRadiusMeters}m).`,
+            'error'
+          );
+          return;
+        }
+      } catch (err: any) {
+        setIsActionLoading(false);
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please enable location permission.',
+          'error'
+        );
+        return;
+      }
+    }
 
     setTimeout(() => {
       const result = AttendanceEngine.processCheckIn({
@@ -189,6 +223,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
         department: targetDept,
         subjectScheduleId: cls.id,
         customTime: curTime,
+        latitude: checkInLat,
+        longitude: checkInLng,
         allowEarlyCheckInMinutes: 30,
         bypassScheduleWindow: !isTeacherRole || hasPermission('schedules.create') || hasPermission('attendance.edit')
       });
@@ -211,7 +247,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   };
 
   // Check-out handler
-  const handleTeacherCheckOutAction = (cls: TeacherSubjectSchedule) => {
+  const handleTeacherCheckOutAction = async (cls: TeacherSubjectSchedule) => {
     if (onCheckOut) {
       onCheckOut(cls);
       return;
@@ -221,12 +257,46 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     const targetTeacherId = activeTeacher?.id || cls.teacherId;
     const targetTeacherName = activeTeacher?.fullName || cls.teacherName;
     const curTime = AttendanceEngine.getCurrentTimeString();
+    const settings = StorageService.getSettings();
+
+    // Verify geofence when active
+    let checkOutLat: number | undefined;
+    let checkOutLng: number | undefined;
+    if (settings?.enforceGeofence) {
+      try {
+        const pos = await GeoService.getCurrentPosition({ highAccuracy: true, timeout: 8000, maximumAge: 0 });
+        checkOutLat = pos.latitude;
+        checkOutLng = pos.longitude;
+        const geoCheck = AttendanceEngine.verifyLocation(pos.latitude, pos.longitude, settings);
+        if (!geoCheck.inside) {
+          setIsActionLoading(false);
+          showToast(
+            isKhmer
+              ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${geoCheck.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${settings.geofenceRadiusMeters}ម)។`
+              : `Check-out denied: You are ${geoCheck.distance.toLocaleString()}m away from campus (Allowed: ${settings.geofenceRadiusMeters}m).`,
+            'error'
+          );
+          return;
+        }
+      } catch (err: any) {
+        setIsActionLoading(false);
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please enable location permission.',
+          'error'
+        );
+        return;
+      }
+    }
 
     setTimeout(() => {
       const result = AttendanceEngine.processCheckOut({
         personId: targetTeacherId,
         personName: targetTeacherName,
         subjectScheduleId: cls.id,
+        latitude: checkOutLat,
+        longitude: checkOutLng,
         customTime: curTime
       });
 

@@ -4,6 +4,7 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
+import { GeoService } from '../../services/geoService.ts';
 import { Employee, Teacher, AttendanceRecord, TeacherSubjectSchedule, Schedule } from '../../types/index.ts';
 import confetti from 'canvas-confetti';
 import {
@@ -191,10 +192,67 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
     );
   }, [selectedTeacher, activeTeacherSubject, allAttendance, todayStr]);
 
+  const [deviceCoords, setDeviceCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          setDeviceCoords({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    }
+  }, []);
+
+  const getGpsCoordsForCheck = async () => {
+    if (systemSettings.enforceGeofence) {
+      if (deviceCoords) return deviceCoords;
+      try {
+        const pos = await GeoService.getCurrentPosition({ highAccuracy: true, timeout: 8000, maximumAge: 0 });
+        setDeviceCoords(pos);
+        return pos;
+      } catch {
+        return null;
+      }
+    }
+    return deviceCoords || {
+      latitude: systemSettings.defaultLocationLatitude,
+      longitude: systemSettings.defaultLocationLongitude
+    };
+  };
+
   // Handle Employee Check-in for Morning or Evening Shift
   // Requirements: Employee can check in before and after shifttime!
-  const handleEmployeeCheckIn = (shift: 'morning' | 'evening') => {
+  const handleEmployeeCheckIn = async (shift: 'morning' | 'evening') => {
     if (!selectedEmployee || isSubmitting) return;
+
+    const coords = await getGpsCoordsForCheck();
+    if (systemSettings.enforceGeofence) {
+      if (!coords) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please allow location access.',
+          'error'
+        );
+        return;
+      }
+      const check = AttendanceEngine.verifyLocation(coords.latitude, coords.longitude, systemSettings);
+      if (!check.inside) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${check.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Denied: You are ${check.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     setTimeout(() => {
@@ -208,8 +266,8 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
         shiftType: shift,
         session: shift === 'evening' ? 'afternoon' : 'morning',
         customTime: currentTimeStr,
-        latitude: systemSettings.defaultLocationLatitude,
-        longitude: systemSettings.defaultLocationLongitude
+        latitude: coords?.latitude,
+        longitude: coords?.longitude
       });
 
       setIsSubmitting(false);
@@ -234,8 +292,31 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
 
   // Handle Employee Check-out for Morning or Evening Shift
   // Requirements: Employee can check out before and after shifttime!
-  const handleEmployeeCheckOut = (shift: 'morning' | 'evening') => {
+  const handleEmployeeCheckOut = async (shift: 'morning' | 'evening') => {
     if (!selectedEmployee || isSubmitting) return;
+
+    const coords = await getGpsCoordsForCheck();
+    if (systemSettings.enforceGeofence) {
+      if (!coords) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please allow location access.',
+          'error'
+        );
+        return;
+      }
+      const check = AttendanceEngine.verifyLocation(coords.latitude, coords.longitude, systemSettings);
+      if (!check.inside) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${check.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Denied: You are ${check.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    }
 
     const recordToClose = shift === 'morning' ? morningRecord : eveningRecord;
 
@@ -247,7 +328,9 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
         shiftType: shift,
         session: shift === 'evening' ? 'afternoon' : 'morning',
         attendanceRecordId: recordToClose?.id,
-        customTime: currentTimeStr
+        customTime: currentTimeStr,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude
       });
 
       setIsSubmitting(false);
@@ -266,8 +349,31 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
   };
 
   // Handle Teacher Check-in / Check-out
-  const handleTeacherCheckIn = () => {
+  const handleTeacherCheckIn = async () => {
     if (!selectedTeacher || !activeTeacherSubject || isSubmitting) return;
+
+    const coords = await getGpsCoordsForCheck();
+    if (systemSettings.enforceGeofence) {
+      if (!coords) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please allow location access.',
+          'error'
+        );
+        return;
+      }
+      const check = AttendanceEngine.verifyLocation(coords.latitude, coords.longitude, systemSettings);
+      if (!check.inside) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${check.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Denied: You are ${check.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     setTimeout(() => {
@@ -280,8 +386,8 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
         scheduleId: selectedTeacher.assignedScheduleId,
         subjectScheduleId: activeTeacherSubject.id,
         customTime: currentTimeStr,
-        latitude: systemSettings.defaultLocationLatitude,
-        longitude: systemSettings.defaultLocationLongitude
+        latitude: coords?.latitude,
+        longitude: coords?.longitude
       });
 
       setIsSubmitting(false);
@@ -304,8 +410,31 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
     }, 250);
   };
 
-  const handleTeacherCheckOut = () => {
+  const handleTeacherCheckOut = async () => {
     if (!selectedTeacher || !activeTeacherSubject || isSubmitting) return;
+
+    const coords = await getGpsCoordsForCheck();
+    if (systemSettings.enforceGeofence) {
+      if (!coords) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please allow location access.',
+          'error'
+        );
+        return;
+      }
+      const check = AttendanceEngine.verifyLocation(coords.latitude, coords.longitude, systemSettings);
+      if (!check.inside) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${check.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Denied: You are ${check.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    }
 
     const curM = AttendanceEngine.timeToMinutes(currentTimeStr);
     const endM = AttendanceEngine.timeToMinutes(activeTeacherSubject.endTime);
@@ -318,7 +447,9 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
         personName: selectedTeacher.fullName,
         subjectScheduleId: activeTeacherSubject.id,
         customTime: isAutoSet ? activeTeacherSubject.endTime : currentTimeStr,
-        autoSetToEndOfSchedule: isAutoSet
+        autoSetToEndOfSchedule: isAutoSet,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude
       });
 
       setIsSubmitting(false);
