@@ -350,15 +350,12 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
   return (
     <div className="w-full flex justify-center py-0 sm:py-3 px-0 sm:px-2 font-sans select-none min-h-full">
       {/* Mobile-Inspired Frame matching Screenshot Style */}
-      <div className="w-full max-w-md bg-white sm:rounded-[36px] shadow-xl sm:border border-slate-200/80 overflow-hidden flex flex-col relative transition-all duration-300 min-h-[calc(100dvh-5rem)] sm:min-h-0">
+      <div className="w-full max-w-md bg-white sm:rounded-2xl shadow-xl sm:border border-slate-200/80 overflow-hidden flex flex-col relative transition-all duration-300 min-h-[calc(100dvh-5rem)] sm:min-h-0">
         
         {/* ======================================================== */}
-        {/* TOP VIBRANT BLUE CURVED HEADER (Screenshot Signature)     */}
+        {/* TOP VIBRANT BLUE HEADER (Flat, Clean - Curve Removed)     */}
         {/* ======================================================== */}
-        <div className="bg-[#2563eb] text-white pt-6 pb-6 px-6 relative rounded-b-[32px] shadow-md">
-          {/* Subtle curved wave pattern overlay */}
-          <div className="absolute top-0 right-0 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none -mr-16 -mt-16" />
-          <div className="absolute bottom-0 left-0 w-36 h-36 bg-blue-400/20 rounded-full blur-xl pointer-events-none -ml-10 -mb-10" />
+        <div className="bg-[#2563eb] text-white pt-5 pb-5 px-6 relative shadow-xs border-b border-blue-600/30">
 
           {/* Greeting: Hello! [User Name] & Notification Bell */}
           <div className="flex items-center justify-between gap-3 relative z-10">
