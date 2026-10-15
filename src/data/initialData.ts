@@ -30,6 +30,7 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       'telegram.view', 'telegram.configure',
       'notifications.send',
       'audit.view',
+      'audit.clear',
       'settings.manage'
     ]
   },
@@ -46,7 +47,8 @@ export const DEFAULT_ROLES: RoleDefinition[] = [
       'attendance.view', 'attendance.checkin', 'attendance.checkout', 'attendance.edit', 'attendance.approve',
       'reports.view', 'reports.export',
       'notifications.send',
-      'audit.view'
+      'audit.view',
+      'audit.clear'
     ]
   },
   {

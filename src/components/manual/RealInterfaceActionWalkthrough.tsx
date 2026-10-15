@@ -29,6 +29,7 @@ import {
   Shield,
   Clock,
   Building2,
+  GraduationCap,
   UserCheck,
   Bell,
   Languages,
@@ -84,6 +85,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [interactiveMode, setInteractiveMode] = useState<boolean>(false);
   const [isClicking, setIsClicking] = useState<boolean>(false);
+  const [deviceView, setDeviceView] = useState<'mobile' | 'desktop'>('mobile');
 
   // Simulated UI state within walkthrough
   const [browserUrlText, setBrowserUrlText] = useState<string>('');
@@ -283,60 +285,60 @@ export const RealInterfaceActionWalkthrough: React.FC<{
     },
     {
       id: 3,
-      titleEn: 'Module 3: Current Schedule Check-In & Check-Out Timeline',
-      titleKm: 'ផ្នែកទី ៣៖ ការស្កេនចូល-ចេញ លើកាលវិភាគបង្រៀនជាក់ស្តែង',
+      titleEn: 'Module 3: Mobile App Home & Today\'s Schedule Check-In',
+      titleKm: 'ផ្នែកទី ៣៖ ទំព័រដើមលើទូរស័ព្ទ និងការស្កេនចូល-ចេញ លើកាលវិភាគ',
       icon: Calendar,
-      sidebarTab: 'monthly_calendar',
+      sidebarTab: 'schedules',
       steps: [
         {
           id: '3-1',
           timeSec: 2.5,
           cursorX: 50,
-          cursorY: 28,
+          cursorY: 18,
           actionType: 'hover' as const,
-          titleEn: 'Step 1: Check Month Capsule (< March 2026 >) & connected range',
-          titleKm: 'ជំហានទី ១៖ ពិនិត្យខែ (< March 2026 >) និងរបារថ្ងៃភ្ជាប់គ្នា ១៤-១៨',
-          subtitleEn: 'Deep navy midnight header with connected blue range pill capsule.',
-          subtitleKm: 'ប្រតិទិនខៀវចាស់ជាមួយរបារថ្ងៃភ្ជាប់គ្នា និងរង្វង់ពណ៌បៃតង/ទឹកក្រូច។'
+          titleEn: 'Step 1: Mobile App Home: Vibrant Blue Header with Live GPS Radar',
+          titleKm: 'ជំហានទី ១៖ ទំព័រដើមកម្មវិធីទូរស័ព្ទ៖ របារក្បាលពណ៌ខៀវ និងស្លាក GPS ក្នុងបរិវេណ',
+          subtitleEn: 'Shows teacher name, department, and campus perimeter GPS status.',
+          subtitleKm: 'បង្ហាញឈ្មោះគ្រូបង្រៀន ដេប៉ាតឺម៉ង់ និងស្ថានភាព GPS ក្នុងបរិវេណសាលា។'
         },
         {
           id: '3-2',
           timeSec: 2.5,
-          cursorX: 54,
-          cursorY: 34,
+          cursorX: 38,
+          cursorY: 42,
           actionType: 'click' as const,
-          titleEn: 'Step 2: Tap Wednesday (Day 14) to view today\'s current classes',
-          titleKm: 'ជំហានទី ២៖ ចុចលើថ្ងៃពុធ (ទី ១៤) ដើម្បីមើលម៉ោងបង្រៀនថ្ងៃនេះ',
-          subtitleEn: 'Day 14 lights up in vibrant solid blue pill, loading today\'s schedule.',
-          subtitleKm: 'ថ្ងៃទី ១៤ រំលេចពណ៌ខៀវដិតច្បាស់ និងបង្ហាញកាលវិភាគថ្ងៃនេះ។'
+          titleEn: 'Step 2: 8-Feature Action Grid & Quick Navigation Toolbar',
+          titleKm: 'ជំហានទី ២៖ ផ្ទាំងមុខងារចម្បងទាំង ៨ (Features Grid) សម្រាប់ប្រើប្រាស់រហ័ស',
+          subtitleEn: 'Quick touch access: Scan QR, Daily Schedule, Attendance, Calendar, Leave & Reports.',
+          subtitleKm: 'ចុចបញ្ជាផ្ទាល់៖ ស្កេន QR កាលវិភាគ វត្តមាន ប្រតិទិន ច្បាប់សម្រាក និងរបាយការណ៍។'
         },
         {
           id: '3-3',
           timeSec: 2.5,
           cursorX: 50,
-          cursorY: 62,
+          cursorY: 65,
           actionType: 'hover' as const,
-          titleEn: 'Step 3: Review current schedule card: CS-201 Data Structures (Room 304)',
-          titleKm: 'ជំហានទី ៣៖ ពិនិត្យកាតម៉ោងបង្រៀនបច្ចុប្បន្ន៖ CS-201 (បន្ទប់ 304 ម៉ោង ០៨:០០ ព្រឹក)',
-          subtitleEn: 'Shows start time 08:00 AM, department, period, and status ready for check-in.',
-          subtitleKm: 'បង្ហាញម៉ោង ០៨:០០ ព្រឹក ដេប៉ាតឺម៉ង់ បន្ទប់ និងប៊ូតុងត្រៀមស្កេនចូល។'
+          titleEn: 'Step 3: Review Today\'s Schedule card: CS-201 Data Structures (Room 304)',
+          titleKm: 'ជំហានទី ៣៖ ពិនិត្យកាតម៉ោងបង្រៀនថ្ងៃនេះ៖ CS-201 (បន្ទប់ 304 ម៉ោង ០៨:០០ ព្រឹក)',
+          subtitleEn: 'Displays start/end time, room, subject and direct action button.',
+          subtitleKm: 'បង្ហាញម៉ោងចាប់ផ្តើម-បញ្ចប់ បន្ទប់ មុខវិជ្ជា និងប៊ូតុងស្កេនផ្ទាល់។'
         },
         {
           id: '3-4',
           timeSec: 3,
-          cursorX: 62,
-          cursorY: 74,
+          cursorX: 78,
+          cursorY: 68,
           actionType: 'click' as const,
-          titleEn: 'Step 4: Tap "Check In Class (ស្កេនចូល)" to start teaching session',
-          titleKm: 'ជំហានទី ៤៖ ចុចប៊ូតុង "ស្កេនចូល (Check In)" ដើម្បីចាប់ផ្តើមបង្រៀន',
-          subtitleEn: 'Locks check-in at 08:00 AM; verifies presence and notifies coordinator.',
+          titleEn: 'Step 4: Tap "Check In Class (ស្កេនចូល)" directly on current schedule card',
+          titleKm: 'ជំហានទី ៤៖ ចុចប៊ូតុង "ស្កេនចូល (Check In)" ផ្ទាល់លើកាតម៉ោងបង្រៀន',
+          subtitleEn: 'Locks check-in at 08:00 AM; verifies presence and notifies school Telegram.',
           subtitleKm: 'កត់ត្រាម៉ោងចូល ០៨:០០ ព្រឹក ផ្ទៀងផ្ទាត់វត្តមាន និងផ្ញើដំណឹងភ្លាមៗ។'
         },
         {
           id: '3-5',
           timeSec: 3,
           cursorX: 50,
-          cursorY: 74,
+          cursorY: 68,
           actionType: 'hover' as const,
           titleEn: 'Step 5: Session In Progress: Status becomes "IN PROGRESS (កំពុងបង្រៀន)"',
           titleKm: 'ជំហានទី ៥៖ ម៉ោងបង្រៀនកំពុងដំណើរការ៖ ស្ថានភាពប្តូរទៅ "កំពុងបង្រៀន"',
@@ -346,8 +348,8 @@ export const RealInterfaceActionWalkthrough: React.FC<{
         {
           id: '3-6',
           timeSec: 3,
-          cursorX: 62,
-          cursorY: 74,
+          cursorX: 78,
+          cursorY: 68,
           actionType: 'click' as const,
           titleEn: 'Step 6: Tap "Check Out Class (ស្កេនចេញ)" when period finishes',
           titleKm: 'ជំហានទី ៦៖ ចុចប៊ូតុង "ស្កេនចេញ (Check Out)" នៅពេលចប់ម៉ោងបង្រៀន',
@@ -358,12 +360,12 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           id: '3-7',
           timeSec: 3,
           cursorX: 50,
-          cursorY: 78,
+          cursorY: 68,
           actionType: 'success' as const,
           titleEn: 'Step 7: Session Completed! Verified Wage Hours Logged to Ledger',
           titleKm: 'ជំហានទី ៧៖ បញ្ចប់ម៉ោងបង្រៀនជោគជ័យ! ទិន្នន័យម៉ោងត្រូវបានបញ្ចូលក្នុងបញ្ជីប្រាក់ឈ្នួល',
-          subtitleEn: 'Both In & Out timestamps recorded. Telegram broadcast dispatched.',
-          subtitleKm: 'កំណត់ត្រាម៉ោងចូល និងម៉ោងចេញពេញលេញ ជាមួយរបាយការណ៍ម៉ោងបង្រៀន។'
+          subtitleEn: 'Both In & Out timestamps recorded. Mobile bottom navigation bar ready.',
+          subtitleKm: 'កំណត់ត្រាម៉ោងចូល និងម៉ោងចេញពេញលេញ ជាមួយរបារបញ្ជាខាងក្រោម។'
         }
       ]
     },
@@ -698,6 +700,586 @@ export const RealInterfaceActionWalkthrough: React.FC<{
     playSfx('beep');
   };
 
+  // ========================================================
+  // MOBILE SMARTPHONE MODULE RENDERERS
+  // ========================================================
+
+  const renderMobileTouchPointer = () => (
+    <div
+      className="absolute pointer-events-none transition-all duration-700 ease-out z-50 flex items-center justify-center"
+      style={{
+        left: `${activeStep.cursorX}%`,
+        top: `${activeStep.cursorY}%`,
+        transform: 'translate(-50%, -50%)'
+      }}
+    >
+      <div
+        className={`w-8 h-8 rounded-full border-2 border-white shadow-xl flex items-center justify-center transition-all ${
+          isClicking
+            ? 'scale-75 bg-blue-600 ring-4 ring-cyan-400/60'
+            : 'bg-blue-500/50 backdrop-blur-2xs'
+        }`}
+      >
+        <div className="w-2.5 h-2.5 rounded-full bg-white shadow-xs" />
+      </div>
+      {isClicking && (
+        <span className="absolute w-12 h-12 rounded-full border border-cyan-400 animate-ping pointer-events-none" />
+      )}
+    </div>
+  );
+
+  const renderMobileModule1 = () => (
+    <div className="flex-1 flex flex-col bg-slate-100 text-slate-900">
+      {stepIndex === 4 || pwaInstalled ? (
+        <div className="flex-1 p-5 flex flex-col justify-between bg-gradient-to-br from-indigo-900 via-slate-900 to-sky-950 text-white relative">
+          <div className="pt-3 text-center">
+            <p className="text-3xl font-extralight font-mono">08:00</p>
+            <p className="text-xs text-blue-200 mt-0.5">Wednesday, March 14</p>
+          </div>
+
+          <div className="grid grid-cols-4 gap-4 py-8">
+            <div className="flex flex-col items-center gap-1.5 animate-in zoom-in-50 duration-300">
+              <div className="w-13 h-13 rounded-2xl bg-[#2563eb] text-white flex items-center justify-center shadow-xl ring-2 ring-emerald-400 relative">
+                <Building2 className="w-7 h-7" />
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] font-black flex items-center justify-center">
+                  ✓
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-white text-center leading-tight">
+                EduTrack
+              </span>
+              <span className="text-[9px] text-emerald-400 font-bold">1-Tap App</span>
+            </div>
+
+            <div className="flex flex-col items-center gap-1.5 opacity-60">
+              <div className="w-13 h-13 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                <Globe className="w-6 h-6" />
+              </div>
+              <span className="text-[11px] text-slate-300">Chrome</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 opacity-60">
+              <div className="w-13 h-13 rounded-2xl bg-blue-500 text-white flex items-center justify-center shadow-md">
+                <Send className="w-6 h-6" />
+              </div>
+              <span className="text-[11px] text-slate-300">Telegram</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 opacity-60">
+              <div className="w-13 h-13 rounded-2xl bg-slate-700 text-white flex items-center justify-center shadow-md">
+                <Clock className="w-6 h-6" />
+              </div>
+              <span className="text-[11px] text-slate-300">Clock</span>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-center text-xs">
+            <span className="text-emerald-400 font-bold block">✓ {isKhmer ? 'ដំឡើងលើអេក្រង់ដើមរួចរាល់!' : 'Added to Home Screen!'}</span>
+            <span className="text-slate-300 text-[11px]">{isKhmer ? 'ចុចបើកប្រើផ្ទាល់ដោយមិនបាច់វាយតំណភ្ជាប់ URL' : '1-tap direct launch from phone home screen'}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col bg-white">
+          <div className="bg-slate-100 p-2.5 border-b border-slate-200">
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-300 shadow-2xs">
+              <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="text-xs font-mono truncate flex-1 font-semibold text-slate-800">
+                {stepIndex === 0 ? 'Search or enter URL...' : 'https://edutrack.edu.kh'}
+              </span>
+              <RotateCcw className="w-3 h-3 text-slate-400 shrink-0" />
+            </div>
+          </div>
+
+          <div className="flex-1 p-4 flex flex-col justify-between">
+            <div className="space-y-3 pt-2 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#2563eb] text-white flex items-center justify-center mx-auto shadow-md">
+                <Building2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="font-black text-slate-900 text-base">EduTrack MIS</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{isKhmer ? 'ប្រព័ន្ធគ្រប់គ្រងការសិក្សា & វត្តមាន' : 'Faculty Mobile Portal'}</p>
+              </div>
+            </div>
+
+            {stepIndex >= 2 && (
+              <div className="p-4 rounded-2xl bg-blue-50 border-2 border-blue-400 shadow-xl space-y-3 animate-in slide-in-from-bottom duration-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#2563eb] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                    ET
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-900 leading-tight">
+                      {isKhmer ? 'ដំឡើងកម្មវិធី EduTrack' : 'Install EduTrack App'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {isKhmer ? 'ដាក់លើអេក្រង់ដើមទូរស័ព្ទ' : 'Add to phone home screen'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (interactiveMode) {
+                      setPwaInstalled(true);
+                      playSfx('success');
+                    }
+                  }}
+                  className={`w-full py-2.5 rounded-xl font-black text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5 ${
+                    stepIndex >= 3
+                      ? 'bg-[#2563eb] text-white ring-2 ring-blue-300 scale-102'
+                      : 'bg-[#2563eb] text-white'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>{isKhmer ? 'បន្ថែមទៅអេក្រង់ដើម (Install)' : 'Add to Home Screen'}</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMobileModule2 = () => (
+    <div className="flex-1 flex flex-col justify-between p-4 bg-slate-50">
+      <div className="text-center pt-2 space-y-2">
+        <div className="relative inline-block">
+          <img
+            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"
+            alt="Dr. Sovann"
+            className="w-16 h-16 rounded-full object-cover ring-4 ring-[#2563eb]/20 shadow-md mx-auto"
+          />
+          <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
+        </div>
+        <div>
+          <h3 className="font-black text-slate-900 text-sm">Dr. Sovann Vichea</h3>
+          <p className="text-[11px] text-slate-500">Computer Science • TCH-001</p>
+        </div>
+      </div>
+
+      <div className="space-y-2 text-center py-2">
+        <p className="text-xs font-bold text-slate-700">
+          {isKhmer ? 'បញ្ចូលលេខកូដសម្ងាត់ PIN ៤ខ្ទង់' : 'Enter 4-Digit Security PIN'}
+        </p>
+        <div className="flex justify-center gap-3">
+          {[0, 1, 2, 3].map(i => (
+            <div
+              key={i}
+              className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                i < (pinDigits.length > 0 ? (stepIndex >= 2 ? 4 : 1) : 0)
+                  ? 'bg-[#2563eb] scale-110 shadow-xs'
+                  : 'bg-slate-200 border border-slate-300'
+              }`}
+            />
+          ))}
+        </div>
+        {stepIndex >= 3 && (
+          <p className="text-[11px] font-bold text-emerald-600 animate-pulse">
+            ✓ {isKhmer ? 'ផ្ទៀងផ្ទាត់ជោគជ័យ! សូមស្វាគមន៍' : 'Authenticated! Welcome'}
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 px-3 pb-2">
+        {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '✓'].map(k => (
+          <button
+            key={k}
+            onClick={() => {
+              if (interactiveMode) {
+                if (k === 'C') setPinDigits([]);
+                else if (k === '✓') {
+                  setPinDigits(['1', '2', '3', '4']);
+                  playSfx('success');
+                } else {
+                  setPinDigits(prev => [...prev, k].slice(0, 4));
+                  playSfx('key');
+                }
+              }
+            }}
+            className={`h-11 rounded-xl font-mono text-sm font-black transition-all flex items-center justify-center shadow-2xs ${
+              (stepIndex === 1 && k === '1') || (stepIndex === 2 && ['2', '3', '4'].includes(k))
+                ? 'bg-blue-600 text-white ring-2 ring-blue-300 scale-105'
+                : k === '✓'
+                ? 'bg-emerald-600 text-white'
+                : k === 'C'
+                ? 'bg-rose-100 text-rose-700'
+                : 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-200'
+            }`}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderMobileModule3 = () => (
+    <div className="flex-1 flex flex-col bg-slate-50 overflow-y-auto">
+      <div className="bg-[#2563eb] text-white p-4 relative shadow-xs border-b border-blue-600/30">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-base font-black text-white">{isKhmer ? 'សួស្តី!' : 'Hello!'}</p>
+            <h4 className="text-xs font-bold text-blue-100">Dr. Sovann Vichea</h4>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] text-blue-200 font-medium">{isKhmer ? 'គ្រូបង្រៀន' : 'Faculty'}</span>
+              <span className="text-blue-300 text-[9px]">•</span>
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/20 text-white text-[9px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{isKhmer ? 'ក្នុងបរិវេណ (18m)' : 'In Campus (18m)'}</span>
+              </div>
+            </div>
+          </div>
+          <div className="w-9 h-9 rounded-full bg-white text-[#2563eb] shadow-md flex items-center justify-center relative shrink-0">
+            <Bell className="w-4 h-4 text-[#2563eb]" />
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center">
+              2
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-black text-slate-900">{isKhmer ? 'មុខងារចម្បង' : 'Features'}</span>
+          <span className="text-[10px] text-[#2563eb] font-bold">{isKhmer ? 'មើលទាំងអស់' : 'View All'}</span>
+        </div>
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {[
+            { labelKm: 'ស្កេន QR', labelEn: 'Scan QR', icon: QrCode, bg: 'bg-indigo-500 text-white' },
+            { labelKm: 'កាលវិភាគ', labelEn: 'Schedule', icon: CalendarDays, bg: 'bg-blue-600 text-white' },
+            { labelKm: 'វត្តមាន', labelEn: 'Attendance', icon: UserCheck, bg: 'bg-emerald-600 text-white' },
+            { labelKm: 'ប្រតិទិន', labelEn: 'Calendar', icon: Calendar, bg: 'bg-amber-500 text-white' },
+            { labelKm: 'ច្បាប់ឈប់', labelEn: 'Leave', icon: Palmtree, bg: 'bg-purple-600 text-white' },
+            { labelKm: 'របាយការណ៍', labelEn: 'Reports', icon: DollarSign, bg: 'bg-teal-600 text-white' },
+            { labelKm: 'វីដេអូ', labelEn: 'Video', icon: Film, bg: 'bg-cyan-500 text-white' },
+            { labelKm: 'ព័ត៌មាន', labelEn: 'Profile', icon: Shield, bg: 'bg-slate-700 text-white' }
+          ].map((item, idx) => {
+            const IconComp = item.icon;
+            return (
+              <div key={idx} className="flex flex-col items-center gap-1 p-1">
+                <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shadow-xs`}>
+                  <IconComp className="w-5 h-5" />
+                </div>
+                <span className="text-[9px] font-bold text-slate-700 truncate max-w-[56px]">
+                  {isKhmer ? item.labelKm : item.labelEn}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="px-3 pb-3 flex-1 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black text-slate-900">{isKhmer ? 'កាលវិភាគ & វត្តមានថ្ងៃនេះ' : "Today's Schedule"}</span>
+          <span className="text-[10px] text-blue-600 font-bold">{isKhmer ? 'ប្រចាំខែ →' : 'Monthly →'}</span>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#2563eb] flex items-center justify-center font-black text-xs shrink-0">
+                CS
+              </div>
+              <div className="min-w-0">
+                <h5 className="text-xs font-black text-slate-900 truncate">CS-201 Data Structures</h5>
+                <p className="text-[10px] text-slate-500">08:00 - 09:30 AM • Room 304</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-1">
+            {scheduleCheckedOut ? (
+              <div className="p-2 rounded-xl bg-blue-50 border border-blue-200 text-center flex items-center justify-between text-xs font-bold text-blue-900">
+                <span>✓ {isKhmer ? 'បានស្កេនចេញរួចរាល់' : 'Checked Out (Done)'}</span>
+                <span className="text-[10px] font-mono bg-blue-600 text-white px-2 py-0.5 rounded">1.5h Logged</span>
+              </div>
+            ) : scheduleCheckedIn ? (
+              <button
+                onClick={() => {
+                  if (interactiveMode) {
+                    setScheduleCheckedOut(true);
+                    playSfx('success');
+                  }
+                }}
+                className={`w-full py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-md ${
+                  stepIndex === 5 ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300 scale-102' : 'bg-amber-500 text-slate-950'
+                }`}
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'ស្កេនចេញ (Check Out) • 09:30 AM' : 'Check Out (09:30 AM)'}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  if (interactiveMode) {
+                    setScheduleCheckedIn(true);
+                    playSfx('success');
+                  }
+                }}
+                className={`w-full py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-md ${
+                  stepIndex === 3 ? 'bg-[#2563eb] text-white ring-2 ring-blue-300 scale-102' : 'bg-[#2563eb] text-white'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'ស្កេនចូល (Check In) • 08:00 AM' : 'Check In (08:00 AM)'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-auto bg-white border-t border-slate-200 px-3 py-1.5 grid grid-cols-5 text-center shrink-0">
+        <div className="flex flex-col items-center text-[#2563eb]">
+          <LayoutDashboard className="w-4 h-4" />
+          <span className="text-[8px] font-bold mt-0.5">{isKhmer ? 'ទំព័រដើម' : 'Home'}</span>
+        </div>
+        <div className="flex flex-col items-center text-slate-400">
+          <CalendarDays className="w-4 h-4" />
+          <span className="text-[8px] font-bold mt-0.5">{isKhmer ? 'កាលវិភាគ' : 'Schedule'}</span>
+        </div>
+        <div className="flex flex-col items-center -mt-3">
+          <div className="w-9 h-9 rounded-full bg-[#2563eb] text-white flex items-center justify-center shadow-md">
+            <QrCode className="w-4 h-4" />
+          </div>
+          <span className="text-[8px] font-bold mt-0.5 text-[#2563eb]">{isKhmer ? 'ស្កេន' : 'Scan'}</span>
+        </div>
+        <div className="flex flex-col items-center text-slate-400">
+          <Calendar className="w-4 h-4" />
+          <span className="text-[8px] font-bold mt-0.5">{isKhmer ? 'ប្រចាំខែ' : 'Calendar'}</span>
+        </div>
+        <div className="flex flex-col items-center text-slate-400">
+          <Shield className="w-4 h-4" />
+          <span className="text-[8px] font-bold mt-0.5">{isKhmer ? 'ម៉ឺនុយ' : 'Menu'}</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMobileModule4 = () => (
+    <div className="flex-1 flex flex-col justify-between p-3.5 bg-slate-50">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-900">{isKhmer ? 'ស្កេនវត្តមាន' : 'Attendance Kiosk'}</span>
+          </div>
+          <span className="text-[10px] font-mono font-bold text-[#2563eb] bg-blue-50 px-2 py-0.5 rounded">
+            {kioskCheckedOut ? '09:30 AM' : checkInDone ? '08:45 AM' : '07:58 AM'}
+          </span>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-slate-950 text-white flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <Radio className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-emerald-400">● {isKhmer ? 'ក្នុងបរិវេណសាលា' : 'Inside Campus'}</p>
+              <p className="text-[9px] text-slate-400 font-mono">18m from classroom (&lt; 500m)</p>
+            </div>
+          </div>
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+            Verified
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {!checkInDone ? (
+            <button
+              onClick={() => {
+                setCheckInDone(true);
+                playSfx('success');
+              }}
+              className={`w-full py-3 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-md ${
+                stepIndex === 2 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white ring-2 ring-emerald-300 scale-102' : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white'
+              }`}
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>CHECK IN (ចូលបង្រៀន) • 07:58 AM</span>
+            </button>
+          ) : !kioskCheckedOut ? (
+            <div className="space-y-2">
+              <div className="p-2.5 rounded-xl bg-cyan-50 border border-cyan-200 flex items-center justify-between text-xs">
+                <span className="font-bold text-cyan-900">{isKhmer ? 'កំពុងបង្រៀន' : 'Session Active'}</span>
+                <span className="font-mono text-cyan-800 font-black">01:31:12</span>
+              </div>
+              <button
+                onClick={() => {
+                  setKioskCheckedOut(true);
+                  playSfx('success');
+                }}
+                className={`w-full py-3 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 shadow-md ${
+                  stepIndex === 4 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 ring-2 ring-amber-300 scale-102' : 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950'
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>CHECK OUT (បញ្ចប់ម៉ោង) • 09:30 AM</span>
+              </button>
+            </div>
+          ) : (
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-900 font-bold space-y-1">
+              <p className="flex items-center gap-1 text-emerald-800">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isKhmer ? 'ម៉ោងបង្រៀនបានផ្ទៀងផ្ទាត់' : 'Session Completed & Verified'}</span>
+              </p>
+              <p className="text-[10px] text-emerald-700 font-mono">In: 07:58 AM • Out: 09:30 AM • 1.5 Hours</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {checkInDone && (
+        <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-[11px] text-blue-900 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Send className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="truncate">{isKhmer ? 'សារ Telegram បានផ្ញើជូនដំណឹង' : 'Telegram broadcast sent'}</span>
+          </div>
+          <span className="text-[9px] font-bold bg-white text-blue-700 px-1.5 py-0.5 rounded shadow-2xs">Sent</span>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMobileModule5 = () => (
+    <div className="flex-1 flex flex-col justify-between p-3.5 bg-slate-50 overflow-y-auto">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <button className="flex-1 py-2 px-2.5 rounded-xl bg-blue-50 text-[#2563eb] border border-blue-200 text-xs font-bold flex items-center justify-center gap-1.5">
+            <QrCode className="w-3.5 h-3.5" />
+            <span>{isKhmer ? 'ស្កេន QR' : 'Scan QR'}</span>
+          </button>
+          <button className="flex-1 py-2 px-2.5 rounded-xl bg-[#2563eb] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs">
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span>{isKhmer ? 'កូដ QR របស់ខ្ញុំ' : 'My QR Card'}</span>
+          </button>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white text-center space-y-2.5 shadow-md">
+          <div className="w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-400 mx-auto flex items-center justify-center font-black text-sm text-blue-200">
+            SV
+          </div>
+          <div>
+            <h4 className="text-xs font-black text-white">Dr. Sovann Vichea</h4>
+            <p className="text-[10px] text-blue-200">Computer Science • TCH-001</p>
+          </div>
+          <div className="w-28 h-28 bg-white rounded-xl mx-auto p-1.5 flex items-center justify-center shadow-inner">
+            <QrCode className="w-24 h-24 text-slate-900" />
+          </div>
+          <p className="text-[9px] text-slate-300">{isKhmer ? 'កូដ QR វៃឆ្លាតសម្រាប់គ្រប់ម៉ោងបង្រៀន' : 'Master QR for all weekly sessions'}</p>
+        </div>
+      </div>
+
+      <button className="w-full py-2.5 rounded-xl bg-[#2563eb] hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer">
+        <Download className="w-3.5 h-3.5" />
+        <span>{isKhmer ? 'ទាញយករូបភាព QR ទុកក្នុងទូរស័ព្ទ' : 'Save QR to Photos'}</span>
+      </button>
+    </div>
+  );
+
+  const renderMobileModule6 = () => (
+    <div className="flex-1 flex flex-col justify-between p-3.5 bg-slate-50 overflow-y-auto">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <span className="text-xs font-bold text-slate-900">{isKhmer ? 'ពាក្យសុំច្បាប់សម្រាក' : 'Leave Request'}</span>
+          <span className="text-[9px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
+            Quota: 12d Left
+          </span>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 block mb-1">{isKhmer ? 'ទម្រង់សុំច្បាប់' : 'Duration Mode'}</label>
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-200/80 rounded-xl">
+            <span className="py-1 text-[10px] font-bold text-center bg-white text-purple-900 rounded-lg shadow-2xs">
+              ⏱️ {isKhmer ? 'ជាម៉ោង' : 'Hourly'}
+            </span>
+            <span className="py-1 text-[10px] font-medium text-center text-slate-500">
+              📅 {isKhmer ? 'ជាថ្ងៃ' : 'Full Day'}
+            </span>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isKhmer ? 'ប្រភេទច្បាប់' : 'Category'}</label>
+          <div className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-800">
+            {isKhmer ? 'ច្បាប់ផ្ទាល់ខ្លួន (Personal)' : 'Personal Leave'}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isKhmer ? 'កាលបរិច្ឆេទ' : 'Date'}</label>
+            <div className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 text-[11px] font-semibold text-slate-800">
+              16 Jan 2026
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 block mb-0.5">{isKhmer ? 'ម៉ោង' : 'Hours'}</label>
+            <div className="bg-purple-50 border border-purple-200 text-purple-900 rounded-xl px-2 py-1.5 text-[11px] font-bold">
+              2.0 hrs (08:00 - 10:00)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => {
+          if (interactiveMode) {
+            setLeaveSubmitted(true);
+            playSfx('success');
+          }
+        }}
+        className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-md ${
+          leaveSubmitted
+            ? 'bg-amber-500 text-slate-950 font-black'
+            : 'bg-[#2563eb] text-white'
+        }`}
+      >
+        <span>{leaveSubmitted ? '✓ បានបញ្ជូន • រង់ចាំពិនិត្យ (Pending)' : 'ដាក់ពាក្យសុំច្បាប់ (Submit Request)'}</span>
+      </button>
+    </div>
+  );
+
+  const renderMobileModule7 = () => (
+    <div className="flex-1 flex flex-col justify-between p-3.5 bg-slate-50 overflow-y-auto">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <span className="text-xs font-bold text-slate-900">{isKhmer ? 'របាយការណ៍ប្រាក់ឈ្នួល' : 'Wage Summary'}</span>
+          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+            January 2026
+          </span>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white space-y-3 shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-blue-100 font-medium">{isKhmer ? 'ម៉ោងបង្រៀនបានផ្ទៀងផ្ទាត់' : 'Verified Teaching Hours'}</span>
+            <span className="text-sm font-black text-white">36.5 hrs</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-blue-100 font-medium">{isKhmer ? 'អត្រាឈ្នួលក្នុងមួយម៉ោង' : 'Hourly Rate'}</span>
+            <span className="text-xs font-mono font-bold">$25.00 / hr</span>
+          </div>
+          <div className="pt-2 border-t border-white/20 flex items-center justify-between">
+            <span className="text-xs font-black text-white">{isKhmer ? 'ប្រាក់ឈ្នួលសរុប (Gross Wage)' : 'Gross Salary'}</span>
+            <span className="text-lg font-black text-amber-300 font-mono">$912.50</span>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-1">
+          <span className="text-xs font-bold text-emerald-900 block">
+            🎉 {isKhmer ? 'វគ្គណែនាំបានបញ្ចប់ជោគជ័យ!' : 'Training Completed!'}
+          </span>
+          <span className="text-[10px] text-emerald-700">
+            {isKhmer ? 'លោកគ្រូ-អ្នកគ្រូអាចចាប់ផ្តើមប្រើប្រាស់កម្មវិធីលើទូរស័ព្ទបានហើយ' : 'Faculty certified for mobile app operation'}
+          </span>
+        </div>
+      </div>
+
+      <button className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md">
+        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+        <span>{isKhmer ? 'ទាញយករបាយការណ៍ (Excel/PDF)' : 'Export Monthly Report'}</span>
+      </button>
+    </div>
+  );
+
   return (
     <div className="w-full h-full flex flex-col bg-slate-900 text-slate-100 font-sans select-none relative overflow-hidden">
       
@@ -726,63 +1308,46 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           </div>
         </div>
 
-        {/* Right: Live Clock, Language Toggle, Notification Bell, Faculty Profile */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        {/* Right: Device Mode Switcher (Mobile/Desktop), Fullscreen, Close */}
+        <div className="flex items-center gap-2 sm:gap-3">
           
-          {/* Live Clock */}
-          <div className="hidden md:flex items-center gap-1.5 text-xs text-blue-200 font-mono bg-white/5 px-2.5 py-1 rounded-xl border border-white/10">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>08:45 AM</span>
-          </div>
-
-          {/* Language Toggle Badge */}
-          <div className="hidden sm:flex items-center gap-1 bg-white/10 px-2.5 py-1 rounded-xl text-xs font-bold border border-white/15 text-slate-200">
-            <Languages className="w-3.5 h-3.5 text-cyan-300" />
-            <span>🇰🇭 ភាសាខ្មែរ</span>
-          </div>
-
-          {/* Notifications Bell */}
-          <div className="relative p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white cursor-pointer">
-            <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-xs">
-              2
-            </span>
-          </div>
-
-          {/* Faculty Profile Pill */}
-          <div className="flex items-center gap-2 bg-gradient-to-r from-blue-900/60 to-indigo-900/60 border border-blue-400/30 px-3 py-1.5 rounded-2xl shadow-xs">
-            <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black">
-              SV
-            </div>
-            <div className="hidden sm:block text-left">
-              <span className="text-xs font-bold text-white block leading-tight">Dr. Sovann Vichea</span>
-              <span className="text-[10px] text-cyan-300 font-mono leading-none">TCH-001 • Computer Science</span>
-            </div>
-          </div>
-
-          {/* Header Action: Install App (Module 1 highlight) */}
-          {currentModule === 1 && (
-            <div
-              className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-md ${
-                pwaInstalled
-                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
-                  : 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white animate-pulse'
+          {/* Device View Mode Toggle */}
+          <div className="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-0.5 shadow-inner">
+            <button
+              onClick={() => setDeviceView('mobile')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                deviceView === 'mobile'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
+              title="Switch to Mobile App View"
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>{pwaInstalled ? '✓ Installed' : 'Install App'}</span>
-            </div>
-          )}
+              <span>{isKhmer ? 'ទូរស័ព្ទ' : 'Mobile'}</span>
+            </button>
+            <button
+              onClick={() => setDeviceView('desktop')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                deviceView === 'desktop'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Switch to Desktop MIS View"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isKhmer ? 'កុំព្យូទ័រ' : 'Desktop'}</span>
+            </button>
+          </div>
 
           {/* Switch to Pre-recorded 1080p MP4 */}
           {onSwitchToVideoPlayer && (
             <button
               onClick={onSwitchToVideoPlayer}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition-colors border border-white/10 cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition-colors border border-white/10 cursor-pointer"
               title="Watch Recorded 1080p MP4 Video"
             >
               <Film className="w-3.5 h-3.5 text-cyan-300" />
-              <span>MP4 Video</span>
+              <span className="hidden sm:inline">MP4 Video</span>
             </button>
           )}
 
@@ -790,7 +1355,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           {onDownloadRequested && (
             <button
               onClick={onDownloadRequested}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
               title="Download 1080p MP4 Video Manual"
             >
               <Download className="w-3.5 h-3.5" />
@@ -799,7 +1364,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           )}
 
           {/* Fullscreen & Close button */}
-          <div className="flex items-center gap-1.5 border-l border-white/15 pl-3">
+          <div className="flex items-center gap-1.5 border-l border-white/15 pl-2 sm:pl-3">
             {onToggleFullscreen && (
               <button
                 onClick={onToggleFullscreen}
@@ -830,45 +1395,94 @@ export const RealInterfaceActionWalkthrough: React.FC<{
       {/* ======================================================== */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
         
-        {/* Real Left Navigation Sidebar */}
-        <aside className="w-16 sm:w-60 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-2 sm:p-3 shrink-0">
-          <nav className="space-y-1">
-            {[
-              { id: 'dashboard', icon: LayoutDashboard, labelEn: 'Dashboard', labelKm: 'ផ្ទាំងដើម', mod: 1 },
-              { id: 'schedules', icon: CalendarDays, labelEn: 'Daily Schedule', labelKm: 'កាលវិភាគ', mod: 3 },
-              { id: 'monthly_calendar', icon: Calendar, labelEn: 'Monthly Calendar', labelKm: 'ប្រចាំខែ', mod: 3 },
-              { id: 'kiosk', icon: MapPin, labelEn: 'Attendance Kiosk', labelKm: 'ស្កេនវត្តមាន', mod: 4 },
-              { id: 'qr', icon: QrCode, labelEn: 'Personal QR Badge', labelKm: 'កូដ QR គ្រូ', mod: 5 },
-              { id: 'leave', icon: Palmtree, labelEn: 'Leave Requests', labelKm: 'ច្បាប់សម្រាក', mod: 6 },
-              { id: 'reports', icon: DollarSign, labelEn: 'Wage Reports', labelKm: 'ប្រាក់ឈ្នួល', mod: 7 }
-            ].map(tab => {
-              const IconComp = tab.icon;
-              const isActive = activeModuleObj.sidebarTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleSelectModule(tab.mod)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
-                  }`}
-                >
-                  <IconComp className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline-block">{isKhmer ? tab.labelKm : tab.labelEn}</span>
-                </button>
-              );
-            })}
-          </nav>
+        {/* Real Left Navigation Sidebar - Only on desktop view & md+ screens */}
+        {deviceView === 'desktop' && (
+          <aside className="hidden md:flex md:w-56 lg:w-60 bg-slate-900 border-r border-slate-800 flex-col justify-between p-2 sm:p-3 shrink-0">
+            <nav className="space-y-1">
+              {[
+                { id: 'dashboard', icon: LayoutDashboard, labelEn: 'Dashboard', labelKm: 'ផ្ទាំងដើម', mod: 1 },
+                { id: 'schedules', icon: CalendarDays, labelEn: 'Daily Schedule', labelKm: 'កាលវិភាគ', mod: 3 },
+                { id: 'monthly_calendar', icon: Calendar, labelEn: 'Monthly Calendar', labelKm: 'ប្រចាំខែ', mod: 3 },
+                { id: 'kiosk', icon: MapPin, labelEn: 'Attendance Kiosk', labelKm: 'ស្កេនវត្តមាន', mod: 4 },
+                { id: 'qr', icon: QrCode, labelEn: 'Personal QR Badge', labelKm: 'កូដ QR គ្រូ', mod: 5 },
+                { id: 'leave', icon: Palmtree, labelEn: 'Leave Requests', labelKm: 'ច្បាប់សម្រាក', mod: 6 },
+                { id: 'reports', icon: DollarSign, labelEn: 'Wage Reports', labelKm: 'ប្រាក់ឈ្នួល', mod: 7 }
+              ].map(tab => {
+                const IconComp = tab.icon;
+                const isActive = activeModuleObj.sidebarTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleSelectModule(tab.mod)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <IconComp className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline-block">{isKhmer ? tab.labelKm : tab.labelEn}</span>
+                  </button>
+                );
+              })}
+            </nav>
 
-          <div className="hidden sm:block p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <span className="text-cyan-400 font-bold block">100% Real Live MIS</span>
-            <span>Faculty verified environment with active real-time data sync.</span>
-          </div>
-        </aside>
+            <div className="hidden sm:block p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+              <span className="text-cyan-400 font-bold block">100% Real Live MIS</span>
+              <span>Faculty verified environment with active real-time data sync.</span>
+            </div>
+          </aside>
+        )}
 
         {/* Real Main Viewport Rendering Authentic Views */}
-        <main className="flex-1 bg-slate-950/60 overflow-y-auto p-3 sm:p-6 flex flex-col justify-center items-center relative">
+        <main className="flex-1 bg-slate-950/80 overflow-y-auto p-2 sm:p-5 flex flex-col justify-center items-center relative min-h-0">
+          
+          {deviceView === 'mobile' ? (
+            /* ======================================================== */
+            /* 100% AUTHENTIC MOBILE SMARTPHONE FRAME                   */
+            /* ======================================================== */
+            <div className="w-full max-w-[360px] sm:max-w-[390px] h-full max-h-[calc(100dvh-135px)] sm:max-h-[660px] bg-slate-950 rounded-[32px] sm:rounded-[42px] p-2 sm:p-3 border-4 border-slate-800 shadow-2xl relative overflow-hidden flex flex-col my-auto select-none animate-in zoom-in-95 duration-200">
+              
+              {/* Dynamic Island Speaker / Camera Notch */}
+              <div className="absolute top-2 inset-x-0 flex justify-center z-30 pointer-events-none">
+                <div className="w-24 h-4 bg-black rounded-full flex items-center justify-between px-2">
+                  <div className="w-2 h-2 rounded-full bg-slate-800" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-950 border border-blue-800/40" />
+                </div>
+              </div>
+
+              {/* Phone Status Bar */}
+              <div className="pt-2 px-3 pb-1 flex items-center justify-between text-[11px] font-bold text-white z-20 shrink-0 select-none">
+                <span className="font-mono">08:00</span>
+                <div className="flex items-center gap-1.5 text-slate-300">
+                  <span className="text-[10px]">5G</span>
+                  <div className="w-4 h-2 border border-slate-400 rounded-xs p-0.5 flex items-center">
+                    <div className="w-full h-full bg-emerald-400 rounded-2xs" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Phone Screen Viewport */}
+              <div className="flex-1 min-h-0 bg-white rounded-[24px] sm:rounded-[28px] overflow-y-auto overflow-x-hidden flex flex-col relative text-slate-900">
+                {currentModule === 1 && renderMobileModule1()}
+                {currentModule === 2 && renderMobileModule2()}
+                {currentModule === 3 && renderMobileModule3()}
+                {currentModule === 4 && renderMobileModule4()}
+                {currentModule === 5 && renderMobileModule5()}
+                {currentModule === 6 && renderMobileModule6()}
+                {currentModule === 7 && renderMobileModule7()}
+
+                {/* Touch pointer overlay inside phone screen */}
+                {!interactiveMode && renderMobileTouchPointer()}
+              </div>
+
+              {/* Phone Home Bar */}
+              <div className="pt-2 pb-0.5 flex justify-center z-20 shrink-0 pointer-events-none">
+                <div className="w-24 h-1 bg-slate-600 rounded-full" />
+              </div>
+            </div>
+          ) : (
+            <>
           
           {/* ======================================================== */}
           {/* MODULE 1: Real Web Browser URL Entry & PWA Installation */}
@@ -1776,6 +2390,8 @@ export const RealInterfaceActionWalkthrough: React.FC<{
               </span>
             </div>
           )}
+          </>
+          )}
 
         </main>
 
@@ -1784,43 +2400,43 @@ export const RealInterfaceActionWalkthrough: React.FC<{
       {/* ======================================================== */}
       {/* 3. FLOATING CINEMATIC VIDEO PLAYER CONTROLS & CAPTIONS */}
       {/* ======================================================== */}
-      <div className="bg-slate-950/95 border-t border-slate-800/80 px-4 sm:px-6 py-3 flex flex-col gap-2.5 shrink-0 z-40">
+      <div className="bg-slate-950/95 border-t border-slate-800/80 px-3 sm:px-6 py-2 sm:py-3 pb-3 sm:pb-3 flex flex-col gap-2 shrink-0 z-40 select-none">
         
         {/* Dual Language Subtitle Caption Bar */}
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
-            <div className="text-white font-bold">
-              <span>{isKhmer ? activeStep.titleKm : activeStep.titleEn}</span>
-              <span className="text-slate-400 font-normal ml-2 hidden sm:inline">
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+            <div className="text-white font-bold truncate">
+              <span className="text-[11px] sm:text-xs">{isKhmer ? activeStep.titleKm : activeStep.titleEn}</span>
+              <span className="text-slate-400 font-normal ml-2 hidden lg:inline">
                 {isKhmer ? activeStep.subtitleKm : activeStep.subtitleEn}
               </span>
             </div>
           </div>
 
-          <div className="text-[11px] font-mono text-cyan-400 bg-cyan-950/70 px-2.5 py-0.5 rounded-lg border border-cyan-800/50 shrink-0">
+          <div className="text-[10px] sm:text-[11px] font-mono text-cyan-400 bg-cyan-950/70 px-2 py-0.5 rounded-lg border border-cyan-800/50 shrink-0">
             Step {stepIndex + 1}/{activeModuleObj.steps.length}
           </div>
         </div>
 
         {/* Video Scrubber & Playback Controls Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-800/60">
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60 overflow-hidden">
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={() => {
                 setIsPlaying(!isPlaying);
                 if (interactiveMode) setInteractiveMode(false);
               }}
-              className="w-9 h-9 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 active:scale-95 transition-all cursor-pointer"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/25 active:scale-95 transition-all cursor-pointer"
               title={isPlaying ? 'Pause' : 'Play'}
             >
-              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+              {isPlaying ? <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-0.5" />}
             </button>
 
             <button
               onClick={handleRestart}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
               title="Restart from Module 1"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -1831,7 +2447,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                 if (currentModule > 1) handleSelectModule(currentModule - 1);
               }}
               disabled={currentModule <= 1}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 cursor-pointer"
               title="Previous Module"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -1842,15 +2458,15 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                 if (currentModule < modulesList.length) handleSelectModule(currentModule + 1);
               }}
               disabled={currentModule >= modulesList.length}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 cursor-pointer"
               title="Next Module"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Module 1 to 7 Jump Buttons */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+          {/* Module 1 to 7 Jump Buttons - Scrollable on mobile */}
+          <div className="flex items-center gap-1 overflow-x-auto py-0.5 max-w-[50vw] sm:max-w-none">
             {modulesList.map(mod => {
               const IconComp = mod.icon;
               const isActive = mod.id === currentModule;
@@ -1858,7 +2474,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                 <button
                   key={mod.id}
                   onClick={() => handleSelectModule(mod.id)}
-                  className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-1 rounded-xl text-[10px] sm:text-xs font-bold flex items-center gap-1 transition-all whitespace-nowrap cursor-pointer shrink-0 ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400'
                       : 'bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200'
@@ -1872,28 +2488,28 @@ export const RealInterfaceActionWalkthrough: React.FC<{
           </div>
 
           {/* Right Action Controls: Interactive, Sound, Speed */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={() => {
                 setInteractiveMode(!interactiveMode);
                 if (!interactiveMode) setIsPlaying(false);
               }}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2 py-1 rounded-xl text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
                 interactiveMode
                   ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-400'
                   : 'bg-slate-800 text-slate-300'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{interactiveMode ? 'Try-It Mode Active' : 'Try-It Yourself'}</span>
+              <Sparkles className="w-3 h-3 text-amber-300" />
+              <span className="hidden sm:inline">{interactiveMode ? 'Try-It Active' : 'Try-It'}</span>
             </button>
 
             <button
               onClick={() => setIsMuted(!isMuted)}
-              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+              className="p-1 sm:p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
               title={isMuted ? 'Unmute' : 'Mute'}
             >
-              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+              {isMuted ? <VolumeX className="w-3 h-3 text-rose-400" /> : <Volume2 className="w-3 h-3 text-emerald-400" />}
             </button>
 
             <button
@@ -1901,7 +2517,7 @@ export const RealInterfaceActionWalkthrough: React.FC<{
                 const speeds = [0.75, 1, 1.25, 1.5];
                 setPlaybackSpeed(speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length]);
               }}
-              className="px-2 py-1 rounded-xl bg-slate-800 text-slate-300 font-mono text-[11px] cursor-pointer"
+              className="px-1.5 sm:px-2 py-1 rounded-xl bg-slate-800 text-slate-300 font-mono text-[10px] sm:text-[11px] cursor-pointer"
             >
               {playbackSpeed}x
             </button>

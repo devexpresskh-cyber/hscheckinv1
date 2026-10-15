@@ -200,6 +200,7 @@ export const TeacherWeeklyTimelineCalendar: React.FC<TeacherWeeklyTimelineCalend
       // Search query
       if (query) {
         const match =
+          sub.subjectCode?.toLowerCase().includes(query) ||
           sub.subject?.toLowerCase().includes(query) ||
           sub.khmerSubject?.toLowerCase().includes(query) ||
           sub.gradeClass?.toLowerCase().includes(query) ||
@@ -572,11 +573,11 @@ export const TeacherWeeklyTimelineCalendar: React.FC<TeacherWeeklyTimelineCalend
                       />
 
                       <div className="pl-2">
-                        {/* Title Row + Options Menu Button */}
+                        {/* Title Row: Subject Code (Primary) + Grade Class Badge */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <h4 className="text-xs sm:text-[13px] font-bold text-slate-900 leading-tight truncate">
-                              {cls.subject}
+                            <h4 className="text-xs sm:text-[13px] font-black font-mono text-slate-900 leading-tight truncate tracking-tight" title={cls.subject}>
+                              {cls.subjectCode || cls.subject}
                             </h4>
                             {cls.gradeClass && (
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-200/80 shrink-0">
@@ -599,14 +600,9 @@ export const TeacherWeeklyTimelineCalendar: React.FC<TeacherWeeklyTimelineCalend
                           </div>
                         </div>
 
-                        {/* Khmer Subject Name (if exists) */}
-                        {cls.khmerSubject && (
-                          <p className="text-[10px] text-slate-500 font-khmer mt-0.5 truncate">
-                            {cls.khmerSubject}
-                          </p>
-                        )}
 
-                        {/* Subtitle Details: Time Range • Room • Subject Code */}
+
+                        {/* Subtitle Details: Time Range • Room • Teacher */}
                         <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] text-slate-500">
                           <span className="font-mono font-medium text-slate-600 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-indigo-500" />
@@ -617,12 +613,6 @@ export const TeacherWeeklyTimelineCalendar: React.FC<TeacherWeeklyTimelineCalend
                             <span className="flex items-center gap-0.5 font-medium text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60">
                               <MapPin className="w-2.5 h-2.5 text-slate-400" />
                               <span>{cls.room}</span>
-                            </span>
-                          )}
-
-                          {cls.subjectCode && (
-                            <span className="font-mono text-[9px] uppercase px-1 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-100">
-                              {cls.subjectCode}
                             </span>
                           )}
 
@@ -720,7 +710,7 @@ export const TeacherWeeklyTimelineCalendar: React.FC<TeacherWeeklyTimelineCalend
             {/* Modal Header */}
             <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-300">
+                <span className="text-[11px] font-mono font-black uppercase tracking-wider text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-700/50 inline-block mb-1">
                   {activeMenuClass.subjectCode || 'CLASS SESSION'}
                 </span>
                 <h3 className="text-sm font-black text-white leading-tight">

@@ -907,17 +907,14 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                         canEdit ? 'cursor-pointer hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100' : ''
                                       }`}
                                       style={{ borderLeftColor: cardBg, borderLeftWidth: '3.5px' }}
+                                      title={`${cls.startTime}-${cls.endTime}: ${cls.subjectCode ? `[${cls.subjectCode}] ` : ''}${cls.subject}${cls.khmerSubject ? ` (${cls.khmerSubject})` : ''} • ${cls.teacherName} • Room ${cls.room}`}
                                     >
-                                      {/* Top Row: Code & Grade Badge */}
+                                      {/* Top Row: Grade Badge, Rate & Admin Actions */}
                                       <div className="flex items-center justify-between gap-1 mb-1">
-                                        <span className="font-mono text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100/80 print:bg-slate-100 print:text-black print:border-slate-300 whitespace-nowrap">
-                                          {cls.subjectCode || 'SUB'}
-                                        </span>
-
                                         <div className="flex items-center gap-1 min-w-0">
-                                          <span className="inline-flex items-center gap-0.5 font-bold text-[9px] text-indigo-900 bg-indigo-50/70 border border-indigo-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                          <span className="inline-flex items-center gap-0.5 font-bold text-[9px] text-indigo-900 bg-indigo-50/80 border border-indigo-100 px-1.5 py-0.5 rounded whitespace-nowrap">
                                             <GraduationCap className="w-2.5 h-2.5 text-indigo-600 shrink-0" />
-                                            <span className="truncate max-w-[70px] sm:max-w-[80px]">{cls.gradeClass}</span>
+                                            <span className="truncate max-w-[85px] sm:max-w-[105px]">{cls.gradeClass}</span>
                                           </span>
 
                                           {!isTeacherAccount && cls.hourlyRate && (
@@ -925,48 +922,43 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                               ${cls.hourlyRate.toFixed(0)}/h
                                             </span>
                                           )}
+                                        </div>
 
-                                          {/* Quick Actions for Admins */}
-                                          <div className="flex items-center gap-0.5 print:hidden">
-                                            {canEdit && onEditSchedule && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  onEditSchedule(cls);
-                                                }}
-                                                className="p-0.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
-                                                title={isKhmer ? 'កែសម្រួលវេន / មុខវិជ្ជា' : 'Edit Period / Schedule'}
-                                              >
-                                                <Edit2 className="w-2.5 h-2.5" />
-                                              </button>
-                                            )}
-                                            {canDelete && onDeleteSchedule && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  onDeleteSchedule(cls.id, cls.subject);
-                                                }}
-                                                className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                                                title={isKhmer ? 'លុប' : 'Delete'}
-                                              >
-                                                <Trash2 className="w-2.5 h-2.5" />
-                                              </button>
-                                            )}
-                                          </div>
+                                        {/* Quick Actions for Admins */}
+                                        <div className="flex items-center gap-0.5 print:hidden">
+                                          {canEdit && onEditSchedule && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onEditSchedule(cls);
+                                              }}
+                                              className="p-0.5 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-colors"
+                                              title={isKhmer ? 'កែសម្រួលវេន / មុខវិជ្ជា' : 'Edit Period / Schedule'}
+                                            >
+                                              <Edit2 className="w-2.5 h-2.5" />
+                                            </button>
+                                          )}
+                                          {canDelete && onDeleteSchedule && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteSchedule(cls.id, cls.subject);
+                                              }}
+                                              className="p-0.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                              title={isKhmer ? 'លុប' : 'Delete'}
+                                            >
+                                              <Trash2 className="w-2.5 h-2.5" />
+                                            </button>
+                                          )}
                                         </div>
                                       </div>
 
-                                      {/* Subject Name - Smaller font to avoid excessive wrapping */}
-                                      <h4 className="text-[11px] sm:text-[11.5px] font-bold text-slate-900 leading-tight line-clamp-2 print:text-[10px] print:line-clamp-none">
-                                        {cls.subject}
+                                      {/* Subject Code (Sole Primary Label on Calendar Card) */}
+                                      <h4 className="text-[12px] sm:text-[12.5px] font-black font-mono text-slate-900 leading-tight truncate tracking-tight print:text-[11px]" title={`${cls.subjectCode ? `[${cls.subjectCode}] ` : ''}${cls.subject}`}>
+                                        {cls.subjectCode || cls.subject}
                                       </h4>
-                                      {cls.khmerSubject && (
-                                        <p className="text-[9.5px] text-slate-500 font-khmer truncate mt-0.5 leading-tight print:text-slate-700 print:text-[9px]">
-                                          {cls.khmerSubject}
-                                        </p>
-                                      )}
 
                                       {/* Time & Room Location - Single row without wrapping */}
                                       <div className="mt-1.5 pt-1.5 border-t border-slate-100 print:border-slate-300 print:mt-1 print:pt-0.5 flex items-center justify-between text-[9px] text-slate-600 gap-1">

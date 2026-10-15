@@ -85,59 +85,59 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
   const chapters: VideoChapter[] = [
     {
       number: '01',
-      titleEn: 'Module 1: Opening Web Browser, Entering Link & App Installation',
-      titleKm: 'ផ្នែកទី ១៖ ការបើកកម្មវិធីរុករក វាយបញ្ចូលតំណភ្ជាប់ (Web Link) & ដំឡើងកម្មវិធី',
+      titleEn: 'Module 1: Opening Mobile Browser, Entering Link & App Installation',
+      titleKm: 'ផ្នែកទី ១៖ ការបើកកម្មវិធីរុករកលើទូរស័ព្ទ វាយតំណភ្ជាប់ & ដំឡើងកម្មវិធីលើអេក្រង់ដើម',
       timeRange: '00:00 - 00:10',
       duration: '10s',
       icon: Smartphone,
       keyPointsEn: [
-        'Open Google Chrome (Android/PC) or Safari (iPhone/iPad)',
-        'Tap the top address bar and enter the school link: https://edutrack.edu.kh',
-        'Press Enter/Go to load the official EduTrack Faculty Portal',
-        'Tap "Install App" or Menu (⋮) → "Add to Home screen" for 1-tap desktop/mobile access'
+        'Open Google Chrome (Android) or Safari (iPhone/iPad)',
+        'Tap address bar and enter school link: https://edutrack.edu.kh',
+        'Press Go to load the mobile-responsive EduTrack Faculty Portal',
+        'Tap "Install App" or browser menu (⋮ / Share) → "Add to Home screen"'
       ],
       keyPointsKm: [
-        'បើកកម្មវិធី Google Chrome (Android/PC) ឬ Safari (iPhone/iPad)',
+        'បើកកម្មវិធី Google Chrome (Android) ឬ Safari (iPhone/iPad)',
         'ចុចលើរបារ URL ខាងលើ រួចវាយបញ្ចូលតំណភ្ជាប់សាលា៖ https://edutrack.edu.kh',
-        'ចុច Go ឬ Enter ដើម្បីបើកទំព័រគ្រប់គ្រងការសិក្សាផ្លូវការ',
-        'ចុចលើ "ដំឡើងកម្មវិធី (Install App)" ឬ Add to Home Screen ដើម្បីប្រើប្រាស់ផ្ទាល់'
+        'ចុច Go ឬ Enter ដើម្បីបើកទំព័រគ្រប់គ្រងការសិក្សាសម្រាប់ទូរស័ព្ទ',
+        'ចុចលើ "ដំឡើងកម្មវិធី (Install App)" ឬ Menu → Add to Home Screen'
       ]
     },
     {
       number: '02',
-      titleEn: 'Module 2: Teacher Account Login & Security PIN',
-      titleKm: 'ផ្នែកទី ២៖ ការចូលគណនីគ្រូបង្រៀន និងលេខសម្ងាត់ PIN ៤ខ្ទង់',
+      titleEn: 'Module 2: Teacher Account Mobile Login & Security PIN',
+      titleKm: 'ផ្នែកទី ២៖ ការចូលគណនីគ្រូលើទូរស័ព្ទ និងលេខសម្ងាត់ PIN ៤ខ្ទង់',
       timeRange: '00:10 - 00:19',
       duration: '9s',
       icon: Lock,
       keyPointsEn: [
-        'Select "Teacher Login" tab on authentication screen',
-        'Choose faculty name from list or enter Teacher ID (e.g., TCH-001)',
-        'Enter confidential 4-digit security PIN on the on-screen keypad',
+        'Select Teacher Profile from mobile roster',
+        'Enter confidential 4-digit security PIN on the mobile numeric keypad',
+        'Instant biometric/PIN authentication opens Mobile App Home',
         'Strict role-based privacy: Teachers only see their assigned data'
       ],
       keyPointsKm: [
-        'ជ្រើសរើសផ្ទាំង "គ្រូបង្រៀន (Teacher)" នៅទំព័រចូលគណនី',
-        'ជ្រើសឈ្មោះគ្រូពីបញ្ជី ឬវាយអត្តលេខគ្រូ (ឧ. TCH-001)',
-        'បញ្ចូលលេខសម្ងាត់ ៤ខ្ទង់ របស់អ្នកលើក្តារចុចលើអេក្រង់',
+        'ជ្រើសឈ្មោះគ្រូបង្រៀនពីបញ្ជីគណនីលើទូរស័ព្ទ',
+        'បញ្ចូលលេខសម្ងាត់ ៤ខ្ទង់ របស់អ្នកលើក្តារចុចលេខប៉ះទូរស័ព្ទ',
+        'ការផ្ទៀងផ្ទាត់រហ័ស នឹងបើកទំព័រដើមកម្មវិធីទូរស័ព្ទភ្លាមៗ',
         'សុវត្ថិភាពខ្ពស់៖ គ្រូអាចចូលមើលបានតែទិន្នន័យផ្ទាល់ខ្លួនប៉ុណ្ណោះ'
       ]
     },
     {
       number: '03',
-      titleEn: 'Module 3: Current Schedule Check-In & Check-Out Timeline',
-      titleKm: 'ផ្នែកទី ៣៖ ការស្កេនចូល-ចេញ លើកាលវិភាគបង្រៀនជាក់ស្តែង',
+      titleEn: 'Module 3: Mobile App Home & Today\'s Schedule Check-In',
+      titleKm: 'ផ្នែកទី ៣៖ ទំព័រដើមលើទូរស័ព្ទ និងការស្កេនចូល-ចេញ លើកាលវិភាគ',
       timeRange: '00:19 - 00:29',
       duration: '10s',
       icon: Calendar,
       keyPointsEn: [
-        'Connected monthly & weekly timeline with interactive class cards',
-        'Tap "Check In Class (ស្កេនចូល)" directly on current schedule to start teaching',
+        'Mobile home screen with greeting, GPS campus chip & 8-feature grid',
+        'Tap "Check In Class (ស្កេនចូល)" directly on current schedule card',
         'Real-time active class status: IN PROGRESS with live session timer',
-        'Tap "Check Out Class (ស្កេនចេញ)" when class ends; auto-calculates verified wage hours'
+        'Tap "Check Out Class (ស្កេនចេញ)" when class ends; logs verified wage hours'
       ],
       keyPointsKm: [
-        'ប្រតិទិនខៀវចាស់ Midnight Navy ជាមួយរបារកាលវិភាគភ្ជាប់គ្នា និងកាតម៉ោងបង្រៀន',
+        'ទំព័រដើមទូរស័ព្ទជាមួយសារស្វាគមន៍ ស្លាក GPS ក្នុងបរិវេណ និងប៊ូតុងមុខងារចម្បង',
         'ចុច "ស្កេនចូល (Check In)" ផ្ទាល់លើកាតម៉ោងបង្រៀន ដើម្បីចាប់ផ្តើមម៉ោងសិក្សា',
         'ស្ថានភាពកំពុងបង្រៀន (IN PROGRESS) ជាមួយនាឡិការាប់ម៉ោងជាក់ស្តែង',
         'ចុច "ស្កេនចេញ (Check Out)" ពេលចប់ម៉ោង គណនាម៉ោងបង្រៀនចូលក្នុងប្រាក់ឈ្នួលស្វ័យប្រវត្តិ'
@@ -247,7 +247,7 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 w-screen h-screen flex flex-col bg-slate-950 text-white font-sans overflow-hidden select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 w-screen h-[100dvh] flex flex-col bg-slate-950 text-white font-sans overflow-hidden select-none animate-in fade-in duration-200">
       
       {/* ======================================================== */}
       {/* 100% FULLSCREEN REAL INTERFACE (ZERO WRAPPER HEADER) */}
@@ -269,15 +269,16 @@ export const TeacherVideoManualModal: React.FC<TeacherVideoManualModalProps> = (
 
       {/* TAB 2: Fullscreen MP4 Video Player with Floating Overlay Controls */}
       {activeTab === 'video_player' && (
-        <div className="flex-1 w-full h-full flex flex-col bg-slate-950 p-3 sm:p-6 relative overflow-y-auto">
+        <div className="flex-1 w-full h-full flex flex-col bg-slate-950 p-2 sm:p-6 relative overflow-y-auto">
           {/* Floating Top Controls Bar (Zero Push, Floating Header) */}
           <div className="w-full max-w-5xl mx-auto flex items-center justify-between pb-3 pt-1">
             <button
               onClick={() => setActiveTab('live_action')}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900/95 hover:bg-blue-600 text-white text-xs font-bold border border-blue-900/40 shadow-lg cursor-pointer transition-all"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-900/95 hover:bg-blue-600 text-white text-xs font-bold border border-blue-900/40 shadow-lg cursor-pointer transition-all"
             >
               <ArrowLeft className="w-4 h-4 text-cyan-400" />
-              <span>{isKhmer ? '← ត្រឡប់ទៅផ្ទាំងពិត (Live Interface)' : '← Return to 100% Real Interface'}</span>
+              <span className="hidden sm:inline">{isKhmer ? '← ត្រឡប់ទៅផ្ទាំងបង្ហាញ (Walkthrough)' : '← Return to Walkthrough'}</span>
+              <span className="sm:hidden">{isKhmer ? '← ត្រឡប់' : '← Back'}</span>
             </button>
 
             <div className="flex items-center gap-2">

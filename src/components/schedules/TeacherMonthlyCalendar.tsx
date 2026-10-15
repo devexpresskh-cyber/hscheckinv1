@@ -365,7 +365,10 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchesSub = s.subject.toLowerCase().includes(q) || (s.khmerSubject && s.khmerSubject.toLowerCase().includes(q));
+        const matchesSub =
+          (s.subjectCode && s.subjectCode.toLowerCase().includes(q)) ||
+          s.subject.toLowerCase().includes(q) ||
+          (s.khmerSubject && s.khmerSubject.toLowerCase().includes(q));
         const matchesTeacher = s.teacherName.toLowerCase().includes(q);
         const matchesRoom = s.room.toLowerCase().includes(q);
         const matchesClass = s.gradeClass.toLowerCase().includes(q);
@@ -819,14 +822,14 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                         <div
                           key={cls.id || cIdx}
                           className={`p-1 rounded-md text-[10px] font-medium leading-tight shadow-2xs ${colorClass}`}
-                          title={`${cls.startTime}-${cls.endTime}: ${cls.subject} (${cls.teacherName}) - Room ${cls.room}`}
+                          title={`${cls.startTime}-${cls.endTime}: ${cls.subjectCode ? `${cls.subjectCode} - ` : ''}${cls.subject} (${cls.teacherName}) - Room ${cls.room}`}
                         >
                           <div className="flex items-center justify-between gap-1 font-bold">
                             <span className="truncate">{cls.startTime}</span>
                             <span className="text-[9px] font-semibold text-slate-500 shrink-0 truncate">{cls.room}</span>
                           </div>
-                          <div className="truncate font-bold">
-                            {cls.subject}
+                          <div className="truncate font-bold font-mono">
+                            {cls.subjectCode || cls.subject}
                           </div>
                           {selectedTeacherId === 'All' && (
                             <div className="truncate text-[9px] opacity-80">
@@ -921,8 +924,10 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                             {cls.periodName}
                           </span>
                         </div>
-                        <h4 className="font-black text-sm text-slate-900 mt-1">
-                          {cls.subject} {cls.khmerSubject ? `(${cls.khmerSubject})` : ''}
+                        <h4 className="font-black text-sm text-slate-900 mt-1 flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                            {cls.subjectCode || cls.subject}
+                          </span>
                         </h4>
                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                           <span>{cls.teacherName}</span>
@@ -1293,8 +1298,10 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           </div>
 
                           <div>
-                            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
-                              {cls.subject}
+                            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-blue-700 font-black">
+                                {cls.subjectCode || cls.subject}
+                              </span>
                             </h3>
                             <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
                               <Calendar className="w-3 h-3 text-slate-400" />
@@ -1421,13 +1428,13 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                         >
                           <div className="flex items-center gap-2.5">
                             <div
-                              className={`w-6 h-6 rounded-full ${palette.initialBg} text-white flex items-center justify-center font-black text-[10px] shrink-0`}
+                              className={`w-6 h-6 rounded-full ${palette.initialBg} text-white flex items-center justify-center font-black text-[9px] shrink-0 font-mono`}
                             >
-                              {matchingClass.subject[0]}
+                              {(matchingClass.subjectCode || matchingClass.subject).slice(0, 3)}
                             </div>
                             <div>
-                              <h4 className={`text-xs font-black ${palette.text} leading-tight`}>
-                                {matchingClass.subject}
+                              <h4 className={`text-xs font-black ${palette.text} leading-tight font-mono`}>
+                                {matchingClass.subjectCode || matchingClass.subject}
                               </h4>
                               <span className="text-[10px] text-slate-500 font-mono">
                                 {matchingClass.startTime} – {matchingClass.endTime} • Room {matchingClass.room}

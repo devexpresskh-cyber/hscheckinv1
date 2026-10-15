@@ -33,6 +33,7 @@ export type Permission =
   | 'telegram.configure'
   | 'notifications.send'
   | 'audit.view'
+  | 'audit.clear'
   | 'settings.manage';
 
 export interface RoleDefinition {

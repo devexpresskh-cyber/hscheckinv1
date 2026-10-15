@@ -107,6 +107,7 @@ export const UserManagement: React.FC = () => {
     { key: 'telegram.view', label: 'View Telegram', group: 'Telegram' },
     { key: 'telegram.configure', label: 'Configure Telegram Bot', group: 'Telegram' },
     { key: 'audit.view', label: 'View Audit Logs', group: 'System' },
+    { key: 'audit.clear', label: 'Clear Audit Logs', group: 'System' },
     { key: 'settings.manage', label: 'Manage Settings', group: 'System' }
   ];
 

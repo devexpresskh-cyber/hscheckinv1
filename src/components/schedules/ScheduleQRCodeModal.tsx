@@ -1587,7 +1587,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                         <tr>
                           <th className="p-1.5">{isKhmer ? 'ថ្ងៃ' : 'Day'}</th>
                           <th className="p-1.5 text-center">{isKhmer ? 'ម៉ោង' : 'Time'}</th>
-                          <th className="p-1.5">{isKhmer ? 'មុខវិជ្ជា' : 'Subject'}</th>
+                          <th className="p-1.5">{isKhmer ? 'កូដមុខវិជ្ជា' : 'Subject Code'}</th>
                           <th className="p-1.5 text-center">{isKhmer ? 'បន្ទប់' : 'Room'}</th>
                         </tr>
                       </thead>
@@ -1599,8 +1599,9 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                             <tr key={s.id || idx} className="hover:bg-slate-50">
                               <td className="p-1.5 font-bold text-slate-800">{dayLabel}</td>
                               <td className="p-1.5 text-center font-mono text-slate-600">{s.startTime}-{s.endTime}</td>
-                              <td className="p-1.5 font-medium text-slate-900 truncate max-w-[120px]">
-                                {s.subject} <span className="text-[9px] text-slate-400">({s.gradeClass})</span>
+                              <td className="p-1.5 font-medium text-slate-900 truncate max-w-[130px]">
+                                <span className="font-mono font-bold text-indigo-700">{s.subjectCode || s.subject}</span>
+                                <span className="text-[9px] text-slate-400 block">{s.gradeClass}</span>
                               </td>
                               <td className="p-1.5 text-center font-bold text-emerald-700">{s.room}</td>
                             </tr>

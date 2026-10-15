@@ -168,6 +168,9 @@ export const translations: Translations = {
   // Settings & Audit
   'audit.title': { en: 'System Audit & Compliance Log', km: 'កំណត់ត្រាសវនកម្ម និងសុវត្ថិភាពប្រព័ន្ធ' },
   'audit.desc': { en: 'Immutable record of staff check-ins, manual modifications, and policy changes.', km: 'កំណត់ត្រាសកម្មភាពសំខាន់ៗ ការកែប្រែទិន្នន័យ និងសុវត្ថិភាព' },
+  'audit.clearLogs': { en: 'Clear Audit Logs', km: 'សម្អាតកំណត់ត្រាសវនកម្ម' },
+  'audit.clearConfirmTitle': { en: 'Clear All Audit Logs?', km: 'សម្អាតកំណត់ត្រាសវនកម្មទាំងអស់?' },
+  'audit.clearConfirmDesc': { en: 'This will permanently remove all audit records from local storage and cloud database. This operation cannot be undone.', km: 'សកម្មភាពនេះនឹងលុបកំណត់ត្រាសវនកម្មទាំងអស់ចេញពីប្រព័ន្ធ និង Cloud ជាអចិន្ត្រៃយ៍។ មិនអាចត្រឡប់វិញបានទេ។' },
   'settings.title': { en: 'System & Organization Settings', km: 'ការកំណត់ស្ថាប័ន និងប្រព័ន្ធ' },
   'settings.desc': { en: 'School branding, GPS coordinates, grace periods, and data backup.', km: 'ព័ត៌មានសាលា កូអរដោនេ GPS ម៉ោងអនុគ្រោះ និងការបម្រុងទុកទិន្នន័យ' },
 

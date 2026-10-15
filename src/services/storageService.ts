@@ -2218,6 +2218,61 @@ export const StorageService = {
       handleFirestoreError(err, OperationType.WRITE, `audit_logs/${log.id}`)
     );
   },
+  async clearAllAuditLogs(): Promise<number> {
+    const initialCount = cache.auditLogs.length;
+    const oldRecords = [...cache.auditLogs];
+
+    // 1. Immediately wipe in-memory cache and localStorage
+    cache.auditLogs = [];
+    setStored(STORAGE_KEYS.AUDIT_LOGS, []);
+
+    // 2. Remove pending offline mutations for audit_logs
+    offlineSyncQueue = offlineSyncQueue.filter(item => item.collection !== 'audit_logs');
+    saveSyncQueue();
+
+    notifyListeners();
+
+    // 3. Delete from Firestore in batches
+    let deletedCount = initialCount;
+    try {
+      const snapshot = await getDocs(collection(db, 'audit_logs'));
+      if (!snapshot.empty) {
+        deletedCount = snapshot.size;
+        const docs = snapshot.docs;
+        const batchSize = 400; // max batch limit in Firestore is 500
+        for (let i = 0; i < docs.length; i += batchSize) {
+          const chunk = docs.slice(i, i + batchSize);
+          const batch = writeBatch(db);
+          chunk.forEach(d => {
+            batch.delete(d.ref);
+          });
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.warn('Batch deletion of audit_logs failed, trying individual deleteDocs:', err);
+      oldRecords.forEach(r => {
+        deleteDoc(doc(db, 'audit_logs', r.id)).catch(() => {});
+      });
+    }
+
+    notifyListeners();
+    return deletedCount;
+  },
+  async deleteAuditLog(id: string): Promise<boolean> {
+    cache.auditLogs = cache.auditLogs.filter(l => l.id !== id);
+    setStored(STORAGE_KEYS.AUDIT_LOGS, cache.auditLogs);
+    offlineSyncQueue = offlineSyncQueue.filter(item => !(item.collection === 'audit_logs' && item.docId === id));
+    saveSyncQueue();
+    notifyListeners();
+    try {
+      await deleteDoc(doc(db, 'audit_logs', id));
+      return true;
+    } catch (err) {
+      console.warn('Failed to delete individual audit log from Firestore:', err);
+      return true;
+    }
+  },
 
   // Notifications
   getNotifications(): AppNotification[] {

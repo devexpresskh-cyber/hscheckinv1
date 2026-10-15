@@ -293,7 +293,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (
         permission === 'telegram.view' ||
         permission === 'telegram.configure' ||
-        permission === 'settings.manage'
+        permission === 'settings.manage' ||
+        permission === 'audit.clear'
       ) {
         return false;
       }
