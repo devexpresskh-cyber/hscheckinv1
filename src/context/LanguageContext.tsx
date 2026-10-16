@@ -157,6 +157,13 @@ export const translations: Translations = {
   'reports.desc': { en: 'Detailed monthly attendance reports, late statistics, and export to CSV/Excel.', km: 'របាយការណ៍វត្តមានប្រចាំខែ ស្ថិតិមកយឺត និងទាញយកជាឯកសារ Excel/CSV' },
   'telegram.title': { en: 'Telegram Bot Integration & Alerts', km: 'ការតភ្ជាប់តេឡេក្រាម Bot និងការជូនដំណឹង' },
   'telegram.desc': { en: 'Automated attendance dispatch engine, alert triggers, and interactive bot commands.', km: 'ប្រព័ន្ធផ្ញើសារស្វ័យប្រវត្តិតាមតេឡេក្រាម និងផ្ទាំងសាកល្បងបញ្ជា Bot' },
+  'telegram.clearTitle': { en: 'Clear Telegram Integration & Alerts', km: 'សម្អាតការតភ្ជាប់ Telegram & Alerts' },
+  'telegram.clearDesc': { en: 'Reset Telegram credentials, disable alert triggers, or clear historical dispatch logs.', km: 'សម្អាតព័ត៌មាន Bot បិទការជូនដំណឹង ឬសម្អាតប្រវត្តិសារដែលបានផ្ញើ' },
+  'telegram.clearLogs': { en: 'Clear Dispatch Logs', km: 'សម្អាតប្រវត្តិសារ' },
+  'telegram.clearCredentials': { en: 'Clear Bot Credentials', km: 'សម្អាត Token និងព័ត៌មាន Bot' },
+  'telegram.clearAll': { en: 'Clear All (Credentials & Logs)', km: 'សម្អាតទាំងអស់ (ព័ត៌មាន Bot និងប្រវត្តិ)' },
+  'telegram.resetDefault': { en: 'Reset to Factory Defaults', km: 'កំណត់ឡើងវិញទៅទម្រង់ដើម' },
+  'telegram.clearSimulator': { en: 'Clear Simulator Chat', km: 'សម្អាតការសន្ទនា Simulator' },
 
   // User & RBAC
   'rbac.title': { en: 'Users, Roles & Permission System', km: 'ប្រព័ន្ធគ្រប់គ្រងអ្នកប្រើប្រាស់ តួនាទី និងសិទ្ធិ (RBAC)' },

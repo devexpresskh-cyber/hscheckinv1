@@ -4,6 +4,7 @@ import { useNotification } from '../../context/NotificationContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
 import { TelegramSettings, TelegramMessageLog } from '../../types/index.ts';
+import { useLanguage } from '../../context/LanguageContext.tsx';
 import confetti from 'canvas-confetti';
 import {
   Send,
@@ -30,7 +31,14 @@ import {
   Users,
   GraduationCap,
   Building2,
-  Upload
+  Upload,
+  Trash2,
+  RotateCcw,
+  X,
+  AlertOctagon,
+  Loader2,
+  KeyRound,
+  BellOff
 } from 'lucide-react';
 
 export const TelegramCenter: React.FC = () => {
@@ -52,6 +60,9 @@ export const TelegramCenter: React.FC = () => {
     );
   }
 
+  const { isKhmer, t } = useLanguage();
+  const isAdmin = currentUser.role === 'admin_hr' || currentUser.role === 'super_admin' || hasPermission('telegram.configure');
+
   const [activeSubTab, setActiveSubTab] = useState<'config' | 'backup' | 'simulator' | 'logs'>('config');
   const [settings, setSettings] = useState<TelegramSettings>(StorageService.getTelegramSettings());
   const [logs, setLogs] = useState<TelegramMessageLog[]>(StorageService.getTelegramLogs());
@@ -67,6 +78,152 @@ export const TelegramCenter: React.FC = () => {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const restoreFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Clear Telegram Integration & Alerts modal states
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [clearOption, setClearOption] = useState<'all' | 'credentials' | 'logs' | 'default'>('all');
+  const [isClearingAction, setIsClearingAction] = useState(false);
+
+  const handleExecuteClear = async () => {
+    if (!isAdmin) {
+      showToast('You do not have permission to clear Telegram configuration', 'error');
+      return;
+    }
+
+    setIsClearingAction(true);
+    try {
+      if (clearOption === 'logs') {
+        const deleted = await StorageService.clearTelegramLogs();
+        setLogs([]);
+        StorageService.addAuditLog({
+          userId: currentUser.id,
+          userName: currentUser.fullName,
+          userRole: currentUser.role,
+          action: 'CLEARED_TELEGRAM_LOGS',
+          target: `${deleted} dispatch logs deleted`,
+          ipAddress: '127.0.0.1'
+        });
+        showToast(
+          isKhmer
+            ? `បានសម្អាតប្រវត្តិសារ Telegram ចំនួន ${deleted} ដោយជោគជ័យ!`
+            : `Successfully cleared ${deleted} Telegram dispatch logs!`,
+          'success'
+        );
+      } else if (clearOption === 'credentials') {
+        StorageService.clearTelegramSettings();
+        setSettings(StorageService.getTelegramSettings());
+        StorageService.addAuditLog({
+          userId: currentUser.id,
+          userName: currentUser.fullName,
+          userRole: currentUser.role,
+          action: 'CLEARED_TELEGRAM_CREDENTIALS',
+          target: 'Telegram Bot Token & Chat IDs cleared',
+          ipAddress: '127.0.0.1'
+        });
+        showToast(
+          isKhmer
+            ? 'បានសម្អាតព័ត៌មាន Bot Token និង Chat IDs រួចរាល់។ ការជូនដំណឹងត្រូវបានបិទ!'
+            : 'Telegram Bot credentials cleared and notifications disabled!',
+          'success'
+        );
+      } else if (clearOption === 'default') {
+        StorageService.resetTelegramSettingsToDefault();
+        setSettings(StorageService.getTelegramSettings());
+        StorageService.addAuditLog({
+          userId: currentUser.id,
+          userName: currentUser.fullName,
+          userRole: currentUser.role,
+          action: 'RESET_TELEGRAM_SETTINGS',
+          target: 'Telegram configuration reset to demo defaults',
+          ipAddress: '127.0.0.1'
+        });
+        showToast(
+          isKhmer
+            ? 'បានកំណត់ការកំណត់រចនាសម្ព័ន្ធ Telegram ទៅទម្រង់ដើម Demo រួចរាល់!'
+            : 'Telegram configuration reset to default demo settings!',
+          'success'
+        );
+      } else if (clearOption === 'all') {
+        const { logsDeleted } = await StorageService.clearAllTelegramIntegrationAndAlerts();
+        setSettings(StorageService.getTelegramSettings());
+        setLogs([]);
+        setChatHistory([
+          {
+            sender: 'bot',
+            text: isKhmer
+              ? '👋 <b>ប្រព័ន្ធតេឡេក្រាម Bot ត្រូវបានសម្អាតឡើងវិញ</b>\nព័ត៌មាន Bot និងប្រវត្តិសារទាំងអស់ត្រូវបានជម្រះរួចរាល់។'
+              : '👋 <b>Telegram Bot Integration Cleared</b>\nCredentials and dispatch logs have been wiped clean.',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+        StorageService.addAuditLog({
+          userId: currentUser.id,
+          userName: currentUser.fullName,
+          userRole: currentUser.role,
+          action: 'CLEARED_TELEGRAM_FULL',
+          target: `Full Telegram wipe (${logsDeleted} logs, credentials cleared)`,
+          ipAddress: '127.0.0.1'
+        });
+        confetti({ particleCount: 40, spread: 50 });
+        showToast(
+          isKhmer
+            ? `បានសម្អាតការតភ្ជាប់ Telegram & Alerts ទាំងអស់ទាំងស្រុង (លុប ${logsDeleted} កំណត់ត្រាសារ)!`
+            : `Telegram Bot Integration & Alerts completely cleared (${logsDeleted} logs deleted)!`,
+          'success'
+        );
+      }
+      setIsClearModalOpen(false);
+    } catch (err: any) {
+      showToast(`Failed to clear: ${err.message || 'Unknown error'}`, 'error');
+    } finally {
+      setIsClearingAction(false);
+    }
+  };
+
+  const handleDirectClearLogs = async () => {
+    if (!isAdmin) return;
+    if (!confirm(isKhmer ? 'តើអ្នកប្រាកដថាចង់សម្អាតប្រវត្តិសារ Telegram ទាំងអស់មែនទេ? សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។' : 'Are you sure you want to delete all Telegram dispatch logs? This cannot be undone.')) {
+      return;
+    }
+    setIsClearingAction(true);
+    const count = await StorageService.clearTelegramLogs();
+    setIsClearingAction(false);
+    setLogs([]);
+    showToast(isKhmer ? `បានសម្អាតប្រវត្តិសារចំនួន ${count} រួចរាល់!` : `Cleared ${count} Telegram logs!`, 'success');
+  };
+
+  const handleDirectClearCredentials = () => {
+    if (!isAdmin) return;
+    if (!confirm(isKhmer ? 'តើអ្នកពិតជាចង់សម្អាត Token និងព័ត៌មានសម្ងាត់ Telegram Bot ទាំងអស់មែនទេ?' : 'Are you sure you want to clear all Telegram Bot credentials and disable alerts?')) {
+      return;
+    }
+    StorageService.clearTelegramSettings();
+    setSettings(StorageService.getTelegramSettings());
+    showToast(isKhmer ? 'បានសម្អាត Token និងព័ត៌មាន Bot រួចរាល់!' : 'Telegram bot credentials cleared!', 'success');
+  };
+
+  const handleDirectResetDefault = () => {
+    if (!isAdmin) return;
+    if (!confirm(isKhmer ? 'កំណត់ការកំណត់ Telegram ឡើងវិញទៅទម្រង់ដើម Demo?' : 'Reset Telegram settings to default demo configuration?')) {
+      return;
+    }
+    StorageService.resetTelegramSettingsToDefault();
+    setSettings(StorageService.getTelegramSettings());
+    showToast(isKhmer ? 'បានកំណត់ទៅទម្រង់ដើម Demo រួចរាល់!' : 'Reset to default configuration!', 'success');
+  };
+
+  const handleDirectClearChat = () => {
+    setChatHistory([
+      {
+        sender: 'bot',
+        text: isKhmer
+          ? '👋 <b>ប្រព័ន្ធតេឡេក្រាម Bot ត្រូវបានតភ្ជាប់</b>\nភ្ជាប់ជាមួយប្រព័ន្ធបញ្ជូនដំណឹងវត្តមានរបស់សាលា Heart School។\nសាកល្បងវាយ៖ /status, /myschedule, ឬ /checkin'
+          : '👋 <b>Telegram Bot Connected</b>\nHeart School Attendance Bot Simulator.\nTry typing: /status, /myschedule, or /checkin',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+    showToast(isKhmer ? 'បានសម្អាតការសន្ទនាសាកល្បង' : 'Simulator chat history cleared', 'info');
+  };
 
   // Sync settings when storage changes
   React.useEffect(() => {
@@ -233,48 +390,69 @@ export const TelegramCenter: React.FC = () => {
           </p>
         </div>
 
-        {/* Tab switcher */}
-        <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
-          <button
-            onClick={() => setActiveSubTab('config')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-              activeSubTab === 'config' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            Bot Config
-          </button>
-          <button
-            onClick={() => setActiveSubTab('backup')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
-              activeSubTab === 'backup' ? 'bg-white text-indigo-950 shadow-xs ring-1 ring-indigo-200' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Auto Data Backup</span>
-            {settings.autoBackupEnabled !== false && (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Auto Backup Active" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveSubTab('simulator')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${
-              activeSubTab === 'simulator' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            <Bot className="w-3.5 h-3.5 text-sky-500" />
-            <span>Interactive Simulator</span>
-          </button>
-          <button
-            onClick={() => {
-              setLogs(StorageService.getTelegramLogs());
-              setActiveSubTab('logs');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-              activeSubTab === 'logs' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
-            }`}
-          >
-            Dispatch Log ({logs.length})
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Tab switcher */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+            <button
+              onClick={() => setActiveSubTab('config')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                activeSubTab === 'config' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              Bot Config
+            </button>
+            <button
+              onClick={() => setActiveSubTab('backup')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                activeSubTab === 'backup' ? 'bg-white text-indigo-950 shadow-xs ring-1 ring-indigo-200' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Auto Data Backup</span>
+              {settings.autoBackupEnabled !== false && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Auto Backup Active" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveSubTab('simulator')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${
+                activeSubTab === 'simulator' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5 text-sky-500" />
+              <span>Interactive Simulator</span>
+            </button>
+            <button
+              onClick={() => {
+                setLogs(StorageService.getTelegramLogs());
+                setActiveSubTab('logs');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                activeSubTab === 'logs' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'
+              }`}
+            >
+              Dispatch Log ({logs.length})
+            </button>
+          </div>
+
+          {/* Admin Clear Telegram Integration & Alerts Button */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setClearOption('all');
+                setIsClearModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200/90 text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+              title={isKhmer ? 'សម្អាតការតភ្ជាប់ Telegram & Alerts' : 'Clear Telegram Integration & Alerts'}
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span className="hidden sm:inline font-khmer">
+                {isKhmer ? 'សម្អាត Telegram & Alerts' : 'Clear Integration & Alerts'}
+              </span>
+              <span className="sm:hidden font-khmer">{isKhmer ? 'សម្អាត' : 'Clear'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -498,13 +676,52 @@ export const TelegramCenter: React.FC = () => {
               </div>
 
               {hasPermission('telegram.configure') && (
-                <div className="pt-3">
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-600/30 transition-all active:scale-95"
-                  >
-                    Save Settings
-                  </button>
+                <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-600/30 transition-all active:scale-95 cursor-pointer"
+                    >
+                      Save Settings
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={handleDirectResetDefault}
+                        className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                        title={isKhmer ? 'កំណត់ឡើងវិញទៅទម្រង់ដើម' : 'Reset to factory demo defaults'}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{isKhmer ? 'ទម្រង់ដើម Demo' : 'Reset Defaults'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isAdmin && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDirectClearCredentials}
+                        className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition-colors cursor-pointer"
+                        title={isKhmer ? 'សម្អាត Token និងព័ត៌មាន Bot' : 'Clear credentials & disable alerts'}
+                      >
+                        <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                        <span>{isKhmer ? 'សម្អាត Token' : 'Clear Bot Token'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClearOption('all');
+                          setIsClearModalOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition-colors cursor-pointer"
+                        title={isKhmer ? 'សម្អាត Telegram & Alerts ទាំងអស់' : 'Clear all Telegram integration and alerts'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>{isKhmer ? 'សម្អាតទាំងអស់' : 'Clear All'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -600,6 +817,65 @@ export const TelegramCenter: React.FC = () => {
               <span>Status: <b>{settings.isEnabled ? 'Active Bot' : 'Disabled'}</b></span>
             </div>
           </div>
+
+          {/* Admin Management & Danger Zone */}
+          {isAdmin && (
+            <div className="lg:col-span-3 bg-gradient-to-r from-rose-50/60 via-slate-50 to-amber-50/50 rounded-3xl p-5 sm:p-6 border border-rose-200/70 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                    <AlertOctagon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-black text-slate-900 text-sm tracking-tight flex items-center gap-2">
+                      <span>{isKhmer ? 'តំបន់គ្រប់គ្រងការសម្អាត Telegram Bot & Alerts' : 'Administrative Telegram Reset & Danger Zone'}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Admin Only</span>
+                    </h4>
+                    <p className="text-xs text-slate-600 font-khmer mt-1 max-w-2xl leading-relaxed">
+                      {isKhmer
+                        ? 'អ្នកគ្រប់គ្រងអាចសម្អាត Bot Token, បិទការជូនដំណឹងទាំងអស់ភ្លាមៗ ឬលុបប្រវត្តិសារ (Logs) ដែលបានផ្ញើចេញពី Cloud Database និងកម្មវិធីដោយសុវត្ថិភាព។'
+                        : 'Administrators can clear Telegram Bot credentials, disable automated alert triggers, or wipe dispatch history logs from both local storage and the cloud database.'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-slate-500 font-mono">
+                      <span>Token: <b>{settings.botToken ? 'Configured' : 'Empty'}</b></span>
+                      <span>•</span>
+                      <span>Target: <b>{settings.groupChatId || settings.adminChatId || 'Not set'}</b></span>
+                      <span>•</span>
+                      <span>Alerts: <b className={settings.isEnabled ? 'text-emerald-600' : 'text-slate-400'}>{settings.isEnabled ? 'Active' : 'Disabled'}</b></span>
+                      <span>•</span>
+                      <span>Dispatch Logs: <b>{logs.length}</b></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearOption('logs');
+                      setIsClearModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <History className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{isKhmer ? 'សម្អាត Logs' : 'Purge Logs'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearOption('all');
+                      setIsClearModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md shadow-rose-600/25 active:scale-95 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="font-khmer">{isKhmer ? 'សម្អាត Telegram & Alerts' : 'Clear Integration & Alerts'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
@@ -1007,8 +1283,19 @@ export const TelegramCenter: React.FC = () => {
                 <p className="text-[10px] text-emerald-400 font-mono">● bot active</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-slate-400">
-              <span>Chatting as: <b>{currentUser.fullName}</b></span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDirectClearChat}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold border border-slate-700 transition-colors cursor-pointer"
+                title={isKhmer ? 'សម្អាតការសន្ទនា' : 'Clear simulator chat history'}
+              >
+                <RotateCcw className="w-3 h-3 text-slate-400" />
+                <span>{isKhmer ? 'សម្អាតឆាត' : 'Clear Chat'}</span>
+              </button>
+              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                <span>Chatting as: <b>{currentUser.fullName}</b></span>
+              </div>
             </div>
           </div>
 
@@ -1070,15 +1357,34 @@ export const TelegramCenter: React.FC = () => {
       {/* Subtab 3: Dispatch Logs */}
       {activeSubTab === 'logs' && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-            <h3 className="font-bold text-slate-900 text-sm">Telegram Bot Dispatch History</h3>
-            <button
-              onClick={() => setLogs(StorageService.getTelegramLogs())}
-              className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 font-bold"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>Refresh</span>
-            </button>
+          <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm">Telegram Bot Dispatch History</h3>
+              <p className="text-[11px] text-slate-500 font-khmer">
+                {isKhmer ? 'ប្រវត្តិនៃការបញ្ជូនសារ និងការជូនដំណឹងទៅកាន់ Telegram' : 'History of automated notifications and alerts sent to Telegram'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {isAdmin && logs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDirectClearLogs}
+                  disabled={isClearingAction}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  title={isKhmer ? 'សម្អាតប្រវត្តិសារទាំងអស់' : 'Delete all dispatch logs'}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{isKhmer ? 'សម្អាត Logs' : 'Clear Dispatch Logs'}</span>
+                </button>
+              )}
+              <button
+                onClick={() => setLogs(StorageService.getTelegramLogs())}
+                className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 font-bold px-3 py-1.5 rounded-xl hover:bg-sky-50 transition-colors cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -1143,6 +1449,248 @@ export const TelegramCenter: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Telegram Integration & Alerts Modal */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="p-6 pb-4 border-b border-slate-100">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                      {isKhmer ? 'សម្អាតការតភ្ជាប់ Telegram Bot & Alerts' : 'Clear Telegram Integration & Alerts'}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-khmer mt-0.5">
+                      {isKhmer
+                        ? 'ជ្រើសរើសជម្រើសសម្អាតព័ត៌មាន Bot, បិទការជូនដំណឹង ឬលុបប្រវត្តិសារ'
+                        : 'Choose the scope of credentials and alert data you wish to reset or purge.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => !isClearingAction && setIsClearModalOpen(false)}
+                  disabled={isClearingAction}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Scope Selection */}
+            <div className="p-6 overflow-y-auto space-y-4">
+              <label className="block text-xs font-bold text-slate-700">
+                {isKhmer ? 'សូមជ្រើសរើសវិសាលភាពនៃការសម្អាត (Select Clear Action):' : 'Select Reset & Clear Scope:'}
+              </label>
+
+              <div className="space-y-2.5">
+                {/* Option 1: Full Wipe */}
+                <div
+                  onClick={() => setClearOption('all')}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    clearOption === 'all'
+                      ? 'bg-rose-50/70 border-rose-300 ring-2 ring-rose-500/20 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="clearOption"
+                      checked={clearOption === 'all'}
+                      onChange={() => setClearOption('all')}
+                      className="mt-1 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-900 text-xs sm:text-sm">
+                          {isKhmer ? 'សម្អាតទាំងអស់ទាំងស្រុង (Full Wipe - Recommended for Reset)' : 'Clear All (Credentials, Alerts & Logs)'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                          {isKhmer ? 'ទូទៅ' : 'Full Reset'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 font-khmer mt-1 leading-relaxed">
+                        {isKhmer
+                          ? `លុប Token, Chat ID, បិទការជូនដំណឹងទាំងអស់ និងលុបប្រវត្តិសារចំនួន ${logs.length} កំណត់ត្រាចេញពី Cloud Database និងកម្មវិធីទាំងស្រុង។`
+                          : `Completely erases Bot Token, Chat IDs, disables all alert triggers (check-in, check-out, late, absent, backups) and purges all ${logs.length} dispatch logs.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Option 2: Credentials & Alerts Only */}
+                <div
+                  onClick={() => setClearOption('credentials')}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    clearOption === 'credentials'
+                      ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-500/20 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="clearOption"
+                      checked={clearOption === 'credentials'}
+                      onChange={() => setClearOption('credentials')}
+                      className="mt-1 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                          {isKhmer ? 'សម្អាតតែ Token & បិទការជូនដំណឹង (Credentials & Alerts Only)' : 'Clear Bot Credentials & Disable Alerts'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 font-khmer mt-1 leading-relaxed">
+                        {isKhmer
+                          ? 'លុប Bot Token, Bot Username, Group Chat ID, Admin Chat ID និងបិទ Alerts ទាំងអស់ ប៉ុន្តែរក្សាទុកប្រវត្តិសារ (Logs) សម្រាប់ពិនិត្យ។'
+                          : 'Clears Telegram token, username, group ID, and stops all alerts. Preserves dispatch logs for historical reference.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Option 3: Logs Only */}
+                <div
+                  onClick={() => setClearOption('logs')}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    clearOption === 'logs'
+                      ? 'bg-sky-50/70 border-sky-300 ring-2 ring-sky-500/20 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="clearOption"
+                      checked={clearOption === 'logs'}
+                      onChange={() => setClearOption('logs')}
+                      className="mt-1 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                          {isKhmer ? 'សម្អាតតែប្រវត្តិសារដែលបានផ្ញើ (Purge Dispatch Logs Only)' : 'Purge Dispatch Logs History Only'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
+                          {logs.length} {isKhmer ? 'កំណត់ត្រា' : 'records'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 font-khmer mt-1 leading-relaxed">
+                        {isKhmer
+                          ? `លុបប្រវត្តិសារចំនួន ${logs.length} ចេញពី Firestore និង Local Storage។ ការតភ្ជាប់ Bot Token និងការកំណត់ជូនដំណឹងនៅតែរក្សាដដែល។`
+                          : `Deletes all ${logs.length} historical dispatch log entries. Keeps Bot Token and alert configuration active.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Option 4: Reset to Demo Defaults */}
+                <div
+                  onClick={() => setClearOption('default')}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    clearOption === 'default'
+                      ? 'bg-slate-100 border-slate-300 ring-2 ring-slate-400/20 shadow-xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="clearOption"
+                      checked={clearOption === 'default'}
+                      onChange={() => setClearOption('default')}
+                      className="mt-1 text-slate-700 focus:ring-slate-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                          {isKhmer ? 'កំណត់ឡើងវិញទៅទម្រង់ដើម Demo (Reset to Factory Defaults)' : 'Reset to Default Factory / Demo Settings'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 font-khmer mt-1 leading-relaxed">
+                        {isKhmer
+                          ? 'កំណត់ Bot Token និង Chat IDs ទៅកាន់គំរូ Demo សាលា Heart School (@EduTrackSchoolBot) ជាមួយការជូនដំណឹងស្តង់ដារ។'
+                          : 'Re-applies default demo bot configuration with demo token, default group and standard alert schedule.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status & Review Box */}
+              <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>{isKhmer ? 'ស្ថានភាព Bot បច្ចុប្បន្ន៖' : 'Current Bot Status:'}</span>
+                  <span className={`font-bold ${settings.isEnabled ? 'text-emerald-600' : 'text-slate-500'}`}>
+                    {settings.isEnabled ? '● Active' : '○ Disabled'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>{isKhmer ? 'ចំនួនប្រវត្តិសារក្នុង Database៖' : 'Logs in Database:'}</span>
+                  <span className="font-mono font-bold text-slate-800">{logs.length} entries</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-600">
+                  <span>{isKhmer ? 'អនុវត្តដោយអ្នកគ្រប់គ្រង៖' : 'Admin Operator:'}</span>
+                  <span className="font-bold text-slate-800 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    {currentUser.fullName} ({currentUser.role})
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(false)}
+                disabled={isClearingAction}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isKhmer ? 'បោះបង់' : 'Cancel'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecuteClear}
+                disabled={isClearingAction}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                {isClearingAction ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{isKhmer ? 'កំពុងសម្អាត...' : 'Clearing...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>
+                      {clearOption === 'all'
+                        ? (isKhmer ? 'យល់ព្រមសម្អាតទាំងអស់' : 'Execute Full Clear')
+                        : clearOption === 'credentials'
+                        ? (isKhmer ? 'សម្អាត Token & Alerts' : 'Clear Credentials')
+                        : clearOption === 'logs'
+                        ? (isKhmer ? 'សម្អាតកំណត់ត្រា Logs' : 'Purge All Logs')
+                        : (isKhmer ? 'កំណត់ទៅទម្រង់ដើម' : 'Reset to Defaults')}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+
           </div>
         </div>
       )}

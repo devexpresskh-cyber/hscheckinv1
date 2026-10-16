@@ -2196,6 +2196,91 @@ export const StorageService = {
       console.warn('Failed to log telegram message to cloud:', err)
     );
   },
+  async clearTelegramLogs(): Promise<number> {
+    const initialCount = cache.telegramLogs.length;
+
+    // 1. Wipe in-memory and localStorage
+    cache.telegramLogs = [];
+    setStored(STORAGE_KEYS.TELEGRAM_LOGS, []);
+
+    // 2. Remove pending offline sync queue entries for telegram_logs
+    offlineSyncQueue = offlineSyncQueue.filter(item => item.collection !== 'telegram_logs');
+    saveSyncQueue();
+
+    notifyListeners();
+
+    // 3. Delete all docs from Firestore in batches
+    let deletedCount = initialCount;
+    try {
+      const snapshot = await getDocs(collection(db, 'telegram_logs'));
+      if (!snapshot.empty) {
+        deletedCount = snapshot.size;
+        const docs = snapshot.docs;
+        const batchSize = 400;
+        for (let i = 0; i < docs.length; i += batchSize) {
+          const chunk = docs.slice(i, i + batchSize);
+          const batch = writeBatch(db);
+          chunk.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.warn('Notice: Local telegram logs cleared, cloud deletion error:', err);
+    }
+
+    notifyListeners();
+    return deletedCount;
+  },
+
+  clearTelegramSettings(): void {
+    const cleared: TelegramSettings = {
+      id: cache.telegramSettings?.id || 'tg-default',
+      botToken: '',
+      botUsername: '',
+      adminChatId: '',
+      groupChatId: '',
+      isEnabled: false,
+      notifyCheckIn: false,
+      notifyLate: false,
+      notifyAbsent: false,
+      notifyCheckOut: false,
+      notifyDailySummary: false,
+      notifyReminder: false,
+      reminderMinutesBefore: 15,
+      summaryTime: '17:30',
+      autoBackupEnabled: false,
+      autoBackupTime: '20:00',
+      autoBackupFrequency: 'daily',
+      autoBackupTarget: 'group',
+      lastBackupAt: '',
+      lastBackupStatus: undefined,
+      lastBackupRecordsCount: 0
+    };
+
+    cache.telegramSettings = cleared;
+    setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, cleared);
+    notifyListeners();
+
+    setDoc(doc(db, 'telegram_settings', 'config'), cleared, { merge: true }).catch(err => {
+      console.warn('Notice: Telegram settings cleared locally, cloud sync pending:', err);
+    });
+  },
+
+  resetTelegramSettingsToDefault(): void {
+    cache.telegramSettings = DEFAULT_TELEGRAM_SETTINGS;
+    setStored(STORAGE_KEYS.TELEGRAM_SETTINGS, DEFAULT_TELEGRAM_SETTINGS);
+    notifyListeners();
+
+    setDoc(doc(db, 'telegram_settings', 'config'), DEFAULT_TELEGRAM_SETTINGS, { merge: true }).catch(err => {
+      console.warn('Notice: Telegram settings reset locally, cloud sync pending:', err);
+    });
+  },
+
+  async clearAllTelegramIntegrationAndAlerts(): Promise<{ logsDeleted: number }> {
+    this.clearTelegramSettings();
+    const logsDeleted = await this.clearTelegramLogs();
+    return { logsDeleted };
+  },
 
   // System Settings
   getSystemSettings(): SystemSettings {
