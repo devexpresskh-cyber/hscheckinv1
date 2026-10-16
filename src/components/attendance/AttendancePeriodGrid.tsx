@@ -401,6 +401,18 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
 
   // Quick Check-in action from cell/modal
   const handlePerformCheckIn = (teacher: Teacher, sched: TeacherSubjectSchedule) => {
+    const holiday = AttendanceEngine.getHoliday(selectedDate);
+    if (holiday) {
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ កាលបរិច្ឆេទ ${selectedDate} ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។`
+          : `Check-in denied: ${selectedDate} is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     const res = AttendanceEngine.processCheckIn({
       personId: teacher.id,
       personType: 'teacher',
@@ -409,6 +421,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
       department: teacher.department,
       scheduleId: sched.id,
       subjectScheduleId: sched.id,
+      date: selectedDate,
       bypassScheduleWindow: true
     });
 

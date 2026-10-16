@@ -11,6 +11,7 @@ import {
 } from '../types/index.ts';
 import { StorageService } from './storageService.ts';
 import { TelegramService } from './telegramService.ts';
+import { DEFAULT_HOLIDAYS } from '../data/initialData.ts';
 
 export interface CheckInResult {
   success: boolean;
@@ -51,6 +52,33 @@ export const AttendanceEngine = {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  },
+
+  // Helper to find official or school holiday for any date ('YYYY-MM-DD')
+  getHoliday(dateStr?: string): Holiday | undefined {
+    const target = (dateStr || this.getCurrentDateString()).trim().slice(0, 10);
+    const holidays = StorageService.getHolidays();
+    // 1. Check user-defined/stored holidays
+    const found = holidays.find(h => {
+      const start = h.date?.trim().slice(0, 10);
+      const end = (h.endDate || h.date)?.trim().slice(0, 10);
+      if (!start) return false;
+      return target >= start && target <= end;
+    });
+    if (found) return found;
+
+    // 2. Check DEFAULT_HOLIDAYS fallback
+    return DEFAULT_HOLIDAYS.find(h => {
+      const start = h.date?.trim().slice(0, 10);
+      const end = (h.endDate || h.date)?.trim().slice(0, 10);
+      if (!start) return false;
+      return target >= start && target <= end;
+    });
+  },
+
+  // Check if a date is an official or school holiday
+  isHoliday(dateStr?: string): boolean {
+    return Boolean(this.getHoliday(dateStr));
   },
 
   // Haversine distance in meters
@@ -102,13 +130,25 @@ export const AttendanceEngine = {
     earlyBufferMinutes: number = 30 // Allow teachers to check in up to 30 mins before class starts to prepare!
   ): {
     isValid: boolean;
-    reason?: 'day_mismatch' | 'too_early' | 'too_late';
+    reason?: 'day_mismatch' | 'too_early' | 'too_late' | 'holiday';
     message?: string;
     khmerMessage?: string;
     startsInMinutes?: number;
     endedMinutesAgo?: number;
   } {
     const today = dateStr || this.getCurrentDateString();
+
+    // Strict Holiday Check: Disallow teaching schedules on official holidays
+    const holiday = this.getHoliday(today);
+    if (holiday) {
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      return {
+        isValid: false,
+        reason: 'holiday',
+        message: `Today (${today}) is an official holiday: "${holidayLabel}". Check-in is not permitted on holidays.`,
+        khmerMessage: `ថ្ងៃនេះ (${today}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holiday.khmerName || holiday.name}"។ មិនអនុញ្ញាតឱ្យស្កេនចូលនៅថ្ងៃឈប់សម្រាកឡើយ។`
+      };
+    }
     const [year, month, day] = today.split('-').map(Number);
     const dateObj = new Date(year, month - 1, day);
     const todayDayOfWeek = dateObj.getDay();
@@ -366,11 +406,22 @@ export const AttendanceEngine = {
     originalTeacherId?: string;
     originalTeacherName?: string;
     manualGrossWage?: number;
+    date?: string;
   }): CheckInResult {
-    const today = this.getCurrentDateString();
+    const today = params.date || this.getCurrentDateString();
     const currentTime = params.customTime || this.getCurrentTimeString();
     const currentMins = this.timeToMinutes(currentTime);
     const systemSettings = StorageService.getSystemSettings();
+
+    // Strict Holiday Restriction: Do not allow check-in on official holidays
+    const holiday = this.getHoliday(today);
+    if (holiday) {
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      return {
+        success: false,
+        message: `Check-in denied: Today (${today}) is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`
+      };
+    }
 
     let subjectSchedule = params.subjectScheduleId
       ? StorageService.getSubjectSchedules().find(s => s.id === params.subjectScheduleId)
@@ -876,8 +927,7 @@ export const AttendanceEngine = {
     const nowMins = this.timeToMinutes(this.getCurrentTimeString());
     const dayOfWeek = new Date().getDay(); // 0-6
 
-    const holidays = StorageService.getHolidays();
-    const isHoliday = holidays.some(h => h.date === today);
+    const isHoliday = this.isHoliday(today);
     if (isHoliday) {
       return { absencesMarked: 0, missingCheckoutsMarked: 0 };
     }

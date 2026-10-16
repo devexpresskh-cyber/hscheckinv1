@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
@@ -17,13 +17,21 @@ export const HolidayManagement: React.FC = () => {
   const { showToast } = useNotification();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const holidays = StorageService.getHolidays();
+  const [holidays, setHolidays] = useState(() => StorageService.getHolidays());
+
+  useEffect(() => {
+    const unsub = StorageService.subscribe(() => {
+      setHolidays(StorageService.getHolidays());
+    });
+    return unsub;
+  }, []);
 
   const [formData, setFormData] = useState<Holiday>({
     id: '',
     name: '',
     khmerName: '',
     date: new Date().toISOString().split('T')[0],
+    endDate: '',
     type: 'Public',
     description: ''
   });
@@ -41,7 +49,7 @@ export const HolidayManagement: React.FC = () => {
 
     StorageService.addHoliday({
       ...formData,
-      id: `hol-${Date.now()}`
+      id: formData.id || `hol-${Date.now()}`
     });
     showToast(`Added holiday: ${formData.name}`, 'success');
     setIsModalOpen(false);
@@ -71,6 +79,7 @@ export const HolidayManagement: React.FC = () => {
                 name: '',
                 khmerName: '',
                 date: new Date().toISOString().split('T')[0],
+                endDate: '',
                 type: 'Public',
                 description: ''
               });
@@ -164,7 +173,7 @@ export const HolidayManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Date *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Start Date *</label>
                   <input
                     type="date"
                     required
@@ -174,17 +183,28 @@ export const HolidayManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Category</label>
-                  <select
-                    value={formData.type}
-                    onChange={e => setFormData({ ...formData, type: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold"
-                  >
-                    <option value="Public">Public National</option>
-                    <option value="School">School Specific</option>
-                    <option value="Special">Special Holiday</option>
-                  </select>
+                  <label className="block font-bold text-slate-700 mb-1">End Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={formData.endDate || ''}
+                    min={formData.date}
+                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Category</label>
+                <select
+                  value={formData.type}
+                  onChange={e => setFormData({ ...formData, type: e.target.value as any })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold"
+                >
+                  <option value="Public">Public National</option>
+                  <option value="School">School Specific</option>
+                  <option value="Special">Special Holiday</option>
+                </select>
               </div>
 
               <div>

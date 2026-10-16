@@ -188,6 +188,20 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
     }
 
     setIsActionLoading(true);
+
+    const holiday = AttendanceEngine.getHoliday();
+    if (holiday) {
+      setIsActionLoading(false);
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។`
+          : `Check-in denied: Today is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     const targetTeacherId = activeTeacher?.id || cls.teacherId;
     const targetTeacherName = activeTeacher?.fullName || cls.teacherName;
     const targetTeacherKhmer = activeTeacher?.khmerName || cls.khmerTeacherName;

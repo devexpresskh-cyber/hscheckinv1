@@ -356,6 +356,18 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   };
 
   const handleAdminQuickCheckIn = (sub: TeacherSubjectSchedule) => {
+    const holiday = AttendanceEngine.getHoliday();
+    if (holiday) {
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។`
+          : `Check-in denied: Today is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     const teacher = teachers.find(t => t.id === sub.teacherId || t.teacherId === sub.teacherId || t.fullName.toLowerCase() === sub.teacherName.toLowerCase());
     const res = AttendanceEngine.processCheckIn({
       personId: teacher?.id || sub.teacherId,

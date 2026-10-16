@@ -9,7 +9,8 @@ import {
   Teacher,
   Employee,
   Schedule,
-  TeacherSubjectSchedule
+  TeacherSubjectSchedule,
+  Holiday
 } from '../types/index.ts';
 
 export const DEFAULT_ROLES: RoleDefinition[] = [
@@ -672,3 +673,121 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   autoCheckOutDailyTime: '17:30',
   preventDuplicateScanMinutes: 10
 };
+
+export const DEFAULT_HOLIDAYS: Holiday[] = [
+  {
+    id: 'hol-2026-01-01',
+    name: 'International New Year Day',
+    khmerName: 'ទិវាចូលឆ្នាំសកល',
+    date: '2026-01-01',
+    type: 'Public',
+    description: 'International New Year celebration'
+  },
+  {
+    id: 'hol-2026-01-07',
+    name: 'Victory over Genocide Day',
+    khmerName: 'ទិវាជ័យជម្នះលើរបបប្រល័យពូជសាសន៍',
+    date: '2026-01-07',
+    type: 'Public',
+    description: 'Commemoration of the end of the Khmer Rouge regime'
+  },
+  {
+    id: 'hol-2026-03-08',
+    name: "International Women's Day",
+    khmerName: 'ទិវាអន្តរជាតិនារី',
+    date: '2026-03-08',
+    type: 'Public',
+    description: "International Women's Day"
+  },
+  {
+    id: 'hol-2026-04-13',
+    name: 'Khmer New Year Day',
+    khmerName: 'ពិធីបុណ្យចូលឆ្នាំថ្មី ប្រពៃណីជាតិ',
+    date: '2026-04-13',
+    endDate: '2026-04-16',
+    type: 'Public',
+    description: 'Traditional Cambodian New Year celebration'
+  },
+  {
+    id: 'hol-2026-05-01',
+    name: 'International Labor Day',
+    khmerName: 'ទិវាពលកម្មអន្តរជាតិ',
+    date: '2026-05-01',
+    type: 'Public',
+    description: 'International Workers Day'
+  },
+  {
+    id: 'hol-2026-05-14',
+    name: "King Sihamoni's Birthday",
+    khmerName: 'ព្រះរាជពិធីបុណ្យចម្រើនព្រះជន្ម ព្រះករុណា ព្រះបាទសម្តេច ព្រះបរមនាថ នរោត្តម សីហមុនី',
+    date: '2026-05-14',
+    type: 'Public',
+    description: "His Majesty King Norodom Sihamoni's Official Birthday"
+  },
+  {
+    id: 'hol-2026-05-20',
+    name: 'National Day of Remembrance',
+    khmerName: 'ទិវាជាតិនៃការចងចាំ',
+    date: '2026-05-20',
+    type: 'Public',
+    description: 'National Day of Remembrance in Cambodia'
+  },
+  {
+    id: 'hol-2026-06-18',
+    name: "Queen Mother's Birthday",
+    khmerName: 'ព្រះរាជពិធីបុណ្យចម្រើនព្រះជន្ម សម្តេចព្រះមហាក្សត្រី ព្រះវររាជមាតាជាតិខ្មែរ',
+    date: '2026-06-18',
+    type: 'Public',
+    description: "Her Majesty the Queen Mother Norodom Monineath Sihanouk's Birthday"
+  },
+  {
+    id: 'hol-2026-09-24',
+    name: 'Constitutional Day',
+    khmerName: 'ទិវាប្រកាសរដ្ឋធម្មនុញ្ញ',
+    date: '2026-09-24',
+    type: 'Public',
+    description: 'Celebration of the promulgation of the Constitution of Cambodia'
+  },
+  {
+    id: 'hol-2026-10-10',
+    name: 'Pchum Ben Festival (Ancestors Day)',
+    khmerName: 'ពិធីបុណ្យភ្ជុំបិណ្ឌ',
+    date: '2026-10-10',
+    endDate: '2026-10-14',
+    type: 'Public',
+    description: 'Ancestors Day and traditional Cambodian religious festival'
+  },
+  {
+    id: 'hol-2026-10-15',
+    name: 'Commemoration Day of the King Father',
+    khmerName: 'ទិវាប្រារព្ធពិធីគោរពព្រះវិញ្ញាណក្ខន្ធ ព្រះករុណា ព្រះបរមរតនកោដ្ឋ',
+    date: '2026-10-15',
+    type: 'Public',
+    description: 'Commemoration of His Majesty King Father Norodom Sihanouk'
+  },
+  {
+    id: 'hol-2026-10-29',
+    name: "King's Coronation Day",
+    khmerName: 'ព្រះរាជពិធីគ្រងព្រះបរមរាជសម្បត្តិ',
+    date: '2026-10-29',
+    type: 'Public',
+    description: 'Anniversary of the Coronation of His Majesty King Norodom Sihamoni'
+  },
+  {
+    id: 'hol-2026-11-09',
+    name: 'National Independence Day',
+    khmerName: 'ទិវាបុណ្យឯករាជ្យជាតិ',
+    date: '2026-11-09',
+    type: 'Public',
+    description: 'National Independence Day of Cambodia'
+  },
+  {
+    id: 'hol-2026-11-23',
+    name: 'Water Festival Ceremony (Bon Om Touk)',
+    khmerName: 'ព្រះរាជពិធីបុណ្យអុំទូក បណ្តែតប្រទីប និងសំពះព្រះខែ អកអំបុក',
+    date: '2026-11-23',
+    endDate: '2026-11-25',
+    type: 'Public',
+    description: 'Traditional Cambodian Water Festival'
+  }
+];

@@ -206,9 +206,11 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const teachers = StorageService.getTeachers().filter(t => t.status === 'Active');
   const employees = StorageService.getEmployees().filter(e => e.status === 'Active');
   const [attendanceList, setAttendanceList] = useState(() => StorageService.getAttendance());
+  const [holidays, setHolidays] = useState(() => StorageService.getHolidays());
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
       setAttendanceList(StorageService.getAttendance());
+      setHolidays(StorageService.getHolidays());
     });
     return unsub;
   }, []);
@@ -345,6 +347,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const todayDayIndex = todayDate.getDay();
   const todayDayName = todayDate.toLocaleDateString('en-US', { weekday: 'long' });
   const todayDayShortName = todayDate.toLocaleDateString('en-US', { weekday: 'short' });
+
+  const todayHoliday = useMemo(() => AttendanceEngine.getHoliday(todayStr), [holidays, todayStr]);
+  const isTodayHoliday = Boolean(todayHoliday);
 
   const isTeacher = activeStaff?.type === 'teacher';
   const rawTeacherSubjectSchedules = isTeacher && activeStaff
@@ -567,6 +572,16 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   // Actual Check-in Execution
   const executeCheckIn = (specificSubjectId?: string, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
+
+    if (isTodayHoliday) {
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${todayHoliday?.name}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
 
     const targetSubject = isTeacher
       ? (teacherSubjectSchedules.find((s: TeacherSubjectSchedule) => s.id === (specificSubjectId || selectedSubjectId)) || activeSubject)
@@ -802,6 +817,16 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const handleCheckIn = (specificSubjectId?: string, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
 
+    if (isTodayHoliday) {
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${todayHoliday?.name}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     const targetShift = shiftType || employeeSelectedShift;
     if (systemSettings.requirePinForKiosk !== false && !isAdmin) {
       setPinError(null);
@@ -873,6 +898,15 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     setPinError(null);
 
     if (currentAction === 'checkin') {
+      if (isTodayHoliday) {
+        showToast(
+          isKhmer
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+            : `Check-in denied: Today (${todayStr}) is an official holiday — "${todayHoliday?.name}". Check-in is not allowed on holidays.`,
+          'error'
+        );
+        return;
+      }
       executeCheckIn(currentSubId, currentShift);
     } else {
       executeCheckOut(currentSubId, autoSetToEnd, currentShift);
@@ -932,6 +966,36 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
         {/* Terminal Content Body */}
         <div className={isMobileModal ? 'p-1 sm:p-2 space-y-4' : 'p-4 sm:p-7 space-y-5 sm:space-y-6'}>
+
+          {/* Official Holiday Notice Banner */}
+          {todayHoliday && (
+            <div className="p-4 sm:p-5 rounded-3xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-950 shadow-sm flex items-start gap-3.5 animate-in fade-in">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-md shadow-amber-500/20">
+                🏖️
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-300">
+                    {isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ' : 'Official Public Holiday'}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-amber-800">
+                    {todayStr}
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-amber-950 mt-1">
+                  {isKhmer ? todayHoliday.khmerName || todayHoliday.name : todayHoliday.name}
+                  {isKhmer && todayHoliday.name !== todayHoliday.khmerName && (
+                    <span className="font-normal text-xs text-amber-800 ml-1.5">({todayHoliday.name})</span>
+                  )}
+                </h3>
+                <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed font-medium">
+                  {isKhmer
+                    ? 'ស្ថាប័នសាលាត្រូវបានបិទសម្រាក។ ការស្កេនវត្តមានចូល (Check-In) ត្រូវបានបិទដំណើរការ និងមិនអនុញ្ញាតនៅថ្ងៃឈប់សម្រាកឡើយ។'
+                    : 'The school is closed for the holiday. Attendance check-in is strictly closed and not permitted today.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* GPS Geofence Real-time Verification Bar */}
           {systemSettings.enforceGeofence && (
@@ -1386,7 +1450,24 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
 
                           {/* Quick trigger button */}
                           {!isCheckedIn ? (
-                            isPresentTime ? (
+                            isTodayHoliday ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  showToast(
+                                    isKhmer
+                                      ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                                      : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+                                    'error'
+                                  );
+                                }}
+                                className="w-full sm:w-auto px-4 py-2 sm:py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1 cursor-not-allowed opacity-90"
+                              >
+                                <Lock className="w-3.5 h-3.5 text-amber-700" />
+                                <span>{isKhmer ? 'ឈប់សម្រាកបុណ្យ' : 'Holiday'}</span>
+                              </button>
+                            ) : isPresentTime ? (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1571,6 +1652,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                       onClick={() => handleCheckIn()}
                       disabled={
                         isSubmitting ||
+                        isTodayHoliday ||
                         Boolean(currentRecord?.checkInTime) ||
                         !activeSubject ||
                         isBeforeStartTime ||
@@ -1578,7 +1660,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                         isOverEndTime
                       }
                       className={`flex flex-col items-center justify-center p-5 sm:p-7 rounded-3xl font-black text-center transition-all duration-150 active:scale-98 shadow-lg ${
-                        currentRecord?.checkInTime ||
+                        isTodayHoliday
+                          ? 'bg-amber-50 text-amber-800 border-2 border-amber-300 cursor-not-allowed shadow-none'
+                          : currentRecord?.checkInTime ||
                         !activeSubject ||
                         isBeforeStartTime ||
                         (!isCurrentSubjectPresentTime && !isEarlyArrival) ||
@@ -1589,7 +1673,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                           : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 hover:shadow-xl'
                       }`}
                     >
-                      {isOverEndTime ? (
+                      {isTodayHoliday ? (
+                        <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-600" />
+                      ) : isOverEndTime ? (
                         <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-rose-500" />
                       ) : isBeforeStartTime ? (
                         <Lock className="w-9 h-9 sm:w-10 sm:h-10 mb-2 text-amber-500" />
@@ -1599,7 +1685,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                         <CheckCircle2 className="w-9 h-9 sm:w-10 sm:h-10 mb-2" />
                       )}
                       <span className="text-base sm:text-xl font-black tracking-tight uppercase">
-                        {!activeSubject
+                        {isTodayHoliday
+                          ? (isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ — មិនអនុញ្ញាតស្កេនចូល' : 'HOLIDAY — CHECK-IN NOT ALLOWED')
+                          : !activeSubject
                           ? (isKhmer ? 'ត្រូវមានកាលវិភាគមុខវិជ្ជា' : 'SUBJECT SCHEDULE REQUIRED')
                           : currentRecord?.checkInTime
                           ? (isKhmer ? 'បានស្កេនចូលរួចរាល់' : 'Already Checked In')
@@ -1616,7 +1704,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                           : (isKhmer ? 'ស្កេនចូល (CHECK IN)' : 'CHECK IN')}
                       </span>
                       <span className="text-xs font-medium opacity-90 mt-1">
-                        {!activeSubject
+                        {isTodayHoliday
+                          ? (isKhmer ? `ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។ សាលាត្រូវបានបិទសម្រាក។` : `Today is an official holiday: "${todayHoliday?.name}". School is closed.`)
+                          : !activeSubject
                           ? (isKhmer ? 'គ្រូត្រូវតែស្កេនចូលតាមកាលវិភាគមុខវិជ្ជា' : 'Teachers must clock in by specific subject period')
                           : currentRecord?.checkInTime
                           ? (isKhmer ? `បានកត់ត្រាម៉ោង ${currentRecord.checkInTime}` : `Recorded at ${currentRecord.checkInTime}`)
@@ -1783,15 +1873,33 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                       {/* Action Buttons for Morning */}
                       <div className="pt-1">
                         {!employeeMorningRecord?.checkInTime ? (
-                          <button
-                            type="button"
-                            onClick={() => handleCheckIn(undefined, 'morning')}
-                            disabled={isSubmitting}
-                            className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-md shadow-emerald-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            <LogIn className="w-4 h-4 shrink-0" />
-                            <span>{isKhmer ? 'ស្កេនចូល វេនព្រឹក (Morning In)' : 'Clock In Morning Shift'}</span>
-                          </button>
+                          isTodayHoliday ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                showToast(
+                                  isKhmer
+                                    ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                                    : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+                                  'error'
+                                );
+                              }}
+                              className="w-full py-3 px-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-800 text-xs sm:text-sm font-black flex items-center justify-center gap-2 cursor-not-allowed"
+                            >
+                              <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                              <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ (បិទស្កេនចូល)' : 'Holiday: Check-in Closed'}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCheckIn(undefined, 'morning')}
+                              disabled={isSubmitting}
+                              className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-md shadow-emerald-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              <LogIn className="w-4 h-4 shrink-0" />
+                              <span>{isKhmer ? 'ស្កេនចូល វេនព្រឹក (Morning In)' : 'Clock In Morning Shift'}</span>
+                            </button>
+                          )
                         ) : !employeeMorningRecord?.checkOutTime ? (
                           <button
                             type="button"
@@ -1872,15 +1980,33 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                       {/* Action Buttons for Evening */}
                       <div className="pt-1">
                         {!employeeEveningRecord?.checkInTime ? (
-                          <button
-                            type="button"
-                            onClick={() => handleCheckIn(undefined, 'evening')}
-                            disabled={isSubmitting}
-                            className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-md shadow-emerald-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            <LogIn className="w-4 h-4 shrink-0" />
-                            <span>{isKhmer ? 'ស្កេនចូល វេនល្ងាច (Evening In)' : 'Clock In Evening Shift'}</span>
-                          </button>
+                          isTodayHoliday ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                showToast(
+                                  isKhmer
+                                    ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                                    : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+                                  'error'
+                                );
+                              }}
+                              className="w-full py-3 px-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-800 text-xs sm:text-sm font-black flex items-center justify-center gap-2 cursor-not-allowed"
+                            >
+                              <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                              <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ (បិទស្កេនចូល)' : 'Holiday: Check-in Closed'}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCheckIn(undefined, 'evening')}
+                              disabled={isSubmitting}
+                              className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-black shadow-md shadow-emerald-600/20 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              <LogIn className="w-4 h-4 shrink-0" />
+                              <span>{isKhmer ? 'ស្កេនចូល វេនល្ងាច (Evening In)' : 'Clock In Evening Shift'}</span>
+                            </button>
+                          )
                         ) : !employeeEveningRecord?.checkOutTime ? (
                           <button
                             type="button"

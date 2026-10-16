@@ -27,6 +27,7 @@ import confetti from 'canvas-confetti';
 import { ScheduleQrService, DecodedScheduleResult } from '../../services/scheduleQrService.ts';
 import { StorageService } from '../../services/storageService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
+import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { Teacher, AttendanceRecord, TeacherSubjectSchedule } from '../../types/index.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
@@ -123,6 +124,19 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
     const targetPeriodId = activeTarget?.id;
 
     const allAttendance = StorageService.getAttendance();
+
+    // Strict Holiday Validation: Do not allow check-in on official holidays
+    const todayHoliday = AttendanceEngine.getHoliday(todayStr);
+    if (todayHoliday) {
+      return {
+        type: 'HOLIDAY_BLOCKED' as const,
+        record: undefined as any,
+        title: isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ' : 'Official Public Holiday',
+        message: isKhmer
+          ? `ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday.khmerName || todayHoliday.name}"។ មិនអនុញ្ញាតឱ្យស្កេនវត្តមានចូលឡើយ។`
+          : `Today (${todayStr}) is an official holiday: "${todayHoliday.name}". Attendance check-in is not permitted.`
+      };
+    }
 
     // Look for attendance record today for this teacher matching this session
     const existing = allAttendance.find(r => {
@@ -498,6 +512,15 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
       const isLate = lateDiff > graceMinutes;
       const lateMinutes = isLate ? Math.max(0, lateDiff) : 0;
 
+      // 0. Prevent check-in on official holidays
+      if (duplicateScanInfo?.type === 'HOLIDAY_BLOCKED') {
+        showToast(duplicateScanInfo.message, 'error');
+        setPinError(duplicateScanInfo.message);
+        setIsVerifying(false);
+        setPinDigits('');
+        return;
+      }
+
       // 1. Check if this is a Check-Out action for an already checked-in session
       if (
         duplicateScanInfo?.type === 'READY_TO_CHECKOUT' ||
@@ -567,6 +590,20 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
           'success'
         );
         onSuccess?.(updatedRecord);
+        return;
+      }
+
+      // 1. Strict Holiday Block: Do not allow check-in on official holidays
+      const holiday = AttendanceEngine.getHoliday(todayStr);
+      if (holiday && !forceCheckOutMode) {
+        const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+        const msg = isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។ មិនអនុញ្ញាតឱ្យស្កេនវត្តមាននៅថ្ងៃឈប់សម្រាកឡើយ។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`;
+        showToast(msg, 'error');
+        setPinError(msg);
+        setIsVerifying(false);
+        setPinDigits('');
         return;
       }
 
@@ -1135,7 +1172,9 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
               {duplicateScanInfo && (
                 <div
                   className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
-                    duplicateScanInfo.type === 'ALREADY_COMPLETED'
+                    duplicateScanInfo.type === 'HOLIDAY_BLOCKED'
+                      ? 'bg-amber-50/95 border-amber-300 text-amber-950'
+                      : duplicateScanInfo.type === 'ALREADY_COMPLETED'
                       ? 'bg-rose-50/90 border-rose-200 text-rose-950'
                       : duplicateScanInfo.type === 'RECENT_DUPLICATE'
                       ? 'bg-amber-50/90 border-amber-200 text-amber-950'
@@ -1144,7 +1183,9 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
                 >
                   <div className="flex items-center justify-between font-bold">
                     <div className="flex items-center gap-1.5">
-                      {duplicateScanInfo.type === 'ALREADY_COMPLETED' ? (
+                      {duplicateScanInfo.type === 'HOLIDAY_BLOCKED' ? (
+                        <span className="text-base">🏖️</span>
+                      ) : duplicateScanInfo.type === 'ALREADY_COMPLETED' ? (
                         <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
                       ) : duplicateScanInfo.type === 'RECENT_DUPLICATE' ? (
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -1156,14 +1197,18 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
 
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        duplicateScanInfo.type === 'ALREADY_COMPLETED'
+                        duplicateScanInfo.type === 'HOLIDAY_BLOCKED'
+                          ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                          : duplicateScanInfo.type === 'ALREADY_COMPLETED'
                           ? 'bg-rose-200/80 text-rose-900'
                           : duplicateScanInfo.type === 'RECENT_DUPLICATE'
                           ? 'bg-amber-200/80 text-amber-900'
                           : 'bg-emerald-200/80 text-emerald-900'
                       }`}
                     >
-                      {duplicateScanInfo.type === 'ALREADY_COMPLETED'
+                      {duplicateScanInfo.type === 'HOLIDAY_BLOCKED'
+                        ? (isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ' : 'Holiday Closed')
+                        : duplicateScanInfo.type === 'ALREADY_COMPLETED'
                         ? (isKhmer ? 'ទប់ស្កាត់ការស្កេនជាន់' : 'Duplicate Blocked')
                         : duplicateScanInfo.type === 'RECENT_DUPLICATE'
                         ? (isKhmer ? 'កំពុងស្ថិតក្នុង Cooldown' : 'Cooldown Active')
@@ -1194,23 +1239,25 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
                     </div>
                   )}
 
-                  {/* If already completed, show option to scan another class or close */}
-                  {duplicateScanInfo.type === 'ALREADY_COMPLETED' && (
+                  {/* If already completed or holiday blocked, show option to close */}
+                  {(duplicateScanInfo.type === 'ALREADY_COMPLETED' || duplicateScanInfo.type === 'HOLIDAY_BLOCKED') && (
                     <div className="pt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStep('scan');
-                          if (scanMode === 'camera') startCamera();
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
-                      >
-                        {isKhmer ? 'ស្កេនម៉ោងបង្រៀនផ្សេងទៀត' : 'Scan Different Class Period'}
-                      </button>
+                      {duplicateScanInfo.type === 'ALREADY_COMPLETED' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStep('scan');
+                            if (scanMode === 'camera') startCamera();
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                        >
+                          {isKhmer ? 'ស្កេនម៉ោងបង្រៀនផ្សេងទៀត' : 'Scan Different Class Period'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={handleModalClose}
-                        className="px-3.5 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-800 hover:bg-rose-50 font-bold text-xs transition-colors cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-800 hover:bg-slate-50 font-bold text-xs transition-colors cursor-pointer"
                       >
                         {isKhmer ? 'បិទផ្ទាំងនេះ' : 'Close Modal'}
                       </button>
@@ -1219,8 +1266,8 @@ export const ScheduleQRScanModal: React.FC<ScheduleQRScanModalProps> = ({
                 </div>
               )}
 
-              {/* 4-Digit Security PIN Section - Only available when assigned teacher is locked and not blocked by completed duplicate */}
-              {selectedTeacher && duplicateScanInfo?.type !== 'ALREADY_COMPLETED' && (
+              {/* 4-Digit Security PIN Section - Only available when assigned teacher is locked and not blocked by completed duplicate or holiday */}
+              {selectedTeacher && duplicateScanInfo?.type !== 'ALREADY_COMPLETED' && duplicateScanInfo?.type !== 'HOLIDAY_BLOCKED' && (
                 <div className="p-4 sm:p-5 rounded-3xl bg-slate-900 text-white space-y-3 shadow-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">

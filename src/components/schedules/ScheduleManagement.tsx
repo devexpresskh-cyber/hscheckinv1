@@ -849,6 +849,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     const targetTeacherKhmer = assignedTeacher?.khmerName || sub.khmerTeacherName;
     const targetDept = assignedTeacher?.department || 'Academic & Curriculum';
 
+    const holiday = AttendanceEngine.getHoliday();
+    if (holiday) {
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។`
+          : `Check-in denied: Today is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     // Allow early check-in buffer: 30 minutes before class
     const earlyBuffer = 30;
     const earliestMins = Math.max(0, startMins - earlyBuffer);

@@ -430,6 +430,19 @@ export const EmployeeMonthlyPresentCalendar: React.FC<EmployeeMonthlyPresentCale
   // Handlers for instant Check-in and Check-out
   const handleCheckInNow = () => {
     if (!currentDisplayEmployee && !currentUser) return;
+
+    const holiday = AttendanceEngine.getHoliday(todayStr);
+    if (holiday) {
+      const holidayLabel = holiday.khmerName ? `${holiday.name} (${holiday.khmerName})` : holiday.name;
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     const personId = currentDisplayEmployee?.id || currentUser.id;

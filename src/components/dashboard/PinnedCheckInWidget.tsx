@@ -5,7 +5,7 @@ import { useLanguage } from '../../context/LanguageContext.tsx';
 import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { GeoService } from '../../services/geoService.ts';
-import { Employee, Teacher, AttendanceRecord, TeacherSubjectSchedule, Schedule } from '../../types/index.ts';
+import { Employee, Teacher, AttendanceRecord, TeacherSubjectSchedule, Schedule, Holiday } from '../../types/index.ts';
 import confetti from 'canvas-confetti';
 import {
   Clock,
@@ -23,7 +23,8 @@ import {
   Pin,
   Sun,
   Moon,
-  ClockAlert
+  ClockAlert,
+  Palmtree
 } from 'lucide-react';
 
 interface PinnedCheckInWidgetProps {
@@ -51,6 +52,7 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
     StorageService.getSubjectSchedules()
   );
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
+  const [holidays, setHolidays] = useState<Holiday[]>(() => StorageService.getHolidays());
 
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
@@ -60,6 +62,7 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
       setSchedules(StorageService.getSchedules());
       setSubjectSchedules(StorageService.getSubjectSchedules());
       setSystemSettings(StorageService.getSystemSettings());
+      setHolidays(StorageService.getHolidays());
     });
     return unsub;
   }, []);
@@ -73,6 +76,8 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
   }, []);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayHoliday = useMemo(() => AttendanceEngine.getHoliday(todayStr), [todayStr, holidays]);
+  const isTodayHoliday = Boolean(todayHoliday);
   const todayDayIndex = useMemo(() => new Date().getDay(), []);
   const currentTimeStr = useMemo(() => AttendanceEngine.getCurrentTimeString(), [tick]);
   const curMins = useMemo(() => AttendanceEngine.timeToMinutes(currentTimeStr), [currentTimeStr]);
@@ -231,6 +236,16 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
   const handleEmployeeCheckIn = async (shift: 'morning' | 'evening') => {
     if (!selectedEmployee || isSubmitting) return;
 
+    if (isTodayHoliday) {
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${todayHoliday?.name}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
+
     const coords = await getGpsCoordsForCheck();
     if (systemSettings.enforceGeofence) {
       if (!coords) {
@@ -351,6 +366,16 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
   // Handle Teacher Check-in / Check-out
   const handleTeacherCheckIn = async () => {
     if (!selectedTeacher || !activeTeacherSubject || isSubmitting) return;
+
+    if (isTodayHoliday) {
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${todayHoliday?.name}". Check-in is not allowed on holidays.`,
+        'error'
+      );
+      return;
+    }
 
     const coords = await getGpsCoordsForCheck();
     if (systemSettings.enforceGeofence) {
@@ -538,6 +563,33 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
         </div>
       </div>
 
+      {/* Official Holiday Notice Banner */}
+      {isTodayHoliday && (
+        <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-400/80 flex items-start gap-3 text-amber-950 shadow-2xs">
+          <div className="w-9 h-9 rounded-xl bg-amber-200 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+            <Palmtree className="w-5 h-5 text-amber-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs sm:text-sm font-black text-amber-950 uppercase tracking-wide">
+                {isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ • បិទដំណើរការស្កេនចូល' : 'Official Holiday • Check-in Closed'}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 uppercase">
+                {todayHoliday?.type || 'Public'} Holiday
+              </span>
+            </div>
+            <p className="text-xs font-extrabold text-amber-900 mt-0.5">
+              {todayHoliday?.name} {todayHoliday?.khmerName ? `(${todayHoliday.khmerName})` : ''}
+            </p>
+            <p className="text-[11px] text-amber-800/90 font-medium mt-0.5 leading-relaxed">
+              {isKhmer
+                ? 'សាលាត្រូវបានបិទសម្រាក។ ការស្កេនវត្តមានចូល (Check-In) ត្រូវបានបិទដំណើរការ និងមិនអនុញ្ញាតនៅថ្ងៃឈប់សម្រាកឡើយ។'
+                : 'The school is closed for the holiday. Attendance check-in is strictly closed and not permitted today.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Action Area */}
       {!isTargetTeacher && selectedEmployee ? (
         /* ================= EMPLOYEE TWO-SHIFT STATION ================= */
@@ -624,15 +676,33 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
               {/* Action Buttons for Morning Shift */}
               <div className="flex items-center gap-2 pt-1">
                 {!morningRecord?.checkInTime ? (
-                  <button
-                    type="button"
-                    onClick={() => handleEmployeeCheckIn('morning')}
-                    disabled={isSubmitting}
-                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <LogIn className="w-3.5 h-3.5 shrink-0" />
-                    <span>{isKhmer ? 'ស្កេនចូល វេនព្រឹក' : 'Check In (Morning)'}</span>
-                  </button>
+                  isTodayHoliday ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        showToast(
+                          isKhmer
+                            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                            : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+                          'error'
+                        );
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-xs font-black shadow-2xs cursor-not-allowed flex items-center justify-center gap-1.5 opacity-90"
+                    >
+                      <Palmtree className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាក (បិទស្កេនចូល)' : 'Holiday: Check-in Closed'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleEmployeeCheckIn('morning')}
+                      disabled={isSubmitting}
+                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <LogIn className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isKhmer ? 'ស្កេនចូល វេនព្រឹក' : 'Check In (Morning)'}</span>
+                    </button>
+                  )
                 ) : !morningRecord?.checkOutTime ? (
                   <button
                     type="button"
@@ -715,15 +785,33 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
               {/* Action Buttons for Evening Shift */}
               <div className="flex items-center gap-2 pt-1">
                 {!eveningRecord?.checkInTime ? (
-                  <button
-                    type="button"
-                    onClick={() => handleEmployeeCheckIn('evening')}
-                    disabled={isSubmitting}
-                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <LogIn className="w-3.5 h-3.5 shrink-0" />
-                    <span>{isKhmer ? 'ស្កេនចូល វេនល្ងាច' : 'Check In (Evening)'}</span>
-                  </button>
+                  isTodayHoliday ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        showToast(
+                          isKhmer
+                            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                            : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+                          'error'
+                        );
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-xs font-black shadow-2xs cursor-not-allowed flex items-center justify-center gap-1.5 opacity-90"
+                    >
+                      <Palmtree className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាក (បិទស្កេនចូល)' : 'Holiday: Check-in Closed'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleEmployeeCheckIn('evening')}
+                      disabled={isSubmitting}
+                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <LogIn className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isKhmer ? 'ស្កេនចូល វេនល្ងាច' : 'Check In (Evening)'}</span>
+                    </button>
+                  )
                 ) : !eveningRecord?.checkOutTime ? (
                   <button
                     type="button"
@@ -788,15 +876,33 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
                 {!teacherRecord?.checkInTime ? (
-                  <button
-                    type="button"
-                    onClick={handleTeacherCheckIn}
-                    disabled={isSubmitting}
-                    className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span>{isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀន' : 'Check In Class'}</span>
-                  </button>
+                  isTodayHoliday ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        showToast(
+                          isKhmer
+                            ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                            : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+                          'error'
+                        );
+                      }}
+                      className="py-2 px-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-xs font-black shadow-2xs cursor-not-allowed flex items-center gap-1.5 opacity-90"
+                    >
+                      <Palmtree className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{isKhmer ? 'ថ្ងៃឈប់សម្រាក (បិទស្កេនចូល)' : 'Holiday: Check-in Closed'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleTeacherCheckIn}
+                      disabled={isSubmitting}
+                      className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>{isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀន' : 'Check In Class'}</span>
+                    </button>
+                  )
                 ) : !teacherRecord?.checkOutTime ? (
                   <button
                     type="button"

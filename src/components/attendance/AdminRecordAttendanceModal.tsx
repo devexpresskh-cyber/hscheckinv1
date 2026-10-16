@@ -85,6 +85,9 @@ export const AdminRecordAttendanceModal: React.FC<AdminRecordAttendanceModalProp
     return new Date(y, m - 1, d).getDay();
   }, [date]);
 
+  // Holiday check for chosen date
+  const dateHoliday = useMemo(() => AttendanceEngine.getHoliday(date), [date]);
+
   // Classes for this teacher on this day of week
   const teacherClassesOnDate = useMemo(() => {
     if (!selectedTeacher) return [];
@@ -160,6 +163,17 @@ export const AdminRecordAttendanceModal: React.FC<AdminRecordAttendanceModalProp
     e.preventDefault();
     if (!selectedTeacher) {
       showToast('Please select a teacher', 'error');
+      return;
+    }
+
+    if (dateHoliday && (status === 'Present' || status === 'Late' || Boolean(checkInTime))) {
+      const holidayLabel = dateHoliday.khmerName ? `${dateHoliday.name} (${dateHoliday.khmerName})` : dateHoliday.name;
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យកត់ត្រាការស្កេនចូលទេ៖ កាលបរិច្ឆេទ ${date} ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${holidayLabel}"។`
+          : `Check-in denied: ${date} is an official holiday — "${holidayLabel}". Check-in is not allowed on holidays.`,
+        'error'
+      );
       return;
     }
 
@@ -352,6 +366,11 @@ export const AdminRecordAttendanceModal: React.FC<AdminRecordAttendanceModalProp
                 onChange={e => setDate(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 shadow-2xs"
               />
+              {dateHoliday && (
+                <div className="mt-1.5 p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[11px] flex items-center gap-1.5 font-bold">
+                  <span>🌴 {dateHoliday.name} {dateHoliday.khmerName ? `(${dateHoliday.khmerName})` : ''}: {isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ (បិទស្កេនចូល)' : 'Official Holiday (Check-in Disabled)'}</span>
+                </div>
+              )}
             </div>
 
             <div>

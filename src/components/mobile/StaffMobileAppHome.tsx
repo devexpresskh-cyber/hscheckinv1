@@ -115,6 +115,8 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
   }, []);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayHoliday = useMemo(() => AttendanceEngine.getHoliday(todayStr), [todayStr, holidays]);
+  const isTodayHoliday = Boolean(todayHoliday);
   const todayDayIndex = useMemo(() => new Date().getDay(), []);
   const currentTimeStr = useMemo(() => AttendanceEngine.getCurrentTimeString(), [tick]);
   const curMins = useMemo(() => AttendanceEngine.timeToMinutes(currentTimeStr), [currentTimeStr]);
@@ -276,8 +278,17 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
       labelEn: 'Check In',
       labelKm: 'ស្កេនចូល',
       icon: LogIn,
-      bgColor: 'bg-blue-50 text-blue-600',
-      action: onOpenCheckIn
+      bgColor: isTodayHoliday ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-600',
+      action: isTodayHoliday
+        ? () => {
+            showToast(
+              isKhmer
+                ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះជាថ្ងៃឈប់សម្រាកបុណ្យ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+                : `Check-in denied: Today is an official holiday — "${todayHoliday?.name}".`,
+              'error'
+            );
+          }
+        : onOpenCheckIn
     },
     {
       id: 'checkout',
@@ -541,7 +552,11 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
                 </div>
 
                 <div>
-                  {isCheckedInToday ? (
+                  {isTodayHoliday ? (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      {isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ' : 'Holiday: Closed'}
+                    </span>
+                  ) : isCheckedInToday ? (
                     <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
                       {isKhmer ? 'បានស្កេនចូល' : 'Present'}
                     </span>

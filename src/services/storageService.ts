@@ -34,7 +34,8 @@ import {
   DEFAULT_TIMETABLE_PERIODS,
   DEFAULT_SUBJECT_SCHEDULES,
   DEFAULT_SYSTEM_SETTINGS,
-  DEFAULT_TELEGRAM_SETTINGS
+  DEFAULT_TELEGRAM_SETTINGS,
+  DEFAULT_HOLIDAYS
 } from '../data/initialData.ts';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import {
@@ -133,7 +134,7 @@ let cache = {
   periods: getStored<TimetablePeriod[]>(STORAGE_KEYS.PERIODS, DEFAULT_TIMETABLE_PERIODS),
   subjectSchedules: getStored<TeacherSubjectSchedule[]>(STORAGE_KEYS.SUBJECT_SCHEDULES, DEFAULT_SUBJECT_SCHEDULES),
   attendance: getStored<AttendanceRecord[]>(STORAGE_KEYS.ATTENDANCE, []),
-  holidays: getStored<Holiday[]>(STORAGE_KEYS.HOLIDAYS, []),
+  holidays: getStored<Holiday[]>(STORAGE_KEYS.HOLIDAYS, DEFAULT_HOLIDAYS),
   departments: getStored<Department[]>(STORAGE_KEYS.DEPARTMENTS, DEFAULT_DEPARTMENTS),
   locations: getStored<WorkLocation[]>(STORAGE_KEYS.LOCATIONS, DEFAULT_LOCATIONS),
   telegramSettings: getStored<TelegramSettings>(STORAGE_KEYS.TELEGRAM_SETTINGS, DEFAULT_TELEGRAM_SETTINGS),
@@ -320,9 +321,20 @@ function initFirestoreSync() {
 
   // 11. Holidays
   onSnapshot(collection(db, 'holidays'), snapshot => {
-    cache.holidays = snapshot.docs.map(d => d.data() as Holiday);
-    setStored(STORAGE_KEYS.HOLIDAYS, cache.holidays);
-    notifyListeners();
+    if (!snapshot.empty) {
+      cache.holidays = snapshot.docs.map(d => d.data() as Holiday);
+      setStored(STORAGE_KEYS.HOLIDAYS, cache.holidays);
+      notifyListeners();
+    } else {
+      cache.holidays = DEFAULT_HOLIDAYS;
+      setStored(STORAGE_KEYS.HOLIDAYS, cache.holidays);
+      DEFAULT_HOLIDAYS.forEach(h => {
+        setDoc(doc(db, 'holidays', h.id), h).catch(err =>
+          handleFirestoreError(err, OperationType.WRITE, `holidays/${h.id}`)
+        );
+      });
+      notifyListeners();
+    }
   }, err => handleFirestoreError(err, OperationType.GET, 'holidays'));
 
   // 12. Departments
@@ -2064,6 +2076,9 @@ export const StorageService = {
 
   // Holidays
   getHolidays(): Holiday[] {
+    if (!cache.holidays || cache.holidays.length === 0) {
+      return DEFAULT_HOLIDAYS;
+    }
     return cache.holidays;
   },
   saveHolidays(holidays: Holiday[]) {
