@@ -25,6 +25,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
+      window.addEventListener('error', function(event) {
+        if (event && event.message && (event.message.indexOf("reading 'send'") !== -1 || event.message.indexOf("WebSocket") !== -1)) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event && event.reason && event.reason.message && (event.reason.message.indexOf("reading 'send'") !== -1 || event.reason.message.indexOf("WebSocket") !== -1)) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      }, true);
       window.__edutrack_pwa_prompt = null;
       window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
