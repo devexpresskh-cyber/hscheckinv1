@@ -56,6 +56,10 @@ export function usePWAInstall() {
       setIsInstalled(true);
       setDeferredPrompt(null);
       (window as any).__edutrack_pwa_prompt = null;
+      try {
+        localStorage.setItem('edutrack_pwa_installed', 'true');
+        localStorage.setItem('edutrack_pwa_dont_show_again', 'true');
+      } catch {}
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -79,6 +83,10 @@ export function usePWAInstall() {
       if (outcome === 'accepted') {
         setIsInstalled(true);
         setDeferredPrompt(null);
+        try {
+          localStorage.setItem('edutrack_pwa_installed', 'true');
+          localStorage.setItem('edutrack_pwa_dont_show_again', 'true');
+        } catch {}
         return true;
       }
       return false;

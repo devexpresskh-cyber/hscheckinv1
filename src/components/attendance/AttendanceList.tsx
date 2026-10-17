@@ -762,7 +762,7 @@ export const AttendanceList: React.FC = () => {
               }`}
             >
               <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              <span>{isKhmer ? 'វត្តមានតាមម៉ោង' : 'Period Header'}</span>
+              <span>{isKhmer ? 'វត្តមានតាមម៉ោង (Timeline)' : 'Period Header / Timeline'}</span>
             </button>
             <button
               onClick={() => setActiveTab('monthly_sheet')}

@@ -18,8 +18,14 @@ export const MobileInstallFloatingBanner: React.FC = () => {
     }
   }, []);
 
-  // If already installed (standalone mode) or dismissed in this session, don't show
-  if (isInstalled || dismissed) {
+  // If already installed (standalone mode or recorded) or clicked don't show again, don't show
+  const isPermanentlyOptedOut =
+    typeof window !== 'undefined' &&
+    (localStorage.getItem('edutrack_pwa_installed') === 'true' ||
+      localStorage.getItem('edutrack_pwa_dont_show_again') === 'true' ||
+      localStorage.getItem('edutrack_pwa_first_access_prompt_dismissed') === 'true');
+
+  if (isInstalled || isPermanentlyOptedOut || dismissed) {
     return null;
   }
 

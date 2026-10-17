@@ -32,20 +32,34 @@ export const FirstLoginInstallModal: React.FC = () => {
   });
 
   useEffect(() => {
-    // If running in standalone PWA, never show install prompt
-    if (isInstalled) {
+    // 1. If running in standalone PWA or already recorded as installed, never popup
+    if (isInstalled || localStorage.getItem('edutrack_pwa_installed') === 'true') {
       return;
     }
 
-    // Clear stale blocking flags so forced PWA install can display
-    try {
-      localStorage.removeItem('edutrack_pwa_first_login_prompt_dismissed');
-    } catch {}
+    // 2. If user clicked "Don't show again" or previously dismissed permanently, never popup
+    const isOptedOut =
+      localStorage.getItem('edutrack_pwa_dont_show_again') === 'true' ||
+      localStorage.getItem(STORAGE_KEY) === 'true';
 
-    // Force PWA install modal to appear on app load
+    if (isOptedOut) {
+      // Only open if explicitly triggered manually via button/event
+      const handleForceEvent = () => setIsOpen(true);
+      window.addEventListener('edutrack:force-pwa-install', handleForceEvent);
+      return () => window.removeEventListener('edutrack:force-pwa-install', handleForceEvent);
+    }
+
+    // 3. If dismissed in this current session (via Remind Later or Close), do not popup again this session
+    if (sessionStorage.getItem('edutrack_pwa_session_dismissed') === 'true') {
+      const handleForceEvent = () => setIsOpen(true);
+      window.addEventListener('edutrack:force-pwa-install', handleForceEvent);
+      return () => window.removeEventListener('edutrack:force-pwa-install', handleForceEvent);
+    }
+
+    // First time access: gentle delay before showing
     const timer = setTimeout(() => {
       setIsOpen(true);
-    }, 400);
+    }, 600);
 
     const handleForceEvent = () => {
       setIsOpen(true);
@@ -65,7 +79,12 @@ export const FirstLoginInstallModal: React.FC = () => {
 
   const handleDismiss = (dontShowAgain: boolean) => {
     if (dontShowAgain) {
+      // Permanently remember to never show again
+      localStorage.setItem('edutrack_pwa_dont_show_again', 'true');
       localStorage.setItem(STORAGE_KEY, 'true');
+    } else {
+      // Dismiss for current browser session
+      sessionStorage.setItem('edutrack_pwa_session_dismissed', 'true');
     }
     setIsOpen(false);
   };
@@ -76,6 +95,10 @@ export const FirstLoginInstallModal: React.FC = () => {
       if (isInstallable) {
         const accepted = await install();
         if (accepted) {
+          // Permanently remember that the app is installed so it NEVER pops up again
+          localStorage.setItem('edutrack_pwa_installed', 'true');
+          localStorage.setItem('edutrack_pwa_dont_show_again', 'true');
+          localStorage.setItem(STORAGE_KEY, 'true');
           setIsOpen(false);
           return;
         }

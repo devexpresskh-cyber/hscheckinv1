@@ -58,6 +58,10 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
     try {
       const accepted = await install();
       if (accepted) {
+        try {
+          localStorage.setItem('edutrack_pwa_installed', 'true');
+          localStorage.setItem('edutrack_pwa_dont_show_again', 'true');
+        } catch {}
         onClose();
       }
     } finally {

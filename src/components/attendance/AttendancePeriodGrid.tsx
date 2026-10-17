@@ -81,7 +81,31 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
   const [shiftFilter, setShiftFilter] = useState<'All' | 'Morning' | 'Afternoon'>('All');
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [groupView, setGroupView] = useState<'teacher' | 'class'>('teacher');
+  const [viewMode, setViewMode] = useState<'timeline' | 'grid'>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768 ? 'timeline' : 'grid';
+    }
+    return 'grid';
+  });
+  const [timelineGrouping, setTimelineGrouping] = useState<'period' | 'teacher'>('period');
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<number | 'All'>('All');
   const [selectedCellModal, setSelectedCellModal] = useState<{
     teacher: Teacher;
     cell: PeriodCellData;
@@ -171,6 +195,16 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
     }
     return list;
   }, [periods, shiftFilter]);
+
+  // Active period ongoing right now
+  const activeCurrentPeriod = useMemo(() => {
+    if (!isDateToday) return null;
+    return filteredPeriods.find(p => {
+      const s = AttendanceEngine.timeToMinutes(p.startTime);
+      const e = AttendanceEngine.timeToMinutes(p.endTime);
+      return curMinutes >= s && curMinutes <= e;
+    }) || null;
+  }, [isDateToday, filteredPeriods, curMinutes]);
 
   // Filtered teachers list
   const filteredTeachers = useMemo(() => {
@@ -385,6 +419,50 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
       };
     });
   }, [filteredPeriods, gridRows]);
+
+  // Groups of classes per period for "By Period" Timeline view
+  const periodScheduleGroups = useMemo(() => {
+    return filteredPeriods.map(period => {
+      const classesInPeriod: {
+        teacher: Teacher;
+        cell: PeriodCellData;
+      }[] = [];
+
+      gridRows.forEach(row => {
+        const cell = row.cells.find(c => c.period.periodNumber === period.periodNumber);
+        if (cell && cell.schedule) {
+          classesInPeriod.push({
+            teacher: row.teacher,
+            cell
+          });
+        }
+      });
+
+      const isCurrentActive = isDateToday && (curMinutes >= AttendanceEngine.timeToMinutes(period.startTime) && curMinutes <= AttendanceEngine.timeToMinutes(period.endTime));
+      const hasEnded = isDateToday ? curMinutes > AttendanceEngine.timeToMinutes(period.endTime) : selectedDate < todayStr;
+      const isUpcoming = isDateToday ? curMinutes < AttendanceEngine.timeToMinutes(period.startTime) : selectedDate > todayStr;
+
+      const presentCount = classesInPeriod.filter(c => c.cell.status === 'Present').length;
+      const lateCount = classesInPeriod.filter(c => c.cell.status === 'Late').length;
+      const inProgressCount = classesInPeriod.filter(c => c.cell.status === 'In Progress').length;
+      const missedCount = classesInPeriod.filter(c => c.cell.status === 'Absent' || c.cell.status === 'Leave').length;
+
+      return {
+        period,
+        classes: classesInPeriod,
+        isCurrentActive,
+        hasEnded,
+        isUpcoming,
+        stats: {
+          total: classesInPeriod.length,
+          present: presentCount,
+          late: lateCount,
+          inProgress: inProgressCount,
+          missed: missedCount
+        }
+      };
+    });
+  }, [filteredPeriods, gridRows, isDateToday, curMinutes, selectedDate, todayStr]);
 
   // Date Navigation
   const handlePrevDay = () => {
@@ -627,10 +705,10 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
     <div className="space-y-4">
 
       {/* Top Filter & Stepper Toolbar */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
         
-        {/* Date Selector with Steppers */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Date Selector with Steppers & Quick Today */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
           <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-1 shadow-2xs">
             <button
               onClick={handlePrevDay}
@@ -640,8 +718,8 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-2 px-3">
-              <Calendar className="w-4 h-4 text-indigo-600" />
+            <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3">
+              <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
               <input
                 type="date"
                 value={selectedDate}
@@ -663,7 +741,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           {selectedDate !== todayStr ? (
             <button
               onClick={() => setSelectedDate(todayStr)}
-              className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
+              className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors cursor-pointer"
             >
               {isKhmer ? 'ថ្ងៃនេះ (Today)' : 'Today'}
             </button>
@@ -674,41 +752,41 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
             </span>
           )}
 
-          {/* Search box */}
-          <div className="relative min-w-[190px]">
+          {/* Search box - full width on mobile */}
+          <div className="relative w-full sm:w-60 min-w-0">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder={isKhmer ? 'ស្វែងរកគ្រូ មុខវិជ្ជា ថ្នាក់...' : 'Search teacher, class, code...'}
+              placeholder={isKhmer ? 'ស្វែងរកគ្រូ មុខវិជ្ជា ថ្នាក់ បន្ទប់...' : 'Search teacher, class, room...'}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium focus:bg-white focus:outline-hidden"
             />
           </div>
         </div>
 
-        {/* Right Controls: Shift, Department, Print, CSV */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Right Controls: Shift, Department, View Mode, Print, CSV */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 justify-between lg:justify-end w-full lg:w-auto">
           
           {/* Shift Switcher */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
             <button
               onClick={() => setShiftFilter('All')}
-              className={`px-2.5 py-1 rounded-lg transition-colors ${shiftFilter === 'All' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${shiftFilter === 'All' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}
             >
-              {isKhmer ? 'គ្រប់ម៉ោង (All)' : 'All Periods'}
+              {isKhmer ? 'គ្រប់ម៉ោង' : 'All'}
             </button>
             <button
               onClick={() => setShiftFilter('Morning')}
-              className={`px-2.5 py-1 rounded-lg transition-colors ${shiftFilter === 'Morning' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${shiftFilter === 'Morning' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}
             >
-              {isKhmer ? 'ព្រឹក (P1-P5)' : 'Morning (P1-5)'}
+              {isKhmer ? 'ព្រឹក' : 'Morning'}
             </button>
             <button
               onClick={() => setShiftFilter('Afternoon')}
-              className={`px-2.5 py-1 rounded-lg transition-colors ${shiftFilter === 'Afternoon' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${shiftFilter === 'Afternoon' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}
             >
-              {isKhmer ? 'រសៀល (P6-P10)' : 'Afternoon (P6-10)'}
+              {isKhmer ? 'រសៀល' : 'Afternoon'}
             </button>
           </div>
 
@@ -717,19 +795,50 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
             <select
               value={selectedDept}
               onChange={e => setSelectedDept(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-hidden"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-hidden cursor-pointer"
             >
-              <option value="All">{isKhmer ? 'គ្រប់ដេប៉ាតឺម៉ង់' : 'All Departments'}</option>
+              <option value="All">{isKhmer ? 'គ្រប់ដេប៉ាតឺម៉ង់' : 'All Depts'}</option>
               {departments.map(d => (
                 <option key={d.id} value={d.name}>{d.name}</option>
               ))}
             </select>
           )}
 
+          {/* View Mode Switcher: Timeline vs Grid */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setViewMode('timeline')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === 'timeline'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Timeline View (ទិដ្ឋភាព Timeline)"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Timeline</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Table Grid View (ទិដ្ឋភាពតារាង)"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'តារាង' : 'Grid'}</span>
+            </button>
+          </div>
+
           {/* Print Button */}
           <button
+            type="button"
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
             title="Print Period Attendance"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -738,20 +847,21 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
 
           {/* Export CSV */}
           <button
+            type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>{isKhmer ? 'ទាញយក CSV' : 'Export CSV'}</span>
+            <span className="hidden sm:inline">{isKhmer ? 'ទាញយក CSV' : 'Export CSV'}</span>
+            <span className="sm:hidden">CSV</span>
           </button>
 
         </div>
-
       </div>
 
       {/* KPI Cards Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
+        <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
           <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wide">
             {isKhmer ? 'ម៉ោងត្រូវបង្រៀនសរុប' : 'Total Scheduled'}
           </span>
@@ -759,7 +869,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           <span className="text-[10px] text-slate-500">{isKhmer ? 'ថ្នាក់ថ្ងៃនេះ' : 'classes today'}</span>
         </div>
 
-        <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200/80 shadow-2xs">
+        <div className="bg-emerald-50/70 p-3 sm:p-3.5 rounded-2xl border border-emerald-200/80 shadow-2xs">
           <span className="text-[10px] uppercase font-bold text-emerald-700 block tracking-wide">
             {isKhmer ? 'មានវត្តមាន / ទាន់ពេល' : 'Present / On Time'}
           </span>
@@ -767,7 +877,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           <span className="text-[10px] text-emerald-600">{isKhmer ? 'បានស្កេនចូល' : 'sessions logged'}</span>
         </div>
 
-        <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
+        <div className="bg-amber-50/70 p-3 sm:p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
           <span className="text-[10px] uppercase font-bold text-amber-700 block tracking-wide">
             {isKhmer ? 'មកយឺត' : 'Late Arrival'}
           </span>
@@ -775,7 +885,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           <span className="text-[10px] text-amber-600">{isKhmer ? 'លើសម៉ោងកំណត់' : 'past grace period'}</span>
         </div>
 
-        <div className="bg-sky-50/70 p-3.5 rounded-2xl border border-sky-200/80 shadow-2xs">
+        <div className="bg-sky-50/70 p-3 sm:p-3.5 rounded-2xl border border-sky-200/80 shadow-2xs">
           <span className="text-[10px] uppercase font-bold text-sky-700 block tracking-wide">
             {isKhmer ? 'កំពុងបង្រៀន' : 'In Session Now'}
           </span>
@@ -783,7 +893,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           <span className="text-[10px] text-sky-600">{isKhmer ? 'ម៉ោងកំពុងដំណើរការ' : 'active right now'}</span>
         </div>
 
-        <div className="bg-rose-50/70 p-3.5 rounded-2xl border border-rose-200/80 shadow-2xs">
+        <div className="bg-rose-50/70 p-3 sm:p-3.5 rounded-2xl border border-rose-200/80 shadow-2xs col-span-2 sm:col-span-1">
           <span className="text-[10px] uppercase font-bold text-rose-700 block tracking-wide">
             {isKhmer ? 'ខកខាន / អវត្តមាន' : 'Missed / Absent'}
           </span>
@@ -792,24 +902,623 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
         </div>
       </div>
 
-      {/* Main Period Header Attendance Table */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Interactive Period Timeline Header Ribbon (Mobile & Responsive) */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-2 flex-wrap">
+                <span>{isKhmer ? 'កាលវិភាគតាមម៉ោង (Period Timeline)' : 'Period Attendance Timeline'}</span>
+                {isDateToday && activeCurrentPeriod && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
+                    <span>{activeCurrentPeriod.periodName} ({isKhmer ? 'កំពុងបង្រៀន' : 'Active'})</span>
+                  </span>
+                )}
+              </h3>
+              <p className="text-[11px] text-slate-500 font-medium truncate">
+                {dayNameKm || dayNameEn} • {formattedDisplayDate} • {dailyKpis.totalClasses} {isKhmer ? 'ថ្នាក់បង្រៀនថ្ងៃនេះ' : 'classes scheduled today'}
+              </p>
+            </div>
+          </div>
+
+          {/* Timeline View Options & Quick Jump */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {viewMode === 'timeline' && (
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setTimelineGrouping('period')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    timelineGrouping === 'period'
+                      ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Group by Period (តាមម៉ោង)"
+                >
+                  {isKhmer ? 'តាមម៉ោង' : 'By Period'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineGrouping('teacher')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    timelineGrouping === 'teacher'
+                      ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Group by Faculty (តាមគ្រូ)"
+                >
+                  {isKhmer ? 'តាមគ្រូ' : 'By Teacher'}
+                </button>
+              </div>
+            )}
+
+            {isDateToday && activeCurrentPeriod && selectedPeriodFilter !== activeCurrentPeriod.periodNumber && (
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodFilter(activeCurrentPeriod.periodNumber)}
+                className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Jump to active period"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
+                <span>{isKhmer ? 'ម៉ោងផ្ទាល់' : 'Live Now'}</span>
+              </button>
+            )}
+
+            {selectedPeriodFilter !== 'All' && (
+              <button
+                type="button"
+                onClick={() => setSelectedPeriodFilter('All')}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <span>{isKhmer ? 'មើលគ្រប់ម៉ោង' : 'Show All'}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Horizontal Scrolling Period Timeline Track */}
+        <div className="relative">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar touch-pan-x">
+            <button
+              type="button"
+              onClick={() => setSelectedPeriodFilter('All')}
+              className={`px-3 py-2 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer border ${
+                selectedPeriodFilter === 'All'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              <span>{isKhmer ? 'គ្រប់ម៉ោង' : 'All Periods'}</span>
+              <span className="ml-1.5 opacity-75 text-[10px]">({dailyKpis.totalClasses})</span>
+            </button>
+
+            {filteredPeriods.map(p => {
+              const isCurrentNow = isDateToday && (curMinutes >= AttendanceEngine.timeToMinutes(p.startTime) && curMinutes <= AttendanceEngine.timeToMinutes(p.endTime));
+              const isSelected = selectedPeriodFilter === p.periodNumber;
+              const stat = periodColumnTotals.find(t => t.periodNumber === p.periodNumber);
+
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelectedPeriodFilter(isSelected ? 'All' : p.periodNumber)}
+                  className={`flex items-center gap-2.5 px-3 sm:px-3.5 py-2 rounded-2xl text-left transition-all shrink-0 cursor-pointer border ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md ring-2 ring-indigo-400/30'
+                      : isCurrentNow
+                      ? 'bg-blue-50 hover:bg-blue-100 text-blue-950 border-blue-400 ring-1 ring-blue-300'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-xl flex items-center justify-center font-black text-[11px] sm:text-xs shrink-0 ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : isCurrentNow
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-200/80 text-slate-700'
+                  }`}>
+                    P{p.periodNumber}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black truncate">
+                        {p.khmerPeriodName || p.periodName}
+                      </span>
+                      {isCurrentNow && (
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping shrink-0" />
+                      )}
+                    </div>
+                    <div className={`text-[10px] font-mono leading-none mt-0.5 ${
+                      isSelected ? 'text-indigo-100' : isCurrentNow ? 'text-blue-700 font-bold' : 'text-slate-500'
+                    }`}>
+                      {p.startTime} - {p.endTime}
+                    </div>
+                  </div>
+
+                  {stat && (
+                    <div className={`text-right pl-1 border-l text-[10px] shrink-0 font-mono ${
+                      isSelected ? 'border-white/25 text-white' : 'border-slate-200 text-slate-600'
+                    }`}>
+                      <span className="font-extrabold">{stat.totalActiveOrPresent}</span>
+                      <span className="opacity-70">/{stat.scheduled}</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* TIMELINE VIEW (Optimized for Mobile & Touch Screens) */}
+      {/* ========================================================================= */}
+      {viewMode === 'timeline' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          
+          {/* Timeline Sub-view 1: Grouped by Period (Chronological time slots - Ideal for Mobile!) */}
+          {timelineGrouping === 'period' ? (
+            <div className="space-y-4">
+              {(() => {
+                const displayPeriodGroups = selectedPeriodFilter === 'All'
+                  ? periodScheduleGroups
+                  : periodScheduleGroups.filter(g => g.period.periodNumber === selectedPeriodFilter);
+
+                if (displayPeriodGroups.length === 0) {
+                  return (
+                    <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
+                      <Clock className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                      <p className="font-bold text-sm">
+                        {isKhmer ? 'ពុំមានកាលវិភាគបង្រៀនសម្រាប់កាលបរិច្ឆេទនេះទេ' : 'No teacher schedules found for this period.'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return displayPeriodGroups.map((group) => {
+                  const p = group.period;
+                  const isCurrentNow = group.isCurrentActive;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`bg-white rounded-3xl border overflow-hidden transition-all shadow-xs ${
+                        isCurrentNow
+                          ? 'border-blue-400 ring-2 ring-blue-400/20 shadow-blue-500/5'
+                          : 'border-slate-200'
+                      }`}
+                    >
+                      {/* Period Header Section */}
+                      <div className={`p-3.5 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                        isCurrentNow ? 'bg-blue-50/70 border-blue-200' : 'bg-slate-50/80 border-slate-200'
+                      }`}>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-2xs ${
+                            isCurrentNow ? 'bg-blue-600 text-white' : 'bg-slate-900 text-white'
+                          }`}>
+                            P{p.periodNumber}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-black text-slate-900 text-xs sm:text-sm">
+                                {p.khmerPeriodName || p.periodName}
+                              </h4>
+                              <span className="font-mono text-xs font-bold text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                                {p.startTime} - {p.endTime}
+                              </span>
+                              {isCurrentNow && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-600 text-white animate-pulse">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                  <span>{isKhmer ? 'កំពុងដំណើរការ' : 'Live Now'}</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                              {p.periodName} • {group.classes.length} {isKhmer ? 'ថ្នាក់បង្រៀនក្នុងម៉ោងនេះ' : 'classes scheduled'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Period Attendance Stats Badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold font-mono">
+                          <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            {group.stats.present} {isKhmer ? 'មានវត្តមាន' : 'Present'}
+                          </span>
+                          {group.stats.late > 0 && (
+                            <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-300">
+                              {group.stats.late} {isKhmer ? 'យឺត' : 'Late'}
+                            </span>
+                          )}
+                          {group.stats.inProgress > 0 && (
+                            <span className="px-2 py-0.5 rounded-lg bg-sky-100 text-sky-800 border border-sky-300">
+                              {group.stats.inProgress} {isKhmer ? 'កំពុងបង្រៀន' : 'In Session'}
+                            </span>
+                          )}
+                          {group.stats.missed > 0 && (
+                            <span className="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300">
+                              {group.stats.missed} {isKhmer ? 'អវត្តមាន' : 'Missed'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Period Classes Cards */}
+                      <div className="p-3.5 sm:p-4">
+                        {group.classes.length === 0 ? (
+                          <div className="py-6 text-center text-slate-400 text-xs italic bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                            {isKhmer ? 'គ្មានថ្នាក់បង្រៀនដែលបានកំណត់ក្នុងម៉ោងនេះទេ' : 'No classes scheduled for this period.'}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {group.classes.map(({ teacher, cell }) => {
+                              const sched = cell.schedule!;
+                              const isPresent = cell.status === 'Present';
+                              const isLate = cell.status === 'Late';
+                              const isInProgress = cell.status === 'In Progress';
+                              const isAbsent = cell.status === 'Absent' || cell.status === 'Leave';
+
+                              return (
+                                <div
+                                  key={`${teacher.id}-${cell.period.id}`}
+                                  onClick={() => setSelectedCellModal({ teacher, cell })}
+                                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer hover:shadow-md ${
+                                    isInProgress
+                                      ? 'bg-sky-50/60 border-sky-300 shadow-xs ring-1 ring-sky-300'
+                                      : isPresent
+                                      ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/70'
+                                      : isLate
+                                      ? 'bg-amber-50/40 border-amber-200 hover:bg-amber-50/70'
+                                      : isAbsent
+                                      ? 'bg-rose-50/40 border-rose-200 hover:bg-rose-50/70'
+                                      : 'bg-slate-50/70 border-slate-200 hover:bg-white'
+                                  }`}
+                                >
+                                  {/* Teacher & Subject Header */}
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs font-khmer">
+                                        {(teacher.khmerName || teacher.fullName).charAt(0)}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h5 className="font-black text-slate-900 text-xs truncate font-khmer">
+                                          {teacher.khmerName || teacher.fullName}
+                                        </h5>
+                                        <p className="text-[10px] text-slate-500 font-sans truncate">
+                                          {teacher.khmerName && teacher.fullName ? `${teacher.fullName} • ` : ''}{teacher.department}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Status Badge */}
+                                    <div className="shrink-0">
+                                      {isPresent ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          <span>{cell.checkInTime || 'Present'}</span>
+                                        </span>
+                                      ) : isLate ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                          <Clock className="w-3 h-3 text-amber-600" />
+                                          <span>+{cell.lateMinutes}m</span>
+                                        </span>
+                                      ) : isInProgress ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-300 animate-pulse">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" />
+                                          <span>Active</span>
+                                        </span>
+                                      ) : isAbsent ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                          <XCircle className="w-3 h-3 text-rose-600" />
+                                          <span>{cell.substitution ? (isKhmer ? 'ជំនួស' : 'Sub') : (isKhmer ? 'អវត្តមាន' : 'Absent')}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                          <Clock className="w-3 h-3 text-slate-400" />
+                                          <span>Sched</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Subject Title */}
+                                  <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="font-extrabold text-slate-900 text-xs truncate">
+                                        {sched.subject}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                                        {sched.gradeClass && (
+                                          <span className="flex items-center gap-1">
+                                            <Users2 className="w-3 h-3 text-slate-400" />
+                                            <span>{sched.gradeClass}</span>
+                                          </span>
+                                        )}
+                                        {sched.room && (
+                                          <span className="flex items-center gap-1 font-mono">
+                                            <MapPin className="w-3 h-3 text-slate-400" />
+                                            <span>{sched.room}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="p-1 rounded-lg bg-slate-100 text-slate-400 group-hover:text-indigo-600 shrink-0">
+                                      <ChevronRight className="w-3.5 h-3.5" />
+                                    </div>
+                                  </div>
+
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          ) : (
+            /* Timeline Sub-view 2: Grouped by Teacher (Teacher profile with vertical period step track) */
+            <div className="space-y-4">
+              {gridRows.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
+                  <Clock className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <p className="font-bold text-sm">
+                    {isKhmer ? 'ពុំមានកាលវិភាគបង្រៀនសម្រាប់កាលបរិច្ឆេទនេះទេ' : 'No teacher schedules found for this date.'}
+                  </p>
+                </div>
+              ) : (
+                gridRows.map((row) => {
+                  // Filter cells if a specific period is selected
+                  const displayCells = selectedPeriodFilter === 'All'
+                    ? row.cells.filter(c => c.schedule)
+                    : row.cells.filter(c => c.period.periodNumber === selectedPeriodFilter && c.schedule);
+
+                  if (displayCells.length === 0 && selectedPeriodFilter !== 'All') {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      key={row.teacher.id}
+                      className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden transition-all hover:border-indigo-300"
+                    >
+                      {/* Teacher Card Header */}
+                      <div className="p-3.5 sm:p-4 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs font-khmer">
+                            {(row.teacher.khmerName || row.teacher.fullName).charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <h4 className="font-black text-slate-900 text-xs sm:text-sm truncate font-khmer">
+                                {row.teacher.khmerName || row.teacher.fullName}
+                              </h4>
+                              {row.subjectCode && (
+                                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded text-[9px] sm:text-[10px]">
+                                  {row.subjectCode}
+                                </span>
+                              )}
+                              {row.teacher.id === currentUser.personId && (
+                                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded">
+                                  (You)
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] sm:text-[11px] text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+                              <span className="font-mono">{row.teacher.teacherId}</span>
+                              {row.teacher.khmerName && row.teacher.fullName && (
+                                <span className="font-sans">• {row.teacher.fullName}</span>
+                              )}
+                              <span>•</span>
+                              <span className="text-slate-600 font-medium">{row.teacher.department}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Day Attendance Rate Pill */}
+                        <div className="text-right shrink-0">
+                          <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 font-mono text-[11px] sm:text-xs font-bold">
+                            <span className="text-emerald-700 font-extrabold">{row.attendedCount}</span>
+                            <span className="text-slate-400">/{row.scheduledPeriodsCount}</span>
+                            <span className={`px-1.5 py-0.2 rounded-md text-[9px] sm:text-[10px] font-black ${
+                              row.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-800' :
+                              row.attendanceRate >= 50 ? 'bg-amber-100 text-amber-800' :
+                              'bg-rose-100 text-rose-800'
+                            }`}>
+                              {row.attendanceRate}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Vertical Timeline Track */}
+                      <div className="p-3.5 sm:p-5">
+                        {displayCells.length === 0 ? (
+                          <div className="py-4 text-center text-slate-400 text-xs italic">
+                            {isKhmer ? 'គ្មានម៉ោងបង្រៀនក្នុងម៉ោងនេះទេ' : 'No classes scheduled for this period.'}
+                          </div>
+                        ) : (
+                          <div className="relative pl-6 sm:pl-8 space-y-3.5 before:absolute before:left-2 sm:before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                            {displayCells.map((cell) => {
+                              const sched = cell.schedule!;
+                              const isPresent = cell.status === 'Present';
+                              const isLate = cell.status === 'Late';
+                              const isInProgress = cell.status === 'In Progress';
+                              const isAbsent = cell.status === 'Absent' || cell.status === 'Leave';
+
+                              return (
+                                <div
+                                  key={cell.period.id}
+                                  className="relative group cursor-pointer"
+                                  onClick={() => setSelectedCellModal({ teacher: row.teacher, cell })}
+                                >
+                                  {/* Timeline Dot */}
+                                  <div className={`absolute -left-6 sm:-left-8 top-3 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 bg-white flex items-center justify-center transition-transform group-hover:scale-110 z-10 ${
+                                    isPresent ? 'border-emerald-500 text-emerald-600' :
+                                    isLate ? 'border-amber-500 text-amber-600' :
+                                    isInProgress ? 'border-sky-500 text-sky-600 ring-2 ring-sky-200' :
+                                    isAbsent ? 'border-rose-500 text-rose-600' :
+                                    'border-slate-300 text-slate-400'
+                                  }`}>
+                                    {isPresent ? <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> :
+                                     isLate ? <Clock className="w-2.5 h-2.5 text-amber-600" /> :
+                                     isInProgress ? <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" /> :
+                                     isAbsent ? <XCircle className="w-2.5 h-2.5 text-rose-600" /> :
+                                     <span className="w-1 h-1 rounded-full bg-slate-300" />}
+                                  </div>
+
+                                  {/* Timeline Class Item Box */}
+                                  <div className={`p-3 sm:p-4 rounded-2xl border transition-all ${
+                                    isInProgress ? 'bg-sky-50/70 border-sky-300 shadow-xs ring-1 ring-sky-300' :
+                                    isPresent ? 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50/70' :
+                                    isLate ? 'bg-amber-50/40 border-amber-200 hover:bg-amber-50/70' :
+                                    isAbsent ? 'bg-rose-50/40 border-rose-200 hover:bg-rose-50/70' :
+                                    'bg-slate-50/70 border-slate-200 hover:bg-white'
+                                  }`}>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                      {/* Period info & Subject */}
+                                      <div className="space-y-1 min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-900 text-white font-mono">
+                                            {cell.period.periodName}
+                                          </span>
+                                          <span className="text-xs font-mono font-bold text-slate-700">
+                                            {cell.period.startTime} - {cell.period.endTime}
+                                          </span>
+                                          {cell.period.khmerPeriodName && (
+                                            <span className="text-[11px] text-slate-500 font-khmer">
+                                              ({cell.period.khmerPeriodName})
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <h5 className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                                          <span>{sched.subject}</span>
+                                          {sched.subjectCode && (
+                                            <span className="text-xs text-indigo-600 font-mono">
+                                              ({sched.subjectCode})
+                                            </span>
+                                          )}
+                                        </h5>
+
+                                        <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
+                                          {sched.gradeClass && (
+                                            <span className="flex items-center gap-1">
+                                              <Users2 className="w-3.5 h-3.5 text-slate-400" />
+                                              <span>{sched.gradeClass}</span>
+                                            </span>
+                                          )}
+                                          {sched.room && (
+                                            <span className="flex items-center gap-1">
+                                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                              <span className="font-mono">{sched.room}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Status Badges & Quick Action */}
+                                      <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                                        {isPresent ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                            <span>{isKhmer ? 'មានវត្តមាន' : 'Present'} {cell.checkInTime ? `(${cell.checkInTime})` : ''}</span>
+                                          </span>
+                                        ) : isLate ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                            <span>{isKhmer ? 'មកយឺត' : 'Late'} +{cell.lateMinutes}m {cell.checkInTime ? `(${cell.checkInTime})` : ''}</span>
+                                          </span>
+                                        ) : isInProgress ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-sky-100 text-sky-800 border border-sky-300 animate-pulse">
+                                            <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
+                                            <span>{isKhmer ? 'កំពុងបង្រៀន' : 'In Session'}</span>
+                                          </span>
+                                        ) : isAbsent ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                            <span>
+                                              {cell.substitution ? (isKhmer ? 'មានគ្រូជំនួស' : 'Sub Assigned') :
+                                               cell.status === 'Leave' ? (isKhmer ? 'សុំច្បាប់' : 'On Leave') :
+                                               (isKhmer ? 'ខកខាន' : 'Missed')}
+                                            </span>
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                            <span>{isKhmer ? 'តាមកាលវិភាគ' : 'Scheduled'}</span>
+                                          </span>
+                                        )}
+
+                                        {/* Tap detail arrow */}
+                                        <div className="p-1.5 rounded-lg bg-slate-100 text-slate-500 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                          <ChevronRight className="w-4 h-4" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TABLE GRID VIEW (Full Desktop & Responsive Scrolling) */}
+      {/* ========================================================================= */}
+      {viewMode === 'grid' && (
+      <div className="space-y-3 animate-in fade-in duration-200">
+        {/* Mobile View Recommendation Banner */}
+        <div className="md:hidden bg-indigo-50 border border-indigo-200 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs text-indigo-900 shadow-2xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span className="truncate">{isKhmer ? 'ប្តូរទៅទិដ្ឋភាព Timeline ងាយស្រួលមើលលើទូរស័ព្ទ' : 'Timeline view is recommended for mobile screens.'}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setViewMode('timeline')}
+            className="px-2.5 py-1 rounded-xl bg-indigo-600 text-white font-bold text-[11px] shrink-0 hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer"
+          >
+            {isKhmer ? 'ប្តូរជា Timeline' : 'Switch to Timeline'}
+          </button>
+        </div>
+
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse select-none">
             <thead>
               {/* Top Period Header Row */}
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-extrabold text-slate-700">
                 
                 {/* Fixed Index Column */}
-                <th className="py-3 px-2.5 text-center w-8 border-r border-slate-200 sticky left-0 bg-slate-50 z-20">
+                <th className="py-2.5 sm:py-3 px-1.5 sm:px-2.5 text-center w-7 sm:w-8 border-r border-slate-200 sticky left-0 bg-slate-50 z-20">
                   #
                 </th>
 
                 {/* Fixed Faculty Name Column */}
-                <th className="py-3 px-3.5 min-w-[190px] border-r border-slate-200 sticky left-8 bg-slate-50 z-20">
+                <th className="py-2.5 sm:py-3 px-2 sm:px-3.5 min-w-[130px] sm:min-w-[190px] border-r border-slate-200 sticky left-7 sm:left-8 bg-slate-50 z-20">
                   <div className="flex items-center gap-1.5">
-                    <GraduationCap className="w-4 h-4 text-indigo-600" />
-                    <span>{isKhmer ? 'គ្រូបង្រៀន / មុខវិជ្ជា' : 'Faculty Member'}</span>
+                    <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="truncate">{isKhmer ? 'គ្រូបង្រៀន / មុខវិជ្ជា' : 'Faculty Member'}</span>
                   </div>
                 </th>
 
@@ -881,7 +1590,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                     </td>
 
                     {/* Teacher Name Column */}
-                    <td className="py-3 px-3.5 border-r border-slate-100 sticky left-8 bg-white group-hover:bg-slate-50 z-10 min-w-[190px]">
+                    <td className="py-3 px-2 sm:px-3.5 border-r border-slate-100 sticky left-7 sm:left-8 bg-white group-hover:bg-slate-50 z-10 min-w-[130px] sm:min-w-[190px]">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 font-khmer">
                           {(row.teacher.khmerName || row.teacher.fullName).charAt(0)}
@@ -1102,6 +1811,8 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
         </div>
 
       </div>
+    </div>
+    )}
 
       {/* Period Cell Inspection & Quick Check-In Modal */}
       {selectedCellModal && selectedCellModal.cell.schedule && (

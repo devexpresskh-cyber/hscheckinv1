@@ -173,7 +173,7 @@ export const AttendanceReports: React.FC = () => {
           }`}
         >
           <Clock className="w-4 h-4" />
-          <span>Period Attendance (វត្តមានតាមម៉ោង)</span>
+          <span>Period Attendance & Timeline (វត្តមានតាមម៉ោង)</span>
         </button>
 
         <button
