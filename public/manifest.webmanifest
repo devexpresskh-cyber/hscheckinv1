@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "EduTrack - Teacher & Staff MIS",
+  "short_name": "EduTrack",
+  "description": "Teacher Schedule & Employee Attendance Management System",
+  "theme_color": "#4f46e5",
+  "background_color": "#09152b",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -23,6 +23,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   }
 
   const handleClick = async () => {
+    window.dispatchEvent(new CustomEvent('edutrack:open-install-modal'));
     // If browser supports direct install prompt, try trigger it first, otherwise show the modal instructions
     if (isInstallable) {
       const outcome = await install();

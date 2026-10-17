@@ -682,6 +682,17 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
             >
               <Printer className="w-4 h-4" />
             </button>
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                title={isKhmer ? 'បិទផ្ទាំងប្រតិទិន' : 'Close Monthly Calendar'}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
         </div>
@@ -1005,11 +1016,11 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
           {/* Top Bar: Back arrow, "Calendar" title, three dots menu */}
           <div className="flex items-center justify-between">
             <button
-              onClick={handleJumpToToday}
+              onClick={onClose || handleJumpToToday}
               className="p-2 -ml-1 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-              title="Jump to Today"
+              title={onClose ? (isKhmer ? "បិទ" : "Close") : "Jump to Today"}
             >
-              <ArrowLeft className="w-5 h-5" />
+              {onClose ? <X className="w-5 h-5" /> : <ArrowLeft className="w-5 h-5" />}
             </button>
 
             <h1 className="text-base sm:text-lg font-black tracking-wide text-white">

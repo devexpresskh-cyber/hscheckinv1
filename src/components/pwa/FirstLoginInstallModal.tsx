@@ -35,20 +35,26 @@ export const FirstLoginInstallModal: React.FC = () => {
       return;
     }
 
-    // Check if user previously dismissed or opted out
-    const dismissed =
-      localStorage.getItem(STORAGE_KEY) === 'true' ||
-      localStorage.getItem('edutrack_pwa_first_login_prompt_dismissed') === 'true';
-    if (dismissed) {
-      return;
-    }
+    // Clear stale blocking flags so forced PWA install can display
+    try {
+      localStorage.removeItem('edutrack_pwa_first_login_prompt_dismissed');
+    } catch {}
 
-    // Prompt popup on first time access to the app
+    // Force PWA install modal to appear on app load
     const timer = setTimeout(() => {
       setIsOpen(true);
-    }, 750);
+    }, 400);
 
-    return () => clearTimeout(timer);
+    const handleForceEvent = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener('edutrack:force-pwa-install', handleForceEvent);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('edutrack:force-pwa-install', handleForceEvent);
+    };
   }, [isInstalled]);
 
   if (!isOpen || isInstalled) {
@@ -68,12 +74,11 @@ export const FirstLoginInstallModal: React.FC = () => {
       if (isInstallable) {
         const accepted = await install();
         if (accepted) {
-          localStorage.setItem(STORAGE_KEY, 'true');
           setIsOpen(false);
           return;
         }
       }
-      // If prompt not supported directly (e.g. Safari on iOS), switch to OS guide
+      // If direct prompt not available (e.g. Safari on iOS, or before Chromium prompt event), switch to OS guide
       if (isIOS) {
         setActiveTab('ios');
       } else {
@@ -233,20 +238,34 @@ export const FirstLoginInstallModal: React.FC = () => {
                   </span>
                 </button>
               ) : (
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
-                  <p className="font-semibold text-slate-900">
-                    {isKhmer ? 'វិធីតំឡើងកម្មវិធីងាយៗ៖' : 'Simple installation instructions:'}
-                  </p>
-                  <p>
-                    {isIOS
-                      ? (isKhmer
-                          ? 'សូមចុចប៊ូតុង Share (⎋) នៅលើ Safari រួចជ្រើសរើស "Add to Home Screen"'
-                          : 'Tap the Share icon (⎋) at the bottom of Safari, then choose "Add to Home Screen".')
-                      : (isKhmer
-                          ? 'សូមចុចសញ្ញាចុច ៣ (⋮) នៅជ្រុងខាងលើ Chrome រួចជ្រើសរើស "Install App"'
-                          : 'Tap the menu (⋮) in Chrome and select "Install app" or "Add to Home Screen".')}
-                  </p>
-                </div>
+                <>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
+                    <p className="font-semibold text-slate-900">
+                      {isKhmer ? 'វិធីតំឡើងកម្មវិធីងាយៗ៖' : 'Simple installation instructions:'}
+                    </p>
+                    <p>
+                      {isIOS
+                        ? (isKhmer
+                            ? 'សូមចុចប៊ូតុង Share (⎋) នៅលើ Safari រួចជ្រើសរើស "Add to Home Screen"'
+                            : 'Tap the Share icon (⎋) at the bottom of Safari, then choose "Add to Home Screen".')
+                        : (isKhmer
+                            ? 'សូមចុចសញ្ញាចុច ៣ (⋮) នៅជ្រុងខាងលើ Chrome រួចជ្រើសរើស "Install App"'
+                            : 'Tap the menu (⋮) in Chrome and select "Install app" or "Add to Home Screen".')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleInstallClick}
+                    disabled={isInstalling}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    <Download className="w-5 h-5" />
+                    <span>
+                      {isIOS
+                        ? (isKhmer ? 'របៀបបន្ថែមលើ Safari iOS (View Guide)' : 'How to Add to iOS Home Screen')
+                        : (isKhmer ? 'តំឡើងលើអេក្រង់ដើម (Install App)' : 'Install to Home Screen')}
+                    </span>
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -350,16 +369,14 @@ export const FirstLoginInstallModal: React.FC = () => {
               {isKhmer ? 'រំលឹកពេលក្រោយ' : 'Remind Later'}
             </button>
 
-            {isInstallable && (
-              <button
-                onClick={handleInstallClick}
-                disabled={isInstalling}
-                className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>{isKhmer ? 'តំឡើងឥឡូវនេះ' : 'Install Now'}</span>
-              </button>
-            )}
+            <button
+              onClick={handleInstallClick}
+              disabled={isInstalling}
+              className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{isKhmer ? 'ដំឡើងឥឡូវនេះ (Install)' : 'Install Now'}</span>
+            </button>
           </div>
         </div>
 

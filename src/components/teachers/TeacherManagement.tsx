@@ -788,11 +788,47 @@ export const TeacherManagement: React.FC = () => {
 
       {/* Monthly Calendar Schedule Modal */}
       {selectedTeacherForMonthlyCalendar && (
-        <TeacherMonthlyCalendar
-          initialTeacher={selectedTeacherForMonthlyCalendar}
-          isOpenModal={true}
-          onClose={() => setSelectedTeacherForMonthlyCalendar(null)}
-        />
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in-50 duration-200 select-none"
+          onClick={() => setSelectedTeacherForMonthlyCalendar(null)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-slate-900 text-white px-5 sm:px-6 py-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-600/30 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    {isKhmer ? 'ប្រតិទិនបង្រៀនប្រចាំខែ (Monthly Teaching Calendar)' : 'Monthly Teaching Calendar'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {isKhmer ? 'សាស្ត្រាចារ្យ៖' : 'Faculty:'} <span className="text-white font-semibold font-khmer">{selectedTeacherForMonthlyCalendar.khmerName || selectedTeacherForMonthlyCalendar.fullName}</span> {selectedTeacherForMonthlyCalendar.khmerName && selectedTeacherForMonthlyCalendar.fullName ? `(${selectedTeacherForMonthlyCalendar.fullName})` : ''} ({selectedTeacherForMonthlyCalendar.subject} • {selectedTeacherForMonthlyCalendar.department})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTeacherForMonthlyCalendar(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Close monthly calendar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-slate-50">
+              <TeacherMonthlyCalendar
+                initialTeacher={selectedTeacherForMonthlyCalendar}
+                isOpenModal={true}
+                onClose={() => setSelectedTeacherForMonthlyCalendar(null)}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Offline Sync Center Modal */}
