@@ -348,6 +348,7 @@ export interface AttendanceCorrectionRequest {
   attendanceId?: string;
   personId: string;
   personName: string;
+  khmerName?: string;
   department: string;
   date: string;
   requestedCheckIn?: string;
@@ -365,6 +366,7 @@ export interface LeaveRequest {
   id: string;
   personId: string;
   personName: string;
+  khmerName?: string;
   department: string;
   leaveType: 'Annual Leave' | 'Sick Leave' | 'Personal Leave' | 'Maternity Leave' | 'Other';
   startDate: string;

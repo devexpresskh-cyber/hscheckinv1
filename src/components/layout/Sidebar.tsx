@@ -498,11 +498,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Quick PWA App Installation Button */}
-      <div className="px-3 pb-2 shrink-0">
-        <PWAInstallButton variant="sidebar" />
-      </div>
-
       {/* Current User Session Bar at bottom of sidebar */}
       <div className="p-3 bg-slate-950/80 border-t border-slate-800 shrink-0">
         <div className="flex items-center justify-between gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800/80">

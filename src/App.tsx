@@ -338,12 +338,6 @@ const MainLayout: React.FC = () => {
         </div>
       )}
 
-      {/* Popup Alert on Home Screen at First Logged-in for App Installation */}
-      <FirstLoginInstallModal />
-
-      {/* Floating 1-Click Mobile App Installation Banner */}
-      <MobileInstallFloatingBanner />
-
       {/* Teacher Video Manual Modal with Real Interface Action & 1080p Player */}
       <TeacherVideoManualModal
         isOpen={isVideoModalOpen}
@@ -387,17 +381,17 @@ const AppContent: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <>
-        <LoginPage />
-        <ToastContainer />
-        <OfflineIndicator />
-      </>
-    );
-  }
-
-  return <MainLayout key={currentUser.id} />;
+  return (
+    <>
+      {!isAuthenticated ? <LoginPage /> : <MainLayout key={currentUser.id} />}
+      <ToastContainer />
+      <OfflineIndicator />
+      {/* Auto Add App to Home Screen Popup on First Time Access */}
+      <FirstLoginInstallModal />
+      {/* Floating 1-Click Mobile App Installation Banner */}
+      <MobileInstallFloatingBanner />
+    </>
+  );
 };
 
 export default function App() {

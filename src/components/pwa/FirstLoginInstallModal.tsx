@@ -16,7 +16,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-const STORAGE_KEY = 'edutrack_pwa_first_login_prompt_dismissed';
+const STORAGE_KEY = 'edutrack_pwa_first_access_prompt_dismissed';
 
 export const FirstLoginInstallModal: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, isAndroid, install } = usePWAInstall();
@@ -36,15 +36,17 @@ export const FirstLoginInstallModal: React.FC = () => {
     }
 
     // Check if user previously dismissed or opted out
-    const dismissed = localStorage.getItem(STORAGE_KEY);
-    if (dismissed === 'true') {
+    const dismissed =
+      localStorage.getItem(STORAGE_KEY) === 'true' ||
+      localStorage.getItem('edutrack_pwa_first_login_prompt_dismissed') === 'true';
+    if (dismissed) {
       return;
     }
 
-    // Wait a brief moment after login to let the home screen render smoothly before presenting the popup
+    // Prompt popup on first time access to the app
     const timer = setTimeout(() => {
       setIsOpen(true);
-    }, 1200);
+    }, 750);
 
     return () => clearTimeout(timer);
   }, [isInstalled]);
@@ -113,16 +115,16 @@ export const FirstLoginInstallModal: React.FC = () => {
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-semibold text-indigo-100 mb-2 border border-white/25">
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>{isKhmer ? 'តំឡើងលើទូរស័ព្ទដៃ' : 'Install to Mobile Home Screen'}</span>
+            <span>{isKhmer ? 'ដំឡើងលើអេក្រង់ដើម (Add to Home Screen)' : 'Add to Home Screen'}</span>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-            {isKhmer ? 'ស្វាគមន៍មកកាន់ EduTrack!' : 'Welcome to EduTrack!'}
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight font-khmer">
+            {isKhmer ? 'ដំឡើង EduTrack លើអេក្រង់ដើម' : 'Install EduTrack to Home Screen'}
           </h2>
-          <p className="mt-1 text-xs sm:text-sm text-indigo-100/90 font-medium max-w-sm mx-auto">
+          <p className="mt-1 text-xs sm:text-sm text-indigo-100/90 font-medium max-w-sm mx-auto font-khmer">
             {isKhmer
-              ? 'តំឡើងកម្មវិធីលើអេក្រង់ដើមទូរស័ព្ទ ដើម្បីទទួលបានការដាស់តឿនម៉ោងបង្រៀន និងស្កេនវត្តមានរហ័ស'
-              : 'Add EduTrack directly to your phone for instant timetable access & class reminders'}
+              ? 'បន្ថែមលើអេក្រង់ដើមទូរស័ព្ទ ឬកុំព្យូទ័រ ដើម្បីដំណើរការពេញអេក្រង់ ស្កេនវត្តមានលឿន និងទទួលដំណឹងទាន់ពេល'
+              : 'Add EduTrack to your home screen for instant full-screen access, fast 1-tap check-in, and timetable alerts'}
           </p>
         </div>
 
