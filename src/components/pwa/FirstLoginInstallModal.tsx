@@ -13,13 +13,15 @@ import {
   Clock,
   WifiOff,
   Zap,
-  ArrowRight
+  ArrowRight,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 
 const STORAGE_KEY = 'edutrack_pwa_first_access_prompt_dismissed';
 
 export const FirstLoginInstallModal: React.FC = () => {
-  const { isInstallable, isInstalled, isIOS, isAndroid, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isAndroid, isIframe, install } = usePWAInstall();
   const { isKhmer } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -136,6 +138,29 @@ export const FirstLoginInstallModal: React.FC = () => {
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
           
+          {/* Iframe Notice & Open in New Tab Button */}
+          {isIframe && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="font-medium">
+                  {isKhmer
+                    ? 'កម្មវិធីរុករកមិនអនុញ្ញាតឱ្យដំឡើងក្នុង Preview Iframe ទេ។ សូមបើកក្នុង Tab ថ្មីដើម្បីដំឡើង PWA ផ្ទាល់៖'
+                    : 'Browsers block PWA installation inside embedded preview frames. Open directly in a new tab to install:'}
+                </span>
+              </div>
+              <a
+                href={window.location.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs whitespace-nowrap shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'បើក Tab ថ្មី' : 'Open in New Tab'}</span>
+              </a>
+            </div>
+          )}
+
           {/* Key Advantages Grid */}
           <div className="grid grid-cols-2 gap-2.5">
             <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-100/80">

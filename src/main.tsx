@@ -40,16 +40,23 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Register Service Worker for Web Push & PWA notifications
+// Register Service Worker for Web Push, PWA Installability & Offline Caching
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  const registerSW = () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((reg) => {
         console.log('[EduTrack SW] Registered successfully, scope:', reg.scope);
+        reg.update().catch(() => {});
       })
       .catch((err) => {
         console.warn('[EduTrack SW] Registration error:', err);
       });
-  });
+  };
+
+  if (document.readyState === 'complete') {
+    registerSW();
+  } else {
+    window.addEventListener('load', registerSW);
+  }
 }

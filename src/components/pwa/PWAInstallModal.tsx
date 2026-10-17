@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   X,
   ExternalLink,
+  AlertCircle,
   Copy,
   Check,
   Zap,
@@ -26,7 +27,7 @@ interface PWAInstallModalProps {
 }
 
 export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClose }) => {
-  const { isInstallable, isInstalled, isIOS, isAndroid, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isAndroid, isIframe, install } = usePWAInstall();
   const { isKhmer } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -180,6 +181,29 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                     : 'You are currently running the app in standalone mode from your home screen.'}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Iframe Notice & Open in New Tab Button */}
+          {isIframe && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="font-medium">
+                  {isKhmer
+                    ? 'កម្មវិធីរុករកមិនអនុញ្ញាតឱ្យដំឡើងក្នុង Preview Iframe ទេ។ សូមបើកក្នុង Tab ថ្មីដើម្បីដំឡើង PWA ផ្ទាល់៖'
+                    : 'Browsers block PWA installation inside embedded preview frames. Open directly in a new tab to install:'}
+                </span>
+              </div>
+              <a
+                href={window.location.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs whitespace-nowrap shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isKhmer ? 'បើក Tab ថ្មី' : 'Open in New Tab'}</span>
+              </a>
             </div>
           )}
 

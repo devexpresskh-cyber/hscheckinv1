@@ -34,22 +34,37 @@ export function usePWAInstall() {
     setIsAndroid(isAndroidDevice);
     setIsMobile(isMobileDevice);
 
+    // Pick up prompt if captured early before React mount
+    if ((window as any).__edutrack_pwa_prompt) {
+      setDeferredPrompt((window as any).__edutrack_pwa_prompt);
+    }
+
     const handleBeforeInstallPrompt = (e: Event) => {
       // Prevent browser default mini-infobar
       e.preventDefault();
+      (window as any).__edutrack_pwa_prompt = e;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    const handleEarlyCaptured = () => {
+      if ((window as any).__edutrack_pwa_prompt) {
+        setDeferredPrompt((window as any).__edutrack_pwa_prompt);
+      }
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      (window as any).__edutrack_pwa_prompt = null;
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('edutrack:pwa-prompt-captured', handleEarlyCaptured);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('edutrack:pwa-prompt-captured', handleEarlyCaptured);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
@@ -73,12 +88,15 @@ export function usePWAInstall() {
     }
   }, [deferredPrompt]);
 
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+
   return {
     isInstallable: !!deferredPrompt,
     isInstalled,
     isIOS,
     isAndroid,
     isMobile,
+    isIframe,
     install,
     deferredPrompt,
   };

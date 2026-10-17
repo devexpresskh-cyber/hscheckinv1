@@ -25,6 +25,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
+      window.__edutrack_pwa_prompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__edutrack_pwa_prompt = e;
+        window.dispatchEvent(new CustomEvent('edutrack:pwa-prompt-captured'));
+      });
       (function() {
         try {
           var _currentFetch = window.fetch;
