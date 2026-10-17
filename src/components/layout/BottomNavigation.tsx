@@ -454,7 +454,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
               {/* Install App to Mobile Home Screen */}
               <div className="pt-2 border-t border-slate-100">
-                <PWAInstallButton variant="login" />
+                <PWAInstallButton variant="mobile-menu" />
               </div>
 
               {/* Logout Action in Sheet */}

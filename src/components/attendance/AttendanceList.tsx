@@ -1067,12 +1067,12 @@ export const AttendanceList: React.FC = () => {
                                   {isTeacher ? (
                                     isAdmin ? (
                                       <>
-                                        <span className="font-semibold text-slate-800 text-xs sm:text-sm">
-                                          {record.personName}
+                                        <span className="font-semibold text-slate-800 text-xs sm:text-sm font-khmer">
+                                          {record.khmerName || record.personName}
                                         </span>
-                                        {record.khmerName && (
-                                          <span className="text-slate-400 text-[10px] hidden md:inline">
-                                            ({record.khmerName})
+                                        {record.khmerName && record.personName && (
+                                          <span className="text-slate-400 text-[10px] hidden md:inline font-sans">
+                                            ({record.personName})
                                           </span>
                                         )}
                                         <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
@@ -1108,7 +1108,7 @@ export const AttendanceList: React.FC = () => {
                                     )
                                   ) : (
                                     <>
-                                      <span className="font-semibold text-slate-600">{record.personName}</span>
+                                      <span className="font-semibold text-slate-600 font-khmer">{record.khmerName || record.personName}</span>
                                       {record.department && <span> • {record.department}</span>}
                                     </>
                                   )}
@@ -1331,9 +1331,14 @@ export const AttendanceList: React.FC = () => {
                                   {isTeacherReq ? (
                                     isAdmin ? (
                                       <>
-                                        <span className="font-semibold text-slate-800 text-xs sm:text-sm">
-                                          {req.personName}
+                                        <span className="font-semibold text-slate-800 text-xs sm:text-sm font-khmer">
+                                          {req.khmerName || req.personName}
                                         </span>
+                                        {req.khmerName && req.personName && (
+                                          <span className="text-slate-400 text-[10px] hidden md:inline font-sans">
+                                            ({req.personName})
+                                          </span>
+                                        )}
                                         <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px] tracking-wider shadow-2xs">
                                           {reqSubjectCode}
                                         </span>
@@ -1361,7 +1366,7 @@ export const AttendanceList: React.FC = () => {
                                     )
                                   ) : (
                                     <>
-                                      <span className="font-semibold text-slate-700">{req.personName}</span>
+                                      <span className="font-semibold text-slate-700 font-khmer">{req.khmerName || req.personName}</span>
                                       {req.department && <span> • {req.department}</span>}
                                     </>
                                   )}

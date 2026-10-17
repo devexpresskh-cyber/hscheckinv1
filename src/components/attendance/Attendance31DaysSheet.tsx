@@ -691,8 +691,8 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
           <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; color: #64748b;">${idx + 1}</td>
           <td style="border: 1px solid #cbd5e1; padding: 4px; font-family: monospace; font-weight: 700;">${row.staff.code}</td>
           <td style="border: 1px solid #cbd5e1; padding: 4px; font-weight: 700; white-space: nowrap;">
-            ${row.staff.name}
-            ${row.staff.khmerName ? `<span style="font-size: 8px; color: #64748b; font-weight: 400; display: block;">${row.staff.khmerName}</span>` : ''}
+            ${row.staff.khmerName || row.staff.name}
+            ${row.staff.khmerName && row.staff.name ? `<span style="font-size: 8px; color: #64748b; font-weight: 400; display: block;">${row.staff.name}</span>` : ''}
           </td>
           <td style="border: 1px solid #cbd5e1; padding: 4px; color: #475569;">${row.staff.dept}</td>
           ${cellsHtml}
@@ -1311,8 +1311,8 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
                             {/* Admin sees Full Name + Subject Code + Khmer Name */}
                             {isAdmin ? (
                               <>
-                                <div className="font-extrabold text-slate-900 truncate text-xs flex items-center gap-1.5">
-                                  <span>{row.staff.name}</span>
+                                <div className="font-extrabold text-slate-900 truncate text-xs flex items-center gap-1.5 font-khmer">
+                                  <span>{row.staff.khmerName || row.staff.name}</span>
                                   {row.staff.subjectCode && (
                                     <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1 rounded text-[9px]">
                                       {row.staff.subjectCode}
@@ -1321,7 +1321,7 @@ export const Attendance31DaysSheet: React.FC<Attendance31DaysSheetProps> = ({
                                 </div>
                                 <div className="text-[10px] text-slate-400 truncate flex items-center gap-1">
                                   <span className="font-mono">{row.staff.code}</span>
-                                  {row.staff.khmerName && <span>• {row.staff.khmerName}</span>}
+                                  {row.staff.khmerName && row.staff.name && <span className="font-sans">• {row.staff.name}</span>}
                                 </div>
                               </>
                             ) : (

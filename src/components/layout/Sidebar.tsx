@@ -498,6 +498,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      {/* Quick PWA App Installation Button */}
+      <div className="px-3 pb-2 shrink-0">
+        <PWAInstallButton variant="sidebar" />
+      </div>
+
       {/* Current User Session Bar at bottom of sidebar */}
       <div className="p-3 bg-slate-950/80 border-t border-slate-800 shrink-0">
         <div className="flex items-center justify-between gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800/80">
@@ -510,12 +515,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="flex items-center gap-2.5 min-w-0 flex-1 text-left p-1 rounded-lg hover:bg-slate-800/80 transition-colors cursor-pointer group"
             title={isKhmer ? 'កែសម្រួលព័ត៌មានប្រវត្តិរូប (Edit Profile)' : 'Edit My Profile & Owned Info'}
           >
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:ring-2 group-hover:ring-indigo-400">
-              {currentUser.fullName.charAt(0)}
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:ring-2 group-hover:ring-indigo-400 font-khmer">
+              {(currentUser.khmerName || currentUser.fullName).charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-indigo-300">
-                {isKhmer && currentUser.khmerName ? currentUser.khmerName : currentUser.fullName}
+              <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-indigo-300 font-khmer">
+                {currentUser.khmerName || currentUser.fullName}
               </p>
               <p className="text-[10px] text-indigo-400 font-medium truncate flex items-center gap-1">
                 <span>{currentRole.name}</span>

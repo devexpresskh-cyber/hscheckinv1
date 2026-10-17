@@ -1143,9 +1143,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             <div className="flex items-center justify-between gap-1.5 mt-2.5 pt-2 border-t border-slate-100 text-xs text-slate-800">
               <div className="flex items-center gap-1.5 min-w-0">
                 <GraduationCap className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span className="font-bold truncate">{sub.teacherName}</span>
-                {sub.khmerTeacherName && (
-                  <span className="text-slate-500 font-medium truncate">({sub.khmerTeacherName})</span>
+                <span className="font-bold truncate font-khmer">{sub.khmerTeacherName || sub.teacherName}</span>
+                {sub.khmerTeacherName && sub.teacherName && (
+                  <span className="text-slate-400 font-sans text-[11px] truncate">({sub.teacherName})</span>
                 )}
               </div>
               {canAdminManageAttendance && (
@@ -1284,7 +1284,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   <LogIn className="w-3.5 h-3.5" />
                   <span>
                     {!isTeacher
-                      ? (isKhmer ? `ស្កេនចូល (${sub.teacherName})` : `Scan In (${sub.teacherName})`)
+                      ? (isKhmer ? `ស្កេនចូល (${sub.khmerTeacherName || sub.teacherName})` : `Scan In (${sub.khmerTeacherName || sub.teacherName})`)
                       : curMins < sStart
                       ? (isKhmer ? `ស្កេនចូលមុនម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Early Check In (Starts ${sub.startTime})`)
                       : (isKhmer ? 'ស្កេនចូលម៉ោងបង្រៀននេះ (Check In)' : 'Check In for this Class')}
@@ -1329,7 +1329,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   <LogOut className="w-3.5 h-3.5" />
                   <span>
                     {!isTeacher
-                      ? (isKhmer ? `ស្កេនចេញ (${sub.teacherName})` : `Scan Out (${sub.teacherName})`)
+                      ? (isKhmer ? `ស្កេនចេញ (${sub.khmerTeacherName || sub.teacherName})` : `Scan Out (${sub.khmerTeacherName || sub.teacherName})`)
                       : (isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class')}
                   </span>
                 </button>
@@ -1576,7 +1576,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                       <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Faculty)' : 'All Faculty'}</option>
                       {teachers.map(t => (
                         <option key={t.id} value={t.id}>
-                          {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} — {t.department}
+                          {t.khmerName || t.fullName} {t.khmerName && t.fullName ? `(${t.fullName})` : ''} — {t.department}
                         </option>
                       ))}
                     </select>
@@ -1926,14 +1926,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                       {/* Teacher Header Row */}
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white font-black text-sm flex items-center justify-center shadow-xs">
-                            {group.teacherName.charAt(0).toUpperCase()}
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white font-black text-sm flex items-center justify-center shadow-xs font-khmer">
+                            {(group.khmerName || group.teacherName).charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="font-black text-sm text-slate-900">
-                                {group.khmerName ? `${group.khmerName} (${group.teacherName})` : group.teacherName}
+                              <h4 className="font-black text-sm text-slate-900 font-khmer">
+                                {group.khmerName || group.teacherName}
                               </h4>
+                              {group.khmerName && group.teacherName && (
+                                <span className="text-xs text-slate-400 font-normal font-sans">
+                                  ({group.teacherName})
+                                </span>
+                              )}
                               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                                 {group.department}
                               </span>
@@ -2028,7 +2033,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Teachers)' : 'All Teachers'}</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                      {t.khmerName || t.fullName} {t.khmerName && t.fullName ? `(${t.fullName})` : ''} - {t.department}
                     </option>
                   ))}
                 </select>
@@ -2125,17 +2130,22 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                             className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
-                            {sub.teacherName.charAt(0)}
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0 font-khmer">
+                            {(sub.khmerTeacherName || teacher?.khmerName || sub.teacherName).charAt(0)}
                           </div>
                         )}
                         <div className="min-w-0">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block font-khmer">
                             {isKhmer ? 'គ្រូបង្រៀន' : 'Assigned Teacher'}
                           </span>
-                          <p className="text-xs font-bold text-slate-900 truncate">
-                            {isKhmer && sub.khmerTeacherName ? sub.khmerTeacherName : sub.teacherName}
+                          <p className="text-xs font-bold text-slate-900 truncate font-khmer">
+                            {sub.khmerTeacherName || teacher?.khmerName || sub.teacherName}
                           </p>
+                          {(sub.khmerTeacherName || teacher?.khmerName) && sub.teacherName && (
+                            <p className="text-[10px] text-slate-400 font-sans truncate">
+                              ({sub.teacherName})
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2717,7 +2727,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                   <option value="">{isKhmer ? '-- ជ្រើសរើសគ្រូបង្រៀន --' : '-- Select Teacher --'}</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department} {t.hourlyRate !== undefined ? `[Rate: $${t.hourlyRate}/h]` : ''}
+                      {t.khmerName || t.fullName} {t.khmerName && t.fullName ? `(${t.fullName})` : ''} - {t.department} {t.hourlyRate !== undefined ? `[Rate: $${t.hourlyRate}/h]` : ''}
                     </option>
                   ))}
                 </select>

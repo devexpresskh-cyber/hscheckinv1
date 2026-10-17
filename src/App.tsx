@@ -29,6 +29,7 @@ import { StaffMobileAppHome } from './components/mobile/StaffMobileAppHome.tsx';
 import { StorageService } from './services/storageService.ts';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator.tsx';
 import { FirstLoginInstallModal } from './components/pwa/FirstLoginInstallModal.tsx';
+import { MobileInstallFloatingBanner } from './components/pwa/MobileInstallFloatingBanner.tsx';
 import { TeacherScheduleAlertBanner } from './components/schedules/TeacherScheduleAlertBanner.tsx';
 import { X, CheckCircle, AlertTriangle, Info, AlertCircle, Building2, ArrowRight } from 'lucide-react';
 
@@ -339,6 +340,9 @@ const MainLayout: React.FC = () => {
 
       {/* Popup Alert on Home Screen at First Logged-in for App Installation */}
       <FirstLoginInstallModal />
+
+      {/* Floating 1-Click Mobile App Installation Banner */}
+      <MobileInstallFloatingBanner />
 
       {/* Teacher Video Manual Modal with Real Interface Action & 1080p Player */}
       <TeacherVideoManualModal

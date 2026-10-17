@@ -521,8 +521,8 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                                 }}
                               />
                             ) : (
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs">
-                                {teacher.fullName.charAt(0)}
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs font-khmer">
+                                {(teacher.khmerName || teacher.fullName).charAt(0)}
                               </div>
                             )}
                             {isTeaching && (
@@ -530,12 +530,12 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                             )}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-bold text-slate-900 truncate">
-                              {teacher.fullName}
+                            <div className="font-bold text-slate-900 truncate font-khmer">
+                              {teacher.khmerName || teacher.fullName}
                             </div>
-                            {teacher.khmerName && (
-                              <div className="text-[11px] text-slate-500 font-medium truncate">
-                                {teacher.khmerName}
+                            {teacher.khmerName && teacher.fullName && (
+                              <div className="text-[11px] text-slate-400 font-medium truncate font-sans">
+                                {teacher.fullName}
                               </div>
                             )}
                             <div className="flex items-center gap-2 mt-0.5">
@@ -790,8 +790,8 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                         }}
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-base shadow-2xs">
-                        {teacher.fullName.charAt(0)}
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-base shadow-2xs font-khmer">
+                        {(teacher.khmerName || teacher.fullName).charAt(0)}
                       </div>
                     )}
                     {isTeaching && (
@@ -801,12 +801,12 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm truncate">
-                        {teacher.fullName}
+                      <span className="font-bold text-slate-900 text-sm truncate font-khmer">
+                        {teacher.khmerName || teacher.fullName}
                       </span>
-                      {teacher.khmerName && (
-                        <span className="text-xs text-slate-500 font-medium truncate">
-                          ({teacher.khmerName})
+                      {teacher.khmerName && teacher.fullName && (
+                        <span className="text-xs text-slate-400 font-normal truncate font-sans">
+                          ({teacher.fullName})
                         </span>
                       )}
                     </div>
@@ -1092,18 +1092,18 @@ export const TeacherOnTeachingList: React.FC<TeacherOnTeachingListProps> = ({
                           className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-200 shrink-0"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 font-extrabold text-base flex items-center justify-center ring-2 ring-slate-200 shrink-0">
-                          {teacher.fullName.charAt(0)}
+                        <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 font-extrabold text-base flex items-center justify-center ring-2 ring-slate-200 shrink-0 font-khmer">
+                          {(teacher.khmerName || teacher.fullName).charAt(0)}
                         </div>
                       )}
 
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-extrabold text-slate-900 text-sm leading-tight truncate">
-                          {teacher.fullName}
+                        <h3 className="font-extrabold text-slate-900 text-sm leading-tight truncate font-khmer">
+                          {teacher.khmerName || teacher.fullName}
                         </h3>
-                        {teacher.khmerName && (
-                          <p className="text-[11px] text-slate-500 font-khmer truncate">
-                            {teacher.khmerName}
+                        {teacher.khmerName && teacher.fullName && (
+                          <p className="text-[11px] text-slate-400 font-sans truncate">
+                            {teacher.fullName}
                           </p>
                         )}
 

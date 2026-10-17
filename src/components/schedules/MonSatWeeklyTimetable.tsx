@@ -982,12 +982,12 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                               className="w-3.5 h-3.5 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
                                             />
                                           ) : (
-                                            <div className="w-3.5 h-3.5 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[7px] flex items-center justify-center shrink-0">
-                                              {cls.teacherName.charAt(0)}
+                                            <div className="w-3.5 h-3.5 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[7px] flex items-center justify-center shrink-0 font-khmer">
+                                              {(cls.khmerTeacherName || teacher?.khmerName || cls.teacherName).charAt(0)}
                                             </div>
                                           )}
-                                          <span className="text-[9px] font-semibold text-slate-700 truncate">
-                                            {isKhmer && cls.khmerTeacherName ? cls.khmerTeacherName : cls.teacherName}
+                                          <span className="text-[9px] font-semibold text-slate-700 truncate font-khmer">
+                                            {cls.khmerTeacherName || teacher?.khmerName || cls.teacherName}
                                           </span>
                                         </div>
                                       )}

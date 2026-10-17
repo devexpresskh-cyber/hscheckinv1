@@ -483,8 +483,8 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
         <tr style="border-bottom: 1px solid #e2e8f0; font-size: 8.5px;">
           <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; color: #64748b;">${idx + 1}</td>
           <td style="border: 1px solid #cbd5e1; padding: 4px; font-weight: 700; white-space: nowrap;">
-            ${row.teacher.fullName}
-            ${row.teacher.khmerName ? `<span style="font-size: 7.5px; color: #64748b; font-weight: normal; display: block;">${row.teacher.khmerName}</span>` : ''}
+            ${row.teacher.khmerName || row.teacher.fullName}
+            ${row.teacher.khmerName && row.teacher.fullName ? `<span style="font-size: 7.5px; color: #64748b; font-weight: normal; display: block;">${row.teacher.fullName}</span>` : ''}
           </td>
           <td style="border: 1px solid #cbd5e1; padding: 4px; font-family: monospace; font-size: 8px;">${row.teacher.department}</td>
           ${cellsHtml}
@@ -883,14 +883,14 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                     {/* Teacher Name Column */}
                     <td className="py-3 px-3.5 border-r border-slate-100 sticky left-8 bg-white group-hover:bg-slate-50 z-10 min-w-[190px]">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0">
-                          {row.teacher.fullName.charAt(0)}
+                        <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 font-khmer">
+                          {(row.teacher.khmerName || row.teacher.fullName).charAt(0)}
                         </div>
                         <div className="min-w-0 flex-1">
                           {isAdmin ? (
                             <>
-                              <div className="font-extrabold text-slate-900 truncate text-xs flex items-center gap-1.5">
-                                <span>{row.teacher.fullName}</span>
+                              <div className="font-extrabold text-slate-900 truncate text-xs flex items-center gap-1.5 font-khmer">
+                                <span>{row.teacher.khmerName || row.teacher.fullName}</span>
                                 {row.subjectCode && (
                                   <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1 py-0.2 rounded text-[9px]">
                                     {row.subjectCode}
@@ -899,15 +899,18 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                               </div>
                               <div className="text-[10px] text-slate-400 truncate flex items-center gap-1">
                                 <span className="font-mono">{row.teacher.teacherId}</span>
-                                {row.teacher.khmerName && <span>• {row.teacher.khmerName}</span>}
+                                {row.teacher.khmerName && row.teacher.fullName && <span className="font-sans">• {row.teacher.fullName}</span>}
                               </div>
                             </>
                           ) : (
                             <>
-                              <div className="font-extrabold text-slate-900 truncate text-xs flex items-center gap-1.5">
-                                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1.5 py-0.5 rounded text-[10px]">
-                                  {row.subjectCode}
-                                </span>
+                              <div className="font-extrabold text-slate-900 truncate text-xs flex items-center gap-1.5 font-khmer">
+                                <span>{row.teacher.khmerName || row.teacher.fullName}</span>
+                                {row.subjectCode && (
+                                  <span className="font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/90 px-1 py-0.2 rounded text-[9px]">
+                                    {row.subjectCode}
+                                  </span>
+                                )}
                                 {row.teacher.id === currentUser.personId && (
                                   <span className="text-[10px] text-emerald-600 font-bold">(You)</span>
                                 )}
@@ -1119,8 +1122,8 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  {selectedCellModal.teacher.fullName} ({selectedCellModal.teacher.department})
+                <p className="text-xs text-slate-300 mt-0.5 font-khmer">
+                  {selectedCellModal.teacher.khmerName || selectedCellModal.teacher.fullName} {selectedCellModal.teacher.khmerName && selectedCellModal.teacher.fullName ? `(${selectedCellModal.teacher.fullName})` : ''} ({selectedCellModal.teacher.department})
                 </p>
               </div>
               <button

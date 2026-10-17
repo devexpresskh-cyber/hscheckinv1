@@ -577,8 +577,22 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                 </div>
               </div>
 
-              {/* Names: Full Name & Khmer Name */}
+              {/* Names: Khmer Name & English Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1 font-khmer">
+                    {isKhmer ? 'ឈ្មោះជាភាសាខ្មែរ (Khmer Full Name) *' : 'Khmer Full Name *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.khmerName}
+                    onChange={e => setFormData({ ...formData, khmerName: e.target.value })}
+                    placeholder="ឧ. សុខ តារា"
+                    className="w-full text-xs px-3 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-khmer text-slate-900 font-bold"
+                  />
+                </div>
+
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
                     {isKhmer ? 'ឈ្មោះពេញ (ឡាតាំង / English Full Name) *' : 'Full Name (English) *'}
@@ -590,19 +604,6 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                     onChange={e => setFormData({ ...formData, fullName: e.target.value })}
                     placeholder="e.g. Sok Dara"
                     className="w-full text-xs px-3 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    {isKhmer ? 'ឈ្មោះជាភាសាខ្មែរ (Khmer Full Name)' : 'Khmer Full Name'}
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.khmerName}
-                    onChange={e => setFormData({ ...formData, khmerName: e.target.value })}
-                    placeholder="ឧ. សុខ តារា"
-                    className="w-full text-xs px-3 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-khmer text-slate-900"
                   />
                 </div>
               </div>

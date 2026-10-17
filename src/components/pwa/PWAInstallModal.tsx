@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePWAInstall } from '../../hooks/usePWAInstall.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
+import QRCode from 'qrcode';
 import {
   Download,
   Share2,
@@ -15,7 +16,8 @@ import {
   Zap,
   WifiOff,
   ShieldCheck,
-  MoreVertical
+  MoreVertical,
+  QrCode
 } from 'lucide-react';
 
 interface PWAInstallModalProps {
@@ -28,11 +30,25 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
   const { isKhmer } = useLanguage();
   const [copied, setCopied] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
-  const [activeTab, setActiveTab] = useState<'auto' | 'ios' | 'android'>(() => {
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'auto' | 'ios' | 'android' | 'qr'>(() => {
     if (isIOS) return 'ios';
     if (isAndroid) return 'android';
     return 'auto';
   });
+
+  useEffect(() => {
+    QRCode.toDataURL(window.location.origin, {
+      width: 260,
+      margin: 2,
+      color: {
+        dark: '#312e81',
+        light: '#ffffff'
+      }
+    })
+      .then(url => setQrDataUrl(url))
+      .catch(err => console.warn('PWA QR code generation error:', err));
+  }, []);
 
   if (!isOpen) return null;
 
@@ -133,6 +149,18 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
             }`}
           >
             <span>Android / Chrome</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('qr')}
+            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all ${
+              activeTab === 'qr'
+                ? 'border-indigo-600 text-indigo-600 font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <QrCode className="w-4 h-4 text-indigo-500" />
+            <span>{isKhmer ? 'ស្កេនទូរស័ព្ទ (QR)' : 'Scan with Phone'}</span>
           </button>
         </div>
 
@@ -322,6 +350,50 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                   <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
                     <Check className="w-4 h-4" />
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* QR Code Tab: Scan with phone to open & install */}
+          {activeTab === 'qr' && (
+            <div className="space-y-4 text-center">
+              <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex flex-col items-center justify-center">
+                <div className="p-3 bg-white rounded-2xl shadow-md border border-indigo-200/60 inline-block mb-3">
+                  {qrDataUrl ? (
+                    <img
+                      src={qrDataUrl}
+                      alt="Scan to install EduTrack"
+                      className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded-xl"
+                    />
+                  ) : (
+                    <div className="w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">
+                      Generating QR...
+                    </div>
+                  )}
+                </div>
+
+                <h4 className="font-bold text-sm text-slate-900">
+                  {isKhmer ? 'ស្កេនកូដ QR នេះដោយប្រើកាមេរ៉ាទូរស័ព្ទរបស់អ្នក' : 'Scan this QR code with your mobile camera'}
+                </h4>
+                <p className="text-xs text-slate-600 mt-1 max-w-sm leading-relaxed font-khmer">
+                  {isKhmer
+                    ? 'បើកកាមេរ៉ាលើ iPhone ឬ Android ដើម្បីស្កេន រួចចុច "Add to Home Screen" ដើម្បីដំឡើងភ្លាមៗ!'
+                    : 'Open camera app on your iPhone or Android, scan the code, and tap "Add to Home Screen" to install instantly!'}
+                </p>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-indigo-700 bg-white px-3 py-1 rounded-xl border border-indigo-200">
+                    {window.location.origin}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="p-1.5 rounded-xl bg-white hover:bg-slate-50 border border-indigo-200 text-indigo-600 text-xs font-bold transition-colors cursor-pointer"
+                    title={isKhmer ? 'ចម្លងតំណភ្ជាប់' : 'Copy URL'}
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
             </div>

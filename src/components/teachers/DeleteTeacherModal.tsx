@@ -113,18 +113,18 @@ export const DeleteTeacherModal: React.FC<DeleteTeacherModalProps> = ({
                 className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white shadow-xs shrink-0"
               />
             ) : (
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 font-extrabold text-xl flex items-center justify-center ring-2 ring-white shadow-xs shrink-0">
-                {teacher.fullName.charAt(0)}
+              <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 font-extrabold text-xl flex items-center justify-center ring-2 ring-white shadow-xs shrink-0 font-khmer">
+                {(teacher.khmerName || teacher.fullName).charAt(0)}
               </div>
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-slate-900 text-base leading-tight truncate">
-                  {teacher.fullName}
+                <span className="font-extrabold text-slate-900 text-base leading-tight truncate font-khmer">
+                  {teacher.khmerName || teacher.fullName}
                 </span>
-                {teacher.khmerName && (
-                  <span className="text-xs text-slate-500 font-khmer">
-                    ({teacher.khmerName})
+                {teacher.khmerName && teacher.fullName && (
+                  <span className="text-xs text-slate-500 font-sans">
+                    ({teacher.fullName})
                   </span>
                 )}
               </div>
@@ -144,10 +144,10 @@ export const DeleteTeacherModal: React.FC<DeleteTeacherModalProps> = ({
           </div>
 
           <div className="space-y-3">
-            <p className="text-xs text-slate-600 leading-relaxed">
+            <p className="text-xs text-slate-600 leading-relaxed font-khmer">
               {isKhmer
-                ? `តើអ្នកពិតជាចង់លុបគ្រូ ${teacher.fullName} មែនទេ? ទិន្នន័យនេះនឹងត្រូវដកចេញភ្លាមៗ និងធ្វើសមកាលកម្មដោយស្វ័យប្រវត្តិតាមរយៈ Cloud Auto-Sync។`
-                : `Are you sure you want to remove ${teacher.fullName} from the faculty registry? This change will be queued and auto-synced across all connected devices.`}
+                ? `តើអ្នកពិតជាចង់លុបគ្រូ ${teacher.khmerName || teacher.fullName} មែនទេ? ទិន្នន័យនេះនឹងត្រូវដកចេញភ្លាមៗ និងធ្វើសមកាលកម្មដោយស្វ័យប្រវត្តិតាមរយៈ Cloud Auto-Sync។`
+                : `Are you sure you want to remove ${teacher.khmerName || teacher.fullName} from the faculty registry? This change will be queued and auto-synced across all connected devices.`}
             </p>
 
             {/* Cascading Options */}

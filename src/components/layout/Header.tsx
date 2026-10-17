@@ -7,6 +7,7 @@ import { StorageService } from '../../services/storageService.ts';
 import { OfflineSyncBadge } from '../sync/OfflineSyncBadge.tsx';
 import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
+import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 import {
   Bell,
   Clock,
@@ -237,6 +238,9 @@ export const Header: React.FC<HeaderProps> = ({
             <OfflineSyncBadge variant="pill" />
           </div>
 
+          {/* Quick PWA Install App Button */}
+          <PWAInstallButton variant="header" />
+
           {/* Telegram Status Badge (Restricted from teachers and employees) */}
           {currentUser.role !== 'teacher' && currentUser.role !== 'employee' && hasPermission('telegram.view') && (
             <button
@@ -346,8 +350,8 @@ export const Header: React.FC<HeaderProps> = ({
               />
               <div className="text-left hidden md:block max-w-[120px] truncate">
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-bold text-white leading-none truncate">
-                    {isKhmer && currentUser.khmerName ? currentUser.khmerName.split(' ')[0] : currentUser.fullName.split(' ')[0]}
+                  <span className="text-xs font-bold text-white leading-none truncate font-khmer">
+                    {(currentUser.khmerName || currentUser.fullName).split(' ')[0]}
                   </span>
                   <span className="px-1 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-white/20 text-white shrink-0">
                     {currentRole.name}
@@ -389,8 +393,8 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-slate-900 truncate">
-                          {isKhmer && currentUser.khmerName ? currentUser.khmerName : currentUser.fullName}
+                        <p className="text-xs font-bold text-slate-900 truncate font-khmer">
+                          {currentUser.khmerName || currentUser.fullName}
                         </p>
                         <p className="text-[10px] text-slate-500 truncate font-mono">{currentUser.email}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
@@ -451,6 +455,11 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     </div>
                   )}
+
+                  {/* Quick Install Mobile/Desktop App Button */}
+                  <div className="pt-1">
+                    <PWAInstallButton variant="compact" className="w-full justify-center" />
+                  </div>
 
                   {/* Logout Button */}
                   <div className="pt-1">

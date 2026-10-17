@@ -643,7 +643,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                 <option value="All">{isKhmer ? 'គ្រូទាំងអស់ (All Faculty)' : 'All Faculty'}</option>
                 {teachers.map(t => (
                   <option key={t.id} value={t.id}>
-                    {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                    {t.khmerName ? `${t.khmerName} (${t.fullName})` : t.fullName} - {t.department}
                   </option>
                 ))}
               </select>
@@ -846,8 +846,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                             {cls.subjectCode || cls.subject}
                           </div>
                           {selectedTeacherId === 'All' && (
-                            <div className="truncate text-[9px] opacity-80">
-                              {cls.teacherName.split(' ')[0]} • {cls.gradeClass}
+                            <div className="truncate text-[9px] opacity-80 font-khmer">
+                              {(cls.khmerTeacherName || cls.teacherName).split(' ')[0]} • {cls.gradeClass}
                             </div>
                           )}
                         </div>
@@ -944,7 +944,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           </span>
                         </h4>
                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                          <span>{cls.teacherName}</span>
+                          <span className="font-khmer font-semibold text-slate-700">{cls.khmerTeacherName || cls.teacherName}</span>
                           <span>•</span>
                           <span>{cls.gradeClass}</span>
                           <span>•</span>
@@ -1064,7 +1064,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                       >
                         {teachers.map(t => (
                           <option key={t.id} value={t.id}>
-                            {t.fullName}
+                            {t.khmerName || t.fullName}
                           </option>
                         ))}
                       </select>

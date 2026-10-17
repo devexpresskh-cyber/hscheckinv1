@@ -68,7 +68,7 @@ function buildPayslipHtml(
     <html>
     <head>
       <meta charset="utf-8" />
-      <title>Payslip Voucher - ${summary.teacherName} - ${periodStr}</title>
+      <title>Payslip Voucher - ${summary.khmerName || summary.teacherName} - ${periodStr}</title>
       <style>
         @page {
           size: portrait;
@@ -266,7 +266,7 @@ function buildPayslipHtml(
             <table class="profile-table">
               <tr>
                 <td style="width: 110px; color: #64748b; font-weight: 600;">Teacher Name:</td>
-                <td style="font-weight: 800; font-size: 13px; color: #0f172a;">${summary.teacherName} ${summary.khmerName ? `(${summary.khmerName})` : ''}</td>
+                <td style="font-weight: 800; font-size: 13px; color: #0f172a; font-family: 'Kantumruy Pro', 'Battambang', sans-serif;">${summary.khmerName || summary.teacherName} ${summary.khmerName && summary.teacherName ? `(${summary.teacherName})` : ''}</td>
               </tr>
               <tr>
                 <td style="color: #64748b; font-weight: 600;">Faculty ID / Code:</td>
@@ -1708,14 +1708,14 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                             className="w-9 h-9 rounded-2xl object-cover border border-slate-200 shrink-0"
                           />
                         ) : (
-                          <div className="w-9 h-9 rounded-2xl bg-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-center border border-slate-200 shrink-0">
-                            {summary.teacherName.charAt(0)}
+                          <div className="w-9 h-9 rounded-2xl bg-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-center border border-slate-200 shrink-0 font-khmer">
+                            {(summary.khmerName || summary.teacherName).charAt(0)}
                           </div>
                         )}
                         <div>
-                          <div className="font-black text-slate-900">{summary.teacherName}</div>
-                          <div className="text-[10px] text-slate-400 font-khmer">
-                            {summary.khmerName || summary.teacherCode} • {summary.teacherCode}
+                          <div className="font-black text-slate-900 font-khmer">{summary.khmerName || summary.teacherName}</div>
+                          <div className="text-[10px] text-slate-400 font-sans">
+                            {summary.khmerName && summary.teacherName ? `${summary.teacherName} • ${summary.teacherCode}` : summary.teacherCode}
                           </div>
                         </div>
                       </div>
@@ -2056,17 +2056,19 @@ export const TeachingWageReport: React.FC<TeachingWageReportProps> = ({ lockedTe
                       className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-xs"
                     />
                   ) : (
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 font-black text-lg flex items-center justify-center border border-slate-200 shadow-xs shrink-0">
-                      {selectedTeacherForDetail.teacherName.charAt(0)}
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 font-black text-lg flex items-center justify-center border border-slate-200 shadow-xs shrink-0 font-khmer">
+                      {(selectedTeacherForDetail.khmerName || selectedTeacherForDetail.teacherName).charAt(0)}
                     </div>
                   )}
                   <div>
-                    <h4 className="text-base font-black text-slate-900">
-                      {selectedTeacherForDetail.teacherName}
+                    <h4 className="text-base font-black text-slate-900 font-khmer">
+                      {selectedTeacherForDetail.khmerName || selectedTeacherForDetail.teacherName}
                     </h4>
-                    <p className="text-xs text-slate-500 font-khmer">
-                      {selectedTeacherForDetail.khmerName || ''} • {selectedTeacherForDetail.teacherCode}
-                    </p>
+                    {selectedTeacherForDetail.khmerName && selectedTeacherForDetail.teacherName && (
+                      <p className="text-xs text-slate-500 font-sans">
+                        {selectedTeacherForDetail.teacherName} • {selectedTeacherForDetail.teacherCode}
+                      </p>
+                    )}
                     <p className="text-xs text-slate-400 mt-0.5">
                       {selectedTeacherForDetail.department} • {selectedTeacherForDetail.position}
                     </p>

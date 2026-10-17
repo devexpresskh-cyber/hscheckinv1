@@ -1078,14 +1078,14 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   <optgroup label={isKhmer ? 'គ្រូបង្រៀន (Teachers)' : 'Teachers'}>
                     {teachers.map(t => (
                       <option key={t.id} value={t.id}>
-                        {t.fullName} ({t.khmerName || t.teacherId}) - {t.department}
+                        {t.khmerName || t.fullName} {t.khmerName && t.fullName ? `(${t.fullName})` : ''} - {t.department}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label={isKhmer ? 'បុគ្គលិកទូទៅ (Employees)' : 'Employees'}>
                     {employees.map(e => (
                       <option key={e.id} value={e.id}>
-                        {e.fullName} ({e.khmerName || e.employeeId}) - {e.department}
+                        {e.khmerName || e.fullName} {e.khmerName && e.fullName ? `(${e.fullName})` : ''} - {e.department}
                       </option>
                     ))}
                   </optgroup>
@@ -1221,22 +1221,22 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                     className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover ring-2 ring-indigo-200 shadow-sm shrink-0"
                   />
                 ) : (
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-indigo-600 text-white font-black text-xl flex items-center justify-center ring-2 ring-indigo-200 shadow-sm shrink-0">
-                    {activeStaff.name.charAt(0)}
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-indigo-600 text-white font-black text-xl flex items-center justify-center ring-2 ring-indigo-200 shadow-sm shrink-0 font-khmer">
+                    {(activeStaff.khmerName || activeStaff.name).charAt(0)}
                   </div>
                 )}
                 <div className="min-w-0 truncate">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base sm:text-lg font-extrabold text-slate-900 leading-tight truncate">
-                      {isKhmer && activeStaff.khmerName ? activeStaff.khmerName : activeStaff.name}
+                    <h3 className="text-base sm:text-lg font-extrabold text-slate-900 leading-tight truncate font-khmer">
+                      {activeStaff.khmerName || activeStaff.name}
                     </h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase shrink-0">
                       {isKhmer ? (activeStaff.type === 'teacher' ? 'គ្រូបង្រៀន' : 'បុគ្គលិក') : activeStaff.type}
                     </span>
                   </div>
-                  {activeStaff.khmerName && (
-                    <p className="text-xs text-slate-600 mt-0.5 font-medium truncate">
-                      {isKhmer ? activeStaff.name : activeStaff.khmerName}
+                  {activeStaff.khmerName && activeStaff.name && (
+                    <p className="text-xs text-slate-500 mt-0.5 font-medium truncate font-sans">
+                      {activeStaff.name}
                     </p>
                   )}
                   <p className="text-xs text-slate-500 mt-1 truncate">
@@ -2081,14 +2081,14 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                     className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-200 shrink-0"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white font-black text-base flex items-center justify-center ring-2 ring-indigo-200 shrink-0">
-                    {activeStaff.name.charAt(0)}
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white font-black text-base flex items-center justify-center ring-2 ring-indigo-200 shrink-0 font-khmer">
+                    {(activeStaff.khmerName || activeStaff.name).charAt(0)}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-black text-slate-900 truncate">
-                      {isKhmer && activeStaff.khmerName ? activeStaff.khmerName : activeStaff.name}
+                    <span className="text-xs font-black text-slate-900 truncate font-khmer">
+                      {activeStaff.khmerName || activeStaff.name}
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${
                       pinModal.action === 'checkin' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'

@@ -452,18 +452,20 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                     className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-200 shadow-2xs"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                    {sub.teacherName.charAt(0).toUpperCase()}
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs font-khmer">
+                    {(sub.khmerTeacherName || teacherObj?.khmerName || sub.teacherName).charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="min-w-0">
-                  <div className="font-bold text-xs text-slate-900 truncate">
-                    {sub.khmerTeacherName ? (
+                  <div className="font-bold text-xs text-slate-900 truncate font-khmer">
+                    {(sub.khmerTeacherName || teacherObj?.khmerName) ? (
                       <>
-                        <span>{sub.khmerTeacherName}</span>
-                        <span className="text-slate-500 text-[11px] font-normal ml-1 hidden lg:inline">
-                          ({sub.teacherName})
-                        </span>
+                        <span>{sub.khmerTeacherName || teacherObj?.khmerName}</span>
+                        {sub.teacherName && (
+                          <span className="text-slate-500 text-[11px] font-normal ml-1 hidden lg:inline font-sans">
+                            ({sub.teacherName})
+                          </span>
+                        )}
                       </>
                     ) : (
                       sub.teacherName
@@ -939,15 +941,20 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
                       className="w-9 h-9 rounded-xl object-cover shrink-0 border border-slate-200 shadow-xs"
                     />
                   ) : (
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white font-black text-sm flex items-center justify-center shadow-xs">
-                      {group.teacherName.charAt(0).toUpperCase()}
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white font-black text-sm flex items-center justify-center shadow-xs font-khmer">
+                      {(group.khmerName || group.teacherName).charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="font-black text-sm text-slate-900">
-                        {group.khmerName ? `${group.khmerName} (${group.teacherName})` : group.teacherName}
+                      <h4 className="font-black text-sm text-slate-900 font-khmer">
+                        {group.khmerName || group.teacherName}
                       </h4>
+                      {group.khmerName && group.teacherName && (
+                        <span className="text-xs text-slate-400 font-normal font-sans">
+                          ({group.teacherName})
+                        </span>
+                      )}
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                         {group.department}
                       </span>

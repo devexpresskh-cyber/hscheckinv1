@@ -417,17 +417,17 @@ export const TeacherManagement: React.FC = () => {
                               className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 font-bold text-sm flex items-center justify-center ring-1 ring-slate-200 shrink-0">
-                              {teacher.fullName.charAt(0)}
+                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 font-bold text-sm flex items-center justify-center ring-1 ring-slate-200 shrink-0 font-khmer">
+                              {(teacher.khmerName || teacher.fullName).charAt(0)}
                             </div>
                           )}
                           <div>
-                            <span className="font-extrabold text-slate-900 block leading-tight">
-                              {teacher.fullName}
+                            <span className="font-extrabold text-slate-900 block leading-tight font-khmer">
+                              {teacher.khmerName || teacher.fullName}
                             </span>
-                            {teacher.khmerName && (
-                              <span className="text-[11px] text-slate-500 font-khmer">
-                                {teacher.khmerName}
+                            {teacher.khmerName && teacher.fullName && (
+                              <span className="text-[11px] text-slate-400 font-sans">
+                                {teacher.fullName}
                               </span>
                             )}
                           </div>
@@ -626,14 +626,19 @@ export const TeacherManagement: React.FC = () => {
                     className="w-12 h-12 rounded-xl object-cover ring-2 ring-indigo-300"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-xl bg-indigo-800 text-white font-bold text-base flex items-center justify-center ring-2 ring-indigo-300 shrink-0">
-                    {selectedTeacherForHistory.fullName.charAt(0)}
+                  <div className="w-12 h-12 rounded-xl bg-indigo-800 text-white font-bold text-base flex items-center justify-center ring-2 ring-indigo-300 shrink-0 font-khmer">
+                    {(selectedTeacherForHistory.khmerName || selectedTeacherForHistory.fullName).charAt(0)}
                   </div>
                 )}
                 <div>
-                  <h3 className="font-bold text-base">{selectedTeacherForHistory.fullName}</h3>
-                  <p className="text-xs text-indigo-200 font-khmer">
-                    {selectedTeacherForHistory.khmerName} • {selectedTeacherForHistory.teacherId}
+                  <h3 className="font-bold text-base font-khmer">
+                    {selectedTeacherForHistory.khmerName || selectedTeacherForHistory.fullName}
+                  </h3>
+                  <p className="text-xs text-indigo-200">
+                    {selectedTeacherForHistory.khmerName && selectedTeacherForHistory.fullName && (
+                      <span className="font-sans mr-1">{selectedTeacherForHistory.fullName} •</span>
+                    )}
+                    <span>{selectedTeacherForHistory.teacherId}</span>
                   </p>
                 </div>
               </div>
@@ -717,7 +722,7 @@ export const TeacherManagement: React.FC = () => {
                     Weekly Teaching Timetable (Mon – Sat)
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Faculty: <span className="text-white font-semibold">{selectedTeacherForSchedule.fullName}</span> ({selectedTeacherForSchedule.subject} • {selectedTeacherForSchedule.department})
+                    Faculty: <span className="text-white font-semibold font-khmer">{selectedTeacherForSchedule.khmerName || selectedTeacherForSchedule.fullName}</span> {selectedTeacherForSchedule.khmerName && selectedTeacherForSchedule.fullName ? `(${selectedTeacherForSchedule.fullName})` : ''} ({selectedTeacherForSchedule.subject} • {selectedTeacherForSchedule.department})
                   </p>
                 </div>
               </div>

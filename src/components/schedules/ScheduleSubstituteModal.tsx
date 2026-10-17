@@ -446,13 +446,15 @@ export const ScheduleSubstituteModal: React.FC<ScheduleSubstituteModalProps> = (
             {/* Original Teacher info with Absent Flag ($0 wage) */}
             <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-rose-200/70 text-rose-800 font-bold text-xs flex items-center justify-center shrink-0">
-                  {schedule.teacherName.charAt(0)}
+                <div className="w-7 h-7 rounded-lg bg-rose-200/70 text-rose-800 font-bold text-xs flex items-center justify-center shrink-0 font-khmer">
+                  {(schedule.khmerTeacherName || schedule.teacherName).charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-rose-950 truncate">
-                    {schedule.teacherName}
-                    {schedule.khmerTeacherName && <span className="text-rose-700 font-normal ml-1">({schedule.khmerTeacherName})</span>}
+                  <div className="text-[11px] font-bold text-rose-950 truncate font-khmer">
+                    {schedule.khmerTeacherName || schedule.teacherName}
+                    {schedule.khmerTeacherName && schedule.teacherName && (
+                      <span className="text-rose-700 font-normal ml-1 font-sans">({schedule.teacherName})</span>
+                    )}
                   </div>
                   <div className="text-[10px] text-rose-600">
                     {isKhmer ? 'គ្រូទទួលខុសត្រូវដើម (អវត្តមាន)' : 'Original Scheduled Teacher (Absent)'}
@@ -634,7 +636,7 @@ export const ScheduleSubstituteModal: React.FC<ScheduleSubstituteModalProps> = (
                             <option value="">{isKhmer ? '-- ជ្រើសរើសគ្រូបង្រៀន --' : '-- Select Teacher --'}</option>
                             {availableTeachers.map(t => (
                               <option key={t.id} value={t.id}>
-                                {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} — {t.subject} (${(t.hourlyRate ?? 20).toFixed(0)}/hr)
+                                {t.khmerName || t.fullName} {t.khmerName && t.fullName ? `(${t.fullName})` : ''} — {t.subject} (${(t.hourlyRate ?? 20).toFixed(0)}/hr)
                               </option>
                             ))}
                           </select>

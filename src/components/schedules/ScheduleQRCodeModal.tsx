@@ -1016,8 +1016,8 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                     <GraduationCap className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs font-black text-indigo-950 block">
-                      {currentTeacher?.fullName} {currentTeacher?.khmerName ? `(${currentTeacher.khmerName})` : ''}
+                    <span className="text-xs font-black text-indigo-950 block font-khmer">
+                      {currentTeacher?.khmerName || currentTeacher?.fullName} {currentTeacher?.khmerName && currentTeacher?.fullName ? `(${currentTeacher.fullName})` : ''}
                     </span>
                     <span className="text-[11px] text-indigo-700 font-medium">
                       {currentTeacher?.teacherId ? `ID: ${currentTeacher.teacherId}` : 'Faculty Member'} • {currentTeacher?.department || 'Academic Department'}
@@ -1104,7 +1104,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                     >
                       {teachers.map(t => (
                         <option key={t.id} value={t.id}>
-                          {t.fullName} {t.khmerName ? `(${t.khmerName})` : ''} - {t.department}
+                          {t.khmerName || t.fullName} {t.khmerName && t.fullName ? `(${t.fullName})` : ''} - {t.department}
                         </option>
                       ))}
                     </select>
@@ -1477,7 +1477,7 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                 </div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
                   {mode === 'teacher'
-                    ? `${currentTeacher?.fullName} ${currentTeacher?.khmerName ? `(${currentTeacher.khmerName})` : ''}`
+                    ? `${currentTeacher?.khmerName || currentTeacher?.fullName} ${currentTeacher?.khmerName && currentTeacher?.fullName ? `(${currentTeacher.fullName})` : ''}`
                     : mode === 'subject'
                     ? currentSubject?.khmerSubject || currentSubject?.subject || 'Class Subject'
                     : mode === 'room'
@@ -1566,8 +1566,8 @@ export const ScheduleQRCodeModal: React.FC<ScheduleQRCodeModalProps> = ({
                     {mode === 'teacher'
                       ? currentTeacher?.subject || 'All Subjects'
                       : mode === 'subject'
-                      ? currentSubject?.teacherName || 'Scheduled Faculty'
-                      : currentTeacher?.fullName || 'Faculty Member'}
+                      ? currentSubject?.khmerTeacherName || currentSubject?.teacherName || 'Scheduled Faculty'
+                      : currentTeacher?.khmerName || currentTeacher?.fullName || 'Faculty Member'}
                   </span>
                 </div>
               </div>
