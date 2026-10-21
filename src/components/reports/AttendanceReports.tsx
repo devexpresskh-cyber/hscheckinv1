@@ -22,12 +22,14 @@ import { TeachingWageReport } from './TeachingWageReport.tsx';
 import { Attendance31DaysSheet } from '../attendance/Attendance31DaysSheet.tsx';
 import { AttendancePeriodGrid } from '../attendance/AttendancePeriodGrid.tsx';
 import { AcademicDatesModal } from '../schedules/AcademicDatesModal.tsx';
+import { DailyScheduleReconciliationModal } from '../schedules/DailyScheduleReconciliationModal.tsx';
 
 export const AttendanceReports: React.FC = () => {
   const { currentUser, canAccessDepartment, hasPermission } = useAuth();
   const { showToast } = useNotification();
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSystemSettings());
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
+  const [isReconciliationModalOpen, setIsReconciliationModalOpen] = useState(false);
 
   React.useEffect(() => {
     const unsub = StorageService.subscribe(() => {
@@ -210,6 +212,14 @@ export const AttendanceReports: React.FC = () => {
         >
           <Calendar className="w-4 h-4" />
           <span>Daily Roll Call Summary (សង្ខេបវត្តមានប្រចាំថ្ងៃ)</span>
+        </button>
+
+        <button
+          onClick={() => setIsReconciliationModalOpen(true)}
+          className="px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-indigo-700 via-indigo-800 to-blue-700 hover:from-indigo-600 hover:to-blue-600 text-white shadow-md shadow-indigo-700/25 transition-all cursor-pointer"
+        >
+          <Printer className="w-4 h-4" />
+          <span>Daily Schedule vs Check-in/out Form (ទម្រង់ផ្ទៀងផ្ទាត់កាលវិភាគ)</span>
         </button>
       </div>
 
@@ -586,6 +596,14 @@ export const AttendanceReports: React.FC = () => {
         <AcademicDatesModal
           isOpen={isAcademicDatesModalOpen}
           onClose={() => setIsAcademicDatesModalOpen(false)}
+        />
+      )}
+
+      {/* Daily Schedule vs Check-in/out Reconciliation Print Modal */}
+      {isReconciliationModalOpen && (
+        <DailyScheduleReconciliationModal
+          isOpen={isReconciliationModalOpen}
+          onClose={() => setIsReconciliationModalOpen(false)}
         />
       )}
 

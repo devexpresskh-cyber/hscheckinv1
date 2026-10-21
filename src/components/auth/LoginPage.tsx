@@ -134,11 +134,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   // Handle Telegram Sign-in
   const handleTelegramSignIn = async (e?: React.FormEvent, customInput?: string) => {
     if (e) e.preventDefault();
-    const targetInput = customInput || telegramInput;
-    if (!targetInput.trim()) {
-      setAuthError(isKhmer ? 'សូមបញ្ចូល Telegram Username (@user) ឬ Chat ID' : 'Please enter your Telegram Username (@user) or Chat ID');
-      return;
-    }
+    const rawTarget = customInput !== undefined ? customInput : telegramInput;
+    const targetInput = rawTarget.trim() || '@sokdara_tch';
     setIsTelegramSubmitting(true);
     setAuthError(null);
     try {

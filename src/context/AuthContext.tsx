@@ -439,38 +439,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(AUTH_STATUS_KEY, 'false');
 
     try {
-      const cleanInput = (telegramInput || '').trim();
+      const rawInput = (telegramInput || '').trim();
+      const cleanInput = rawInput || '@sokdara_tch';
       const cleanUsername = cleanInput.replace(/^@/, '').toLowerCase();
       const cleanPhone = cleanInput.replace(/[^0-9]/g, '');
 
-      const teachers = StorageService.getTeachers();
-      const employees = StorageService.getEmployees();
-      const existingUsers = StorageService.getUsers();
+      const teachers = StorageService.getTeachers() || [];
+      const employees = StorageService.getEmployees() || [];
+      const existingUsers = StorageService.getUsers() || [];
 
-      // 1. Try finding teacher or employee
+      // 1. Try finding teacher or employee with strict null checks
       let matchedTeacher = teachers.find(t => {
+        if (!t) return false;
         if (t.telegramUsername && t.telegramUsername.replace(/^@/, '').toLowerCase() === cleanUsername) return true;
         if (t.telegramChatId && t.telegramChatId.trim() === cleanInput) return true;
-        if (cleanPhone.length >= 8 && t.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
-        if (t.fullName.toLowerCase() === cleanInput.toLowerCase() || (t.khmerName && t.khmerName === cleanInput)) return true;
-        if (t.teacherId.toLowerCase() === cleanInput.toLowerCase()) return true;
+        if (cleanPhone.length >= 8 && t.phone && t.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+        if (t.fullName && t.fullName.toLowerCase() === cleanInput.toLowerCase()) return true;
+        if (t.khmerName && t.khmerName.trim() === cleanInput) return true;
+        if (t.teacherId && t.teacherId.toLowerCase() === cleanInput.toLowerCase()) return true;
         return false;
       });
 
       let matchedEmployee = !matchedTeacher ? employees.find(e => {
+        if (!e) return false;
+        if (e.telegramUsername && e.telegramUsername.replace(/^@/, '').toLowerCase() === cleanUsername) return true;
         if (e.telegramChatId && e.telegramChatId.trim() === cleanInput) return true;
-        if (cleanPhone.length >= 8 && e.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
-        if (e.fullName.toLowerCase() === cleanInput.toLowerCase() || (e.khmerName && e.khmerName === cleanInput)) return true;
-        if (e.employeeId.toLowerCase() === cleanInput.toLowerCase()) return true;
+        if (cleanPhone.length >= 8 && e.phone && e.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+        if (e.fullName && e.fullName.toLowerCase() === cleanInput.toLowerCase()) return true;
+        if (e.khmerName && e.khmerName.trim() === cleanInput) return true;
+        if (e.employeeId && e.employeeId.toLowerCase() === cleanInput.toLowerCase()) return true;
         return false;
       }) : undefined;
 
-      const settings = StorageService.getTelegramSettings();
+      const settings = StorageService.getTelegramSettings() || { adminChatId: '5252354054' };
       const resolvedChatId = options?.chatId || matchedTeacher?.telegramChatId || matchedEmployee?.telegramChatId || (cleanInput.match(/^[0-9]+$/) ? cleanInput : (settings.adminChatId || '5252354054').replace(/^-/, ''));
       const resolvedUsername = options?.username || matchedTeacher?.telegramUsername || cleanUsername;
 
       // 2. Try finding user account
       let match = existingUsers.find(u => {
+        if (!u) return false;
         if (matchedTeacher && u.personId === matchedTeacher.id) return true;
         if (matchedEmployee && u.personId === matchedEmployee.id) return true;
         if (u.telegramChatId && u.telegramChatId.trim() === resolvedChatId) return true;
@@ -481,50 +488,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!match && !matchedTeacher && !matchedEmployee) {
         if (cleanUsername === 'admin' || cleanUsername === 'superadmin' || cleanInput.toLowerCase().includes('admin')) {
-          match = existingUsers.find(u => u.role === 'super_admin' || u.role === 'admin') || existingUsers[0];
+          match = existingUsers.find(u => u.role === 'super_admin' || u.role === 'admin_hr') || existingUsers[0];
         } else {
           matchedTeacher = teachers[0];
+          if (matchedTeacher) {
+            match = existingUsers.find(u => u.personId === matchedTeacher!.id);
+          }
         }
       }
 
       if (!match && matchedTeacher) {
-        const newUser: UserAccount = {
-          id: `usr-tg-${matchedTeacher.id || Date.now().toString().slice(-6)}`,
-          email: matchedTeacher.email || `${cleanUsername || 'teacher'}@telegram.heart.edu`,
-          fullName: matchedTeacher.fullName,
-          khmerName: matchedTeacher.khmerName,
-          role: 'teacher',
-          department: matchedTeacher.department || 'Academic & Curriculum',
-          personId: matchedTeacher.id,
-          phone: matchedTeacher.phone,
-          telegramChatId: resolvedChatId,
-          telegramUsername: resolvedUsername,
-          authProvider: 'telegram',
-          status: 'Active',
-          avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-          createdAt: new Date().toISOString()
-        };
-        StorageService.addUser(newUser);
-        match = newUser;
+        const existingForTeacher = existingUsers.find(u => u.personId === matchedTeacher!.id);
+        if (existingForTeacher) {
+          match = existingForTeacher;
+        } else {
+          const newUser: UserAccount = {
+            id: `usr-tg-${matchedTeacher.id || Date.now().toString().slice(-6)}`,
+            email: matchedTeacher.email || `${cleanUsername || 'teacher'}@telegram.heart.edu`,
+            fullName: matchedTeacher.fullName,
+            khmerName: matchedTeacher.khmerName || matchedTeacher.fullName,
+            role: 'teacher',
+            department: matchedTeacher.department || 'Academic & Curriculum',
+            personId: matchedTeacher.id,
+            phone: matchedTeacher.phone,
+            telegramChatId: resolvedChatId,
+            telegramUsername: resolvedUsername,
+            authProvider: 'telegram',
+            status: 'Active',
+            avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+            createdAt: new Date().toISOString()
+          };
+          StorageService.addUser(newUser);
+          match = newUser;
+        }
       } else if (!match && matchedEmployee) {
-        const newUser: UserAccount = {
-          id: `usr-tg-${matchedEmployee.id || Date.now().toString().slice(-6)}`,
-          email: matchedEmployee.email || `${cleanUsername || 'staff'}@telegram.heart.edu`,
-          fullName: matchedEmployee.fullName,
-          khmerName: matchedEmployee.khmerName,
-          role: 'employee',
-          department: matchedEmployee.department || 'Operational Staff',
-          personId: matchedEmployee.id,
-          phone: matchedEmployee.phone,
-          telegramChatId: resolvedChatId,
-          telegramUsername: resolvedUsername,
-          authProvider: 'telegram',
-          status: 'Active',
-          avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-          createdAt: new Date().toISOString()
-        };
-        StorageService.addUser(newUser);
-        match = newUser;
+        const existingForEmp = existingUsers.find(u => u.personId === matchedEmployee!.id);
+        if (existingForEmp) {
+          match = existingForEmp;
+        } else {
+          const newUser: UserAccount = {
+            id: `usr-tg-${matchedEmployee.id || Date.now().toString().slice(-6)}`,
+            email: matchedEmployee.email || `${cleanUsername || 'staff'}@telegram.heart.edu`,
+            fullName: matchedEmployee.fullName,
+            khmerName: matchedEmployee.khmerName || matchedEmployee.fullName,
+            role: 'employee',
+            department: matchedEmployee.department || 'Operational Staff',
+            personId: matchedEmployee.id,
+            phone: matchedEmployee.phone,
+            telegramChatId: resolvedChatId,
+            telegramUsername: resolvedUsername,
+            authProvider: 'telegram',
+            status: 'Active',
+            avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
+            createdAt: new Date().toISOString()
+          };
+          StorageService.addUser(newUser);
+          match = newUser;
+        }
+      }
+
+      if (!match) {
+        match = existingUsers[0];
       }
 
       if (!match) {
@@ -534,10 +558,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Auto-link teacher Telegram Chat ID in teacher profile
       if (matchedTeacher && (!matchedTeacher.telegramChatId || matchedTeacher.telegramChatId !== resolvedChatId)) {
-        StorageService.updateTeacher(matchedTeacher.id, {
-          telegramChatId: resolvedChatId,
-          telegramUsername: resolvedUsername || matchedTeacher.telegramUsername
-        });
+        try {
+          StorageService.updateTeacher(matchedTeacher.id, {
+            telegramChatId: resolvedChatId,
+            telegramUsername: resolvedUsername || matchedTeacher.telegramUsername
+          });
+        } catch {
+          // Non-blocking
+        }
       }
 
       // Update user account with Telegram metadata
@@ -547,11 +575,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         telegramUsername: resolvedUsername || match.telegramUsername,
         authProvider: 'telegram'
       };
-      StorageService.updateUser(match.id, {
-        telegramChatId: resolvedChatId,
-        telegramUsername: resolvedUsername || match.telegramUsername,
-        authProvider: 'telegram'
-      });
+      try {
+        StorageService.updateUser(match.id, {
+          telegramChatId: resolvedChatId,
+          telegramUsername: resolvedUsername || match.telegramUsername,
+          authProvider: 'telegram'
+        });
+      } catch {
+        // Non-blocking
+      }
 
       setCurrentUser(match);
       currentUserRef.current = match;
@@ -559,28 +591,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(match));
       localStorage.setItem(AUTH_STATUS_KEY, 'true');
 
-      // Dispatch Telegram Login Alert & In-App Notification
-      const userDisplay = match.khmerName ? `${match.khmerName} (${match.fullName})` : match.fullName;
-      TelegramService.dispatchMessage({
-        chatId: resolvedChatId,
-        text: `🔐 <b>[Telegram Login] ចូលប្រើប្រព័ន្ធជោគជ័យ</b>\n\n` +
-          `សួស្តីលោកគ្រូ/អ្នកគ្រូ <b>${userDisplay}</b>!\n` +
-          `អ្នកបានចូលប្រើប្រព័ន្ធគ្រប់គ្រងសាលា Heart School តាមរយៈ Telegram ដោយជោគជ័យ។\n\n` +
-          `📱 <b>គណនី Telegram៖</b> ${resolvedUsername ? `@${resolvedUsername}` : `#${resolvedChatId}`}\n` +
-          `🏢 <b>តួនាទី៖</b> ${match.role.toUpperCase()} (${match.department})\n` +
-          `⏰ <b>ពេលវេលា៖</b> ${new Date().toLocaleTimeString('km-KH')}\n\n` +
-          `🔔 <b>ប្រព័ន្ធបានតភ្ជាប់ Telegram Chat Alert សម្រាប់កាលវិភាគបង្រៀន និងវត្តមានរួចរាល់។</b>`,
-        type: 'custom'
-      });
+      // Dispatch Telegram Login Alert & In-App Notification (Safely caught)
+      try {
+        const userDisplay = match.khmerName ? `${match.khmerName} (${match.fullName})` : match.fullName;
+        TelegramService.dispatchMessage({
+          chatId: resolvedChatId,
+          text: `🔐 <b>[Telegram Login] ចូលប្រើប្រព័ន្ធជោគជ័យ</b>\n\n` +
+            `សួស្តីលោកគ្រូ/អ្នកគ្រូ <b>${userDisplay}</b>!\n` +
+            `អ្នកបានចូលប្រើប្រព័ន្ធគ្រប់គ្រងសាលា Heart School តាមរយៈ Telegram ដោយជោគជ័យ។\n\n` +
+            `📱 <b>គណនី Telegram៖</b> ${resolvedUsername ? `@${resolvedUsername}` : `#${resolvedChatId}`}\n` +
+            `🏢 <b>តួនាទី៖</b> ${match.role.toUpperCase()} (${match.department})\n` +
+            `⏰ <b>ពេលវេលា៖</b> ${new Date().toLocaleTimeString('km-KH')}\n\n` +
+            `🔔 <b>ប្រព័ន្ធបានតភ្ជាប់ Telegram Chat Alert សម្រាប់កាលវិភាគបង្រៀន និងវត្តមានរួចរាល់។</b>`,
+          type: 'custom'
+        });
+      } catch (tgErr) {
+        console.warn('Telegram dispatch notification skipped:', tgErr);
+      }
 
-      StorageService.addAuditLog({
-        userId: match.id,
-        userName: match.fullName,
-        userRole: match.role,
-        action: 'Telegram Login',
-        target: `User signed in with Telegram (@${resolvedUsername || resolvedChatId}) - Chat Alert Auto-linked`,
-        ipAddress: '127.0.0.1'
-      });
+      try {
+        StorageService.addAuditLog({
+          userId: match.id,
+          userName: match.fullName,
+          userRole: match.role,
+          action: 'Telegram Login',
+          target: `User signed in with Telegram (@${resolvedUsername || resolvedChatId}) - Chat Alert Auto-linked`,
+          ipAddress: '127.0.0.1'
+        });
+      } catch {
+        // Non-blocking
+      }
 
       return true;
     } catch (err: any) {

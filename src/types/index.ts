@@ -101,6 +101,7 @@ export interface Employee {
   phone: string;
   email: string;
   telegramChatId: string;
+  telegramUsername?: string;
   department: string;
   position: string;
   supervisor: string;

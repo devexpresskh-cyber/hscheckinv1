@@ -39,6 +39,7 @@ import {
   QrCode,
   Camera,
   Download,
+  Printer,
   UserCog,
   UserPlus,
   UserCheck,
@@ -56,6 +57,7 @@ import { ScheduleQRScanModal } from './ScheduleQRScanModal.tsx';
 import { ScheduleSubstituteModal } from './ScheduleSubstituteModal.tsx';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
+import { DailyScheduleReconciliationModal } from './DailyScheduleReconciliationModal.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { GeoService } from '../../services/geoService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
@@ -97,6 +99,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedTeacherFilter, setSelectedTeacherFilter] = useState<string>('All');
   const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
+  const [isReconciliationModalOpen, setIsReconciliationModalOpen] = useState(false);
 
   // Reactive state synced with StorageService
   const [schedules, setSchedules] = useState<Schedule[]>(() => StorageService.getSchedules());
@@ -1540,6 +1543,15 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               </button>
 
               <button
+                onClick={() => setIsReconciliationModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-700 via-indigo-800 to-blue-700 hover:from-indigo-600 hover:to-blue-600 text-white text-xs font-bold shadow-md shadow-indigo-700/25 transition-all active:scale-95 cursor-pointer"
+                title={isKhmer ? 'បោះពុម្ពទម្រង់ផ្ទៀងផ្ទាត់កាលវិភាគ និង Check-in/out' : 'Print Daily Schedule & Attendance Reconciliation Form'}
+              >
+                <Printer className="w-3.5 h-3.5 shrink-0 text-white" />
+                <span>{isKhmer ? 'ទម្រង់ផ្ទៀងផ្ទាត់ (Print)' : 'Daily Audit Form (Print)'}</span>
+              </button>
+
+              <button
                 onClick={viewMode === 'cards' ? handleOpenAdd : handleOpenAddSubject}
                 className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all active:scale-95"
               >
@@ -1789,10 +1801,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 {/* Sum of Hours for Selected Day */}
                 {(() => {
                   const dayTotalMins = dailyClassesFiltered.reduce((sum, cls) => {
-                    const s = cls.schedule;
-                    if (!s.startTime || !s.endTime) return sum;
-                    const st = AttendanceEngine.timeToMinutes(s.startTime);
-                    const et = AttendanceEngine.timeToMinutes(s.endTime);
+                    if (!cls.startTime || !cls.endTime) return sum;
+                    const st = AttendanceEngine.timeToMinutes(cls.startTime);
+                    const et = AttendanceEngine.timeToMinutes(cls.endTime);
                     return sum + (et > st ? et - st : 0);
                   }, 0);
                   const dayTotalHours = dayTotalMins > 0
@@ -1812,6 +1823,15 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 <span className="text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl whitespace-nowrap">
                   {dailyClassesGroupedByPeriod.length} {isKhmer ? 'វេន' : 'Periods'}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setIsReconciliationModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 shadow-2xs transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                  title={isKhmer ? 'បោះពុម្ពទម្រង់ផ្ទៀងផ្ទាត់កាលវិភាគ និង Check-in/out' : 'Print Daily Schedule & Attendance Reconciliation Form'}
+                >
+                  <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{isKhmer ? 'បោះពុម្ពទម្រង់ផ្ទៀងផ្ទាត់' : 'Print Audit Sheet'}</span>
+                </button>
               </div>
             </div>
 
@@ -3254,6 +3274,14 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           onSuccess={() => {
             setAttendanceList(StorageService.getAttendance());
           }}
+        />
+      )}
+
+      {/* Daily Schedule vs Checkin/Out Reconciliation Print Modal */}
+      {isReconciliationModalOpen && (
+        <DailyScheduleReconciliationModal
+          isOpen={isReconciliationModalOpen}
+          onClose={() => setIsReconciliationModalOpen(false)}
         />
       )}
 
