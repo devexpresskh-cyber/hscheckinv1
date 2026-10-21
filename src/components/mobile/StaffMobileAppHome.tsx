@@ -132,6 +132,11 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
       );
       if (match) return match;
     }
+    if (currentUser.id) {
+      const cleanId = currentUser.id.replace(/^usr-/, '');
+      const match = teachers.find(t => t.id === cleanId || t.teacherId?.toLowerCase() === cleanId.toLowerCase());
+      if (match) return match;
+    }
     if (currentUser.email) {
       const match = teachers.find(t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase());
       if (match) return match;
@@ -252,11 +257,27 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
   // Today's teaching classes (for Teacher: includes owned and assigned substitute classes)
   const todayClasses = useMemo(() => {
     if (!isTeacher) return [];
-    const teacherId = activeTeacher?.id;
+    const myId = (activeTeacher?.id || '').toLowerCase();
+    const myTeacherCode = (activeTeacher?.teacherId || '').toLowerCase();
+    const myName = (currentUser.fullName || activeTeacher?.fullName || '').toLowerCase();
+    const myKhmer = (currentUser.khmerName || activeTeacher?.khmerName || '').trim();
+    const myPersonId = (currentUser.personId || '').toLowerCase();
+
     const regularClasses = subjectSchedules
       .filter(s => {
         if (!s.isActive) return false;
-        if (teacherId && s.teacherId !== teacherId) return false;
+        const subTId = (s.teacherId || '').toLowerCase();
+        const subName = (s.teacherName || '').toLowerCase();
+        const subKhmer = (s.khmerTeacherName || '').trim();
+
+        const isMatch =
+          (myId && subTId === myId) ||
+          (myTeacherCode && subTId === myTeacherCode) ||
+          (myPersonId && subTId === myPersonId) ||
+          (myName && subName === myName) ||
+          (myKhmer && subKhmer === myKhmer);
+
+        if (!isMatch) return false;
         if (s.daysOfWeek && Array.isArray(s.daysOfWeek) && s.daysOfWeek.length > 0) {
           return s.daysOfWeek.includes(todayDayIndex);
         }

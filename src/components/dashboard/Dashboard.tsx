@@ -110,10 +110,44 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
   const currentTimeStr = useMemo(() => AttendanceEngine.getCurrentTimeString(), [tick]);
   const curMins = useMemo(() => AttendanceEngine.timeToMinutes(currentTimeStr), [currentTimeStr]);
 
-  // Compute live active teaching sessions right now across faculty
+  const isTeacher = currentUser.role === 'teacher';
+  const activeTeacher = useMemo(() => {
+    if (!isTeacher) return null;
+    if (currentUser.personId) {
+      const match = teachers.find(
+        t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase()
+      );
+      if (match) return match;
+    }
+    if (currentUser.id) {
+      const cleanId = currentUser.id.replace(/^usr-/, '');
+      const match = teachers.find(t => t.id === cleanId || t.teacherId?.toLowerCase() === cleanId.toLowerCase());
+      if (match) return match;
+    }
+    if (currentUser.email) {
+      const match = teachers.find(t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase());
+      if (match) return match;
+    }
+    if (currentUser.fullName) {
+      const match = teachers.find(t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase());
+      if (match) return match;
+    }
+    return teachers[0] || null;
+  }, [isTeacher, currentUser, teachers]);
+
+  // Compute live active teaching sessions right now across faculty (or own assigned classes for teacher)
   const liveTeachingSessions = useMemo(() => {
     const todayClasses = subjectSchedules.filter(sub => {
       if (!sub.isActive) return false;
+      if (isTeacher) {
+        const myTId = (activeTeacher?.id || '').toLowerCase();
+        const myCode = (activeTeacher?.teacherId || '').toLowerCase();
+        const myName = (currentUser.fullName || '').toLowerCase();
+        const subTId = (sub.teacherId || '').toLowerCase();
+        const subName = (sub.teacherName || '').toLowerCase();
+        const isMatch = (myTId && subTId === myTId) || (myCode && subTId === myCode) || (myName && subName === myName);
+        if (!isMatch) return false;
+      }
       if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
         return sub.daysOfWeek.includes(todayDayIndex);
       }
@@ -141,7 +175,7 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
         isCompleted
       };
     });
-  }, [subjectSchedules, allAttendance, todayDayIndex, todayStr, teachers, curMins]);
+  }, [subjectSchedules, allAttendance, todayDayIndex, todayStr, teachers, curMins, isTeacher, activeTeacher, currentUser]);
 
   const currentlyInClass = useMemo(() => {
     return liveTeachingSessions.filter(s => s.isInSession);
@@ -170,9 +204,18 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
       const isSelected = dateStr === selectedDate;
       const isCurrentDay = dateStr === todayStr;
 
-      // Count active classes & sum hours on this day
+      // Count active classes & sum hours on this day (scoped to teacher if teacher account)
       const daySchedules = subjectSchedules.filter(sub => {
         if (!sub.isActive) return false;
+        if (isTeacher) {
+          const myTId = (activeTeacher?.id || '').toLowerCase();
+          const myCode = (activeTeacher?.teacherId || '').toLowerCase();
+          const myName = (currentUser.fullName || '').toLowerCase();
+          const subTId = (sub.teacherId || '').toLowerCase();
+          const subName = (sub.teacherName || '').toLowerCase();
+          const isMatch = (myTId && subTId === myTId) || (myCode && subTId === myCode) || (myName && subName === myName);
+          if (!isMatch) return false;
+        }
         if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
           return sub.daysOfWeek.includes(dowIndex);
         }

@@ -108,7 +108,11 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
     }
     if (isTeacherRole) {
       const match = teachers.find(
-        t => t.id === currentUser?.personId || t.email?.toLowerCase() === currentUser?.email?.toLowerCase()
+        t => t.id === currentUser?.personId ||
+             t.teacherId?.toLowerCase() === currentUser?.personId?.toLowerCase() ||
+             (currentUser?.id && (t.id === currentUser.id.replace(/^usr-/, '') || t.teacherId?.toLowerCase() === currentUser.id.replace(/^usr-/, '').toLowerCase())) ||
+             t.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
+             t.fullName.toLowerCase() === currentUser?.fullName.toLowerCase()
       );
       return match ? match.id : (teachers[0]?.id || '');
     }
@@ -171,7 +175,11 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
   const activeTeacherSubject = useMemo(() => {
     if (!selectedTeacher) return null;
     const teacherClasses = subjectSchedules.filter(s => {
-      if (!s.isActive || s.teacherId !== selectedTeacher.id) return false;
+      if (!s.isActive) return false;
+      const isMatch = s.teacherId === selectedTeacher.id ||
+                      s.teacherId?.toLowerCase() === selectedTeacher.teacherId?.toLowerCase() ||
+                      s.teacherName?.toLowerCase() === selectedTeacher.fullName.toLowerCase();
+      if (!isMatch) return false;
       if (s.daysOfWeek && s.daysOfWeek.length > 0) {
         return s.daysOfWeek.includes(todayDayIndex);
       }

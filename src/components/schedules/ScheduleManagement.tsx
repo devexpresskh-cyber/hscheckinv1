@@ -61,6 +61,8 @@ import { DailyScheduleReconciliationModal } from './DailyScheduleReconciliationM
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { GeoService } from '../../services/geoService.ts';
 import { TelegramService } from '../../services/telegramService.ts';
+import { matchTeacher } from '../../utils/staffMatchUtils.ts';
+import { phoneNumbersMatch } from '../../utils/phoneUtils.ts';
 
 interface ScheduleManagementProps {
   initialView?: 'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards';
@@ -97,7 +99,6 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
   const [editingSubjectSchedule, setEditingSubjectSchedule] = useState<TeacherSubjectSchedule | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [selectedTeacherFilter, setSelectedTeacherFilter] = useState<string>('All');
   const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
   const [isReconciliationModalOpen, setIsReconciliationModalOpen] = useState(false);
 
@@ -144,22 +145,66 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       );
       if (byPersonId) return byPersonId;
     }
-    // 2. By email
+    // 2. By id (e.g. usr-tch-001 -> tch-001)
+    if (currentUser.id) {
+      const cleanId = currentUser.id.replace(/^usr-/, '');
+      const byId = teachers.find(t => t.id === cleanId || t.teacherId?.toLowerCase() === cleanId.toLowerCase());
+      if (byId) return byId;
+    }
+    // 3. By email
     if (currentUser.email) {
       const byEmail = teachers.find(
         t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase()
       );
       if (byEmail) return byEmail;
     }
-    // 3. By fullName
+    // 4. By fullName or khmerName
     if (currentUser.fullName) {
       const byName = teachers.find(
-        t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase()
+        t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase() ||
+             (t.englishName && t.englishName.toLowerCase() === currentUser.fullName.toLowerCase())
       );
       if (byName) return byName;
     }
+    if (currentUser.khmerName) {
+      const byKhmer = teachers.find(
+        t => t.khmerName && t.khmerName.trim() === currentUser.khmerName?.trim()
+      );
+      if (byKhmer) return byKhmer;
+    }
+    // 5. By phone
+    if (currentUser.phone) {
+      const byPhone = teachers.find(t => t.phone && phoneNumbersMatch(currentUser.phone || '', t.phone));
+      if (byPhone) return byPhone;
+    }
+    // 6. By matchTeacher helper
+    const matched = teachers.find(t =>
+      matchTeacher(currentUser.personId || '', t) ||
+      matchTeacher(currentUser.fullName || '', t) ||
+      matchTeacher(currentUser.email || '', t)
+    );
+    if (matched) return matched;
+
+    // 7. Fallback for teacher role
+    if (currentUser.role === 'teacher') {
+      return teachers[0] || null;
+    }
     return null;
   }, [currentUser, teachers]);
+
+  const [selectedTeacherFilter, setSelectedTeacherFilter] = useState<string>(() => {
+    if (isTeacher) {
+      return activeTeacher ? activeTeacher.id : 'All';
+    }
+    return 'All';
+  });
+
+  // Automatically keep teacher filter synchronized with teacher account
+  useEffect(() => {
+    if (isTeacher && activeTeacher) {
+      setSelectedTeacherFilter(activeTeacher.id);
+    }
+  }, [isTeacher, activeTeacher]);
 
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
@@ -3282,6 +3327,8 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         <DailyScheduleReconciliationModal
           isOpen={isReconciliationModalOpen}
           onClose={() => setIsReconciliationModalOpen(false)}
+          initialTeacherId={isTeacher && activeTeacher ? activeTeacher.id : selectedTeacherFilter !== 'All' ? selectedTeacherFilter : undefined}
+          initialDate={todayStr}
         />
       )}
 

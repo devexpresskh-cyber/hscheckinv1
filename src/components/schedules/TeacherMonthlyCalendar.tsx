@@ -372,7 +372,16 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
   const filteredSchedules = useMemo(() => {
     return subjectSchedules.filter(s => {
       if (!s.isActive) return false;
-      if (selectedTeacherId !== 'All' && s.teacherId !== selectedTeacherId) return false;
+      if (selectedTeacherId !== 'All') {
+        const selTeacher = teachers.find(t => t.id === selectedTeacherId || t.teacherId?.toLowerCase() === selectedTeacherId?.toLowerCase());
+        const matchesTeacher = s.teacherId === selectedTeacherId ||
+          (selTeacher && (
+            s.teacherId === selTeacher.id ||
+            s.teacherId?.toLowerCase() === selTeacher.teacherId?.toLowerCase() ||
+            s.teacherName?.toLowerCase() === selTeacher.fullName.toLowerCase()
+          ));
+        if (!matchesTeacher) return false;
+      }
       if (selectedDept !== 'All') {
         const teacher = teachers.find(t => t.id === s.teacherId || t.teacherId === s.teacherId);
         if (teacher && teacher.department !== selectedDept) return false;

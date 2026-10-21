@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Printer,
   Download,
@@ -22,6 +22,7 @@ import { StorageService } from '../../services/storageService.ts';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 import {
   Teacher,
   TeacherSubjectSchedule,
@@ -42,16 +43,10 @@ export const DailyScheduleReconciliationModal: React.FC<DailyScheduleReconciliat
   initialDate,
   initialTeacherId
 }) => {
+  const { currentUser } = useAuth();
+  const isTeacherRole = currentUser?.role === 'teacher';
   const { isKhmer } = useLanguage();
   const { showToast } = useNotification();
-
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const [selectedDate, setSelectedDate] = useState<string>(initialDate || todayStr);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(initialTeacherId || 'all');
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
 
   // Load fresh database state
   const systemSettings = StorageService.getSystemSettings();
@@ -60,6 +55,54 @@ export const DailyScheduleReconciliationModal: React.FC<DailyScheduleReconciliat
   const attendanceList: AttendanceRecord[] = StorageService.getAttendance();
   const periods: TimetablePeriod[] = StorageService.getPeriods();
   const departments = StorageService.getDepartments();
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const [selectedDate, setSelectedDate] = useState<string>(initialDate || todayStr);
+
+  // Active teacher resolution
+  const activeTeacher = useMemo(() => {
+    if (!currentUser) return null;
+    if (initialTeacherId && initialTeacherId !== 'all') {
+      const match = teachers.find(t => t.id === initialTeacherId || t.teacherId === initialTeacherId);
+      if (match) return match;
+    }
+    if (currentUser.personId) {
+      const match = teachers.find(t => t.id === currentUser.personId || t.teacherId?.toLowerCase() === currentUser.personId?.toLowerCase());
+      if (match) return match;
+    }
+    if (currentUser.id) {
+      const cleanId = currentUser.id.replace(/^usr-/, '');
+      const match = teachers.find(t => t.id === cleanId || t.teacherId?.toLowerCase() === cleanId.toLowerCase());
+      if (match) return match;
+    }
+    if (currentUser.email) {
+      const match = teachers.find(t => t.email && t.email.toLowerCase() === currentUser.email.toLowerCase());
+      if (match) return match;
+    }
+    if (currentUser.fullName) {
+      const match = teachers.find(t => t.fullName.toLowerCase() === currentUser.fullName.toLowerCase());
+      if (match) return match;
+    }
+    return isTeacherRole ? (teachers[0] || null) : null;
+  }, [currentUser, isTeacherRole, initialTeacherId, teachers]);
+
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(() => {
+    if (isTeacherRole && activeTeacher) return activeTeacher.id;
+    return initialTeacherId || 'all';
+  });
+
+  useEffect(() => {
+    if (isTeacherRole && activeTeacher) {
+      setSelectedTeacherId(activeTeacher.id);
+    } else if (initialTeacherId) {
+      setSelectedTeacherId(initialTeacherId);
+    }
+  }, [isTeacherRole, activeTeacher, initialTeacherId]);
+
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
 
   // Selected date day-of-week (0 = Sun, 1 = Mon, ..., 6 = Sat)
   const selectedDateObj = useMemo(() => new Date(selectedDate), [selectedDate]);
@@ -229,7 +272,10 @@ export const DailyScheduleReconciliationModal: React.FC<DailyScheduleReconciliat
   const filteredRows = useMemo(() => {
     return reconciliationRows.filter(row => {
       // Teacher filter
-      if (selectedTeacherId !== 'all' && row.teacherId !== selectedTeacherId) return false;
+      if (selectedTeacherId !== 'all') {
+        const matchesTeacher = row.teacherId === selectedTeacherId || row.teacherCode === selectedTeacherId;
+        if (!matchesTeacher) return false;
+      }
 
       // Department filter
       if (selectedDepartment !== 'all' && row.department !== selectedDepartment) return false;
@@ -468,18 +514,25 @@ export const DailyScheduleReconciliationModal: React.FC<DailyScheduleReconciliat
             </select>
 
             {/* Filter by Teacher */}
-            <select
-              value={selectedTeacherId}
-              onChange={e => setSelectedTeacherId(e.target.value)}
-              className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold text-slate-700 focus:outline-none cursor-pointer shadow-2xs"
-            >
-              <option value="all">{isKhmer ? 'គ្រប់គ្រូបង្រៀន / All Teachers' : 'All Teachers'}</option>
-              {teachers.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.teacherId} - {t.khmerName || t.fullName}
-                </option>
-              ))}
-            </select>
+            {!isTeacherRole ? (
+              <select
+                value={selectedTeacherId}
+                onChange={e => setSelectedTeacherId(e.target.value)}
+                className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold text-slate-700 focus:outline-none cursor-pointer shadow-2xs"
+              >
+                <option value="all">{isKhmer ? 'គ្រប់គ្រូបង្រៀន / All Teachers' : 'All Teachers'}</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.teacherId} - {t.khmerName || t.fullName}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl px-3 py-1.5 font-bold text-xs flex items-center gap-1.5 shadow-2xs">
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{activeTeacher?.khmerName || activeTeacher?.fullName || currentUser?.fullName}</span>
+              </div>
+            )}
 
             {/* Filter by Verification Status */}
             <select
