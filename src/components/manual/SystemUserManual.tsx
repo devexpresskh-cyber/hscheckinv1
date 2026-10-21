@@ -784,13 +784,13 @@ export const SystemUserManual: React.FC = () => {
       titleKm: '៨. ការចូលប្រើប្រព័ន្ធ គណនី និងសិទ្ធិអនុញ្ញាត',
       badge: 'Security',
       icon: Lock,
-      descriptionEn: 'How to sign in with Google or Staff ID, and how role permissions control feature access.',
-      descriptionKm: 'ការចូលប្រើប្រព័ន្ធតាមរយៈ Google ឬលេខកូដសម្គាល់ និងការគ្រប់គ្រងសិទ្ធិតាមតួនាទី។',
+      descriptionEn: 'How to sign in with Telegram or Staff ID, and how role permissions control feature access.',
+      descriptionKm: 'ការចូលប្រើប្រព័ន្ធតាមរយៈ Telegram ឬលេខកូដសម្គាល់ និងការគ្រប់គ្រងសិទ្ធិតាមតួនាទី។',
       stepsEn: [
         {
-          title: 'Signing In with Google',
-          desc: 'Click "Continue with Google Account" on the login page for instant, secure authentication via Firebase Auth.',
-          tip: 'Your institutional or personal Google email is supported.'
+          title: 'Signing In with Telegram',
+          desc: 'Enter your Telegram @username or Chat ID on the login page for instant authentication with auto-linked schedule alerts.',
+          tip: 'Telegram alerts for schedules, substitutes, and check-ins will automatically link to your personal chat.'
         },
         {
           title: 'Signing In with Staff ID / Email',
@@ -805,9 +805,9 @@ export const SystemUserManual: React.FC = () => {
       ],
       stepsKm: [
         {
-          title: 'ការចូលប្រើតាមរយៈគណនី Google',
-          desc: 'ចុចប៊ូតុង "Continue with Google Account" នៅលើទំព័រ Login ដើម្បីចូលប្រើប្រព័ន្ធភ្លាមៗដោយសុវត្ថិភាព។',
-          tip: 'គាំទ្រអ៊ីមែល Google ផ្ទាល់ខ្លួន ឬអ៊ីមែលរបស់សាលា។'
+          title: 'ការចូលប្រើតាមរយៈគណនី Telegram',
+          desc: 'វាយបញ្ចូល Telegram @username ឬ Chat ID នៅលើទំព័រ Login ដើម្បីចូលប្រើប្រព័ន្ធភ្លាមៗ ជាមួយការតភ្ជាប់ Telegram Alert ដោយស្វ័យប្រវត្តិ។',
+          tip: 'ការជូនដំណឹងកាលវិភាគបង្រៀន ការបង្រៀនជំនួស និងវត្តមាន នឹងផ្ញើទៅ Telegram ផ្ទាល់ខ្លួនរបស់អ្នកដោយស្វ័យប្រវត្តិ។'
         },
         {
           title: 'ការចូលប្រើតាមរយៈលេខសម្គាល់ ឬអ៊ីមែល',

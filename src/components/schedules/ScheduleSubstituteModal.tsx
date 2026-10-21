@@ -26,6 +26,7 @@ import {
   ScheduleSubstitutionAssignee
 } from '../../types/index.ts';
 import { StorageService } from '../../services/storageService.ts';
+import { TelegramService } from '../../services/telegramService.ts';
 import { useLanguage } from '../../context/LanguageContext.tsx';
 import { useNotification } from '../../context/NotificationContext.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
@@ -345,14 +346,48 @@ export const ScheduleSubstituteModal: React.FC<ScheduleSubstituteModalProps> = (
         assignedBy: currentUser.fullName || currentUser.email
       });
 
+      // 🔔 Dispatch Telegram Alert to Telegram group & assignee(s)
+      try {
+        for (const a of finalAssignees) {
+          const assignedTeacher = a.substituteType === 'teacher' ? teachers.find(t => t.id === a.substituteId) : undefined;
+          const assignedEmployee = a.substituteType === 'employee' ? employees.find(e => e.id === a.substituteId) : undefined;
+          const personalChatId = assignedTeacher?.telegramChatId || assignedEmployee?.telegramChatId;
+
+          TelegramService.sendScheduleAssignmentAlert({
+            assignmentType: 'substitute',
+            assigneeName: a.substituteName,
+            assigneeKhmerName: a.substituteKhmerName,
+            assigneeRole: a.substituteType,
+            assigneeDepartment: a.substituteDepartment,
+            assigneeChatId: personalChatId,
+            subject: schedule.subject,
+            khmerSubject: schedule.khmerSubject,
+            gradeClass: schedule.gradeClass,
+            room: schedule.room,
+            periodName: schedule.periodName,
+            date: selectedDate,
+            startTime: a.startTime || schedule.startTime,
+            endTime: a.endTime || schedule.endTime,
+            allocatedHours: a.allocatedHours,
+            wage: a.substituteType === 'employee' ? a.manualGrossWage : undefined,
+            originalTeacherName: schedule.teacherName,
+            originalTeacherKhmer: schedule.khmerTeacherName,
+            assignedBy: currentUser.fullName || currentUser.email,
+            note: note
+          });
+        }
+      } catch (tgErr) {
+        console.warn('Telegram notification dispatch failed:', tgErr);
+      }
+
       const summaryText = finalAssignees.map(a =>
         `${a.substituteName} (${a.substituteType === 'employee' ? 'Staff' : 'Teacher'}, ${a.allocatedHours}h${a.substituteType === 'employee' ? `, $${(a.manualGrossWage ?? 0).toFixed(2)}` : ''})`
       ).join(', ');
 
       showToast(
         isKhmer
-          ? `បានចាត់តាំងអ្នកជំនួស ${finalAssignees.length} នាក់ (${summaryText}) ជំនួសគ្រូ ${schedule.teacherName} ដោយជោគជ័យ!`
-          : `Assigned ${finalAssignees.length} substitute(s) (${summaryText}) to cover for absent teacher ${schedule.teacherName}!`,
+          ? `បានចាត់តាំងអ្នកជំនួស ${finalAssignees.length} នាក់ (${summaryText}) ជំនួសគ្រូ ${schedule.teacherName} និងផ្ញើសារដំណឹងទៅ Telegram Group រួចរាល់!`
+          : `Assigned ${finalAssignees.length} substitute(s) (${summaryText}) to cover for absent teacher ${schedule.teacherName} & alerted Telegram group!`,
         'success'
       );
 

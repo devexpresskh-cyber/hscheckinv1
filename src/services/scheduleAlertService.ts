@@ -369,13 +369,25 @@ class ScheduleAlertEngine {
     const todayDateStr = now.toISOString().split('T')[0];
 
     const allSubjectSchedules = StorageService.getSubjectSchedules();
-    const mySchedules = allSubjectSchedules.filter(s => {
+    const myRegularSchedules = allSubjectSchedules.filter(s => {
       if (!s.isActive) return false;
       const isMyTeacher = s.teacherId === teacherId;
       const isToday =
         s.dayOfWeek === dayOfWeek ||
         (Array.isArray(s.daysOfWeek) && s.daysOfWeek.includes(dayOfWeek));
       return isMyTeacher && isToday;
+    });
+
+    const assignedSubstituteSchedules = StorageService.getAssignedSubstituteSchedules(teacherId, todayDateStr);
+    const mySchedules = [...myRegularSchedules];
+    assignedSubstituteSchedules.forEach(item => {
+      if (!mySchedules.some(s => s.id === item.schedule.id)) {
+        mySchedules.push({
+          ...item.schedule,
+          startTime: item.assignee?.startTime || item.schedule.startTime,
+          endTime: item.assignee?.endTime || item.schedule.endTime
+        });
+      }
     });
 
     for (const schedule of mySchedules) {
@@ -506,13 +518,26 @@ class ScheduleAlertEngine {
     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
 
     const allSubjectSchedules = StorageService.getSubjectSchedules();
-    const mySchedules = allSubjectSchedules.filter(s => {
+    const myRegularSchedules = allSubjectSchedules.filter(s => {
       if (!s.isActive) return false;
       const isMyTeacher = s.teacherId === teacherId;
       const isToday =
         s.dayOfWeek === dayOfWeek ||
         (Array.isArray(s.daysOfWeek) && s.daysOfWeek.includes(dayOfWeek));
       return isMyTeacher && isToday;
+    });
+
+    const todayDateStr = now.toISOString().split('T')[0];
+    const assignedSubstituteSchedules = StorageService.getAssignedSubstituteSchedules(teacherId, todayDateStr);
+    const mySchedules = [...myRegularSchedules];
+    assignedSubstituteSchedules.forEach(item => {
+      if (!mySchedules.some(s => s.id === item.schedule.id)) {
+        mySchedules.push({
+          ...item.schedule,
+          startTime: item.assignee?.startTime || item.schedule.startTime,
+          endTime: item.assignee?.endTime || item.schedule.endTime
+        });
+      }
     });
 
     // Sort by start time

@@ -41,8 +41,10 @@ import {
   Wallet,
   Search,
   BookOpen,
+  Send,
   X
 } from 'lucide-react';
+import { TelegramService } from '../../services/telegramService.ts';
 import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 
 interface StaffMobileAppHomeProps {
@@ -199,11 +201,59 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
     }
   };
 
-  // Today's teaching classes (for Teacher)
+  // Today's assigned substitute classes (for Teacher OR Employee)
+  const todayAssignedSubstituteClasses = useMemo(() => {
+    const personId = isTeacher ? activeTeacher?.id : activeEmployee?.id;
+    const targetId = personId || currentUser.personId || currentUser.id;
+    if (!targetId) return [];
+
+    const assignedSubs = StorageService.getAssignedSubstituteSchedules(targetId, todayStr);
+    return assignedSubs.map(item => {
+      const sub = item.schedule;
+      const effectiveStart = item.assignee?.startTime || sub.startTime;
+      const effectiveEnd = item.assignee?.endTime || sub.endTime;
+
+      const rec = allAttendance.find(
+        r => r.date === todayStr &&
+             (r.personId === targetId || r.personName?.toLowerCase() === currentUser.fullName?.toLowerCase()) &&
+             (r.subjectScheduleId === sub.id || r.scheduleId === sub.id) &&
+             r.isSubstitute
+      );
+      const isCheckedIn = Boolean(rec?.checkInTime);
+      const isCheckedOut = Boolean(rec?.checkOutTime);
+      const sStart = AttendanceEngine.timeToMinutes(effectiveStart);
+      const sEnd = AttendanceEngine.timeToMinutes(effectiveEnd);
+
+      const isInSession = (isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut);
+      const isUpcoming = curMins < sStart && !isCheckedIn;
+      const isCompleted = isCheckedOut || (curMins >= sEnd && isCheckedIn);
+
+      return {
+        schedule: {
+          ...sub,
+          startTime: effectiveStart,
+          endTime: effectiveEnd
+        },
+        record: rec,
+        isCheckedIn,
+        isCheckedOut,
+        isInSession,
+        isUpcoming,
+        isCompleted,
+        isSubstitute: true,
+        originalTeacherName: item.substitution.originalTeacherName,
+        originalTeacherKhmer: item.substitution.originalTeacherKhmer,
+        allocatedHours: item.assignee?.allocatedHours || item.substitution.totalScheduleHours,
+        manualWage: item.assignee?.manualGrossWage
+      };
+    });
+  }, [isTeacher, activeTeacher, activeEmployee, currentUser, todayStr, allAttendance, curMins]);
+
+  // Today's teaching classes (for Teacher: includes owned and assigned substitute classes)
   const todayClasses = useMemo(() => {
     if (!isTeacher) return [];
     const teacherId = activeTeacher?.id;
-    return subjectSchedules
+    const regularClasses = subjectSchedules
       .filter(s => {
         if (!s.isActive) return false;
         if (teacherId && s.teacherId !== teacherId) return false;
@@ -230,11 +280,25 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
           isCheckedOut,
           isInSession,
           isUpcoming,
-          isCompleted
+          isCompleted,
+          isSubstitute: false,
+          originalTeacherName: undefined as string | undefined,
+          originalTeacherKhmer: undefined as string | undefined,
+          allocatedHours: undefined as number | undefined,
+          manualWage: undefined as number | undefined
         };
-      })
-      .sort((a, b) => a.schedule.startTime.localeCompare(b.schedule.startTime));
-  }, [isTeacher, activeTeacher, subjectSchedules, allAttendance, todayStr, todayDayIndex, curMins, teachers]);
+      });
+
+    // Merge regular classes and substitute classes assigned to this teacher
+    const combined = [...regularClasses];
+    todayAssignedSubstituteClasses.forEach(subItem => {
+      if (!combined.some(c => c.schedule.id === subItem.schedule.id)) {
+        combined.push(subItem);
+      }
+    });
+
+    return combined.sort((a, b) => a.schedule.startTime.localeCompare(b.schedule.startTime));
+  }, [isTeacher, activeTeacher, subjectSchedules, allAttendance, todayStr, todayDayIndex, curMins, teachers, todayAssignedSubstituteClasses]);
 
   // Today's work shift (for Employee)
   const todayEmployeeShift = useMemo(() => {
@@ -501,13 +565,27 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
                         {sub.periodName.slice(0, 2)}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                          {sub.subject}
-                        </h4>
-                        <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                            {sub.subject}
+                          </h4>
+                          {item.isSubstitute && (
+                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                              <span>🔄</span>
+                              <span>{isKhmer ? `បង្រៀនជំនួស (${item.originalTeacherKhmer || item.originalTeacherName || 'គ្រូ'})` : `Sub for ${item.originalTeacherName}`}</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="font-mono">{sub.startTime} - {sub.endTime}</span>
                           <span>•</span>
                           <span>{sub.room}</span>
+                          {item.allocatedHours && (
+                            <>
+                              <span>•</span>
+                              <span className="text-amber-700 font-semibold">{item.allocatedHours}h</span>
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -536,36 +614,110 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
               })
             ) : (
               /* Employee Shift */
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
-                    <Briefcase className="w-5 h-5" />
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
+                      <Briefcase className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">
+                        {todayEmployeeShift?.schedule?.name || (isKhmer ? 'វេនការងារទូទៅ' : 'Standard Shift')}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {todayEmployeeShift?.schedule?.startTime || '08:00'} - {todayEmployeeShift?.schedule?.endTime || '17:00'}
+                      </p>
+                    </div>
                   </div>
+
                   <div>
-                    <h4 className="text-sm font-black text-slate-900">
-                      {todayEmployeeShift?.schedule?.name || (isKhmer ? 'វេនការងារទូទៅ' : 'Standard Shift')}
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {todayEmployeeShift?.schedule?.startTime || '08:00'} - {todayEmployeeShift?.schedule?.endTime || '17:00'}
-                    </p>
+                    {isTodayHoliday ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        {isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ' : 'Holiday: Closed'}
+                      </span>
+                    ) : isCheckedInToday ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                        {isKhmer ? 'បានស្កេនចូល' : 'Present'}
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-600">
+                        {isKhmer ? 'មិនទាន់ស្កេន' : 'Pending In'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  {isTodayHoliday ? (
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                      {isKhmer ? 'ថ្ងៃឈប់សម្រាកបុណ្យ' : 'Holiday: Closed'}
-                    </span>
-                  ) : isCheckedInToday ? (
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                      {isKhmer ? 'បានស្កេនចូល' : 'Present'}
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-600">
-                      {isKhmer ? 'មិនទាន់ស្កេន' : 'Pending In'}
-                    </span>
-                  )}
-                </div>
+                {/* Assigned Substitute Classes for Staff / Employee */}
+                {todayAssignedSubstituteClasses.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 px-1">
+                      <span>🔄</span>
+                      <span>{isKhmer ? 'កាលវិភាគបង្រៀនជំនួសដែលបានចាត់តាំង (Assigned Substitute Classes)' : 'Assigned Substitute Classes'}</span>
+                    </div>
+                    {todayAssignedSubstituteClasses.map((item, idx) => {
+                      const sub = item.schedule;
+                      return (
+                        <div
+                          key={sub.id || idx}
+                          className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 hover:border-amber-300 flex items-center justify-between gap-3 transition-colors shadow-2xs"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-xs shrink-0">
+                              {sub.periodName ? sub.periodName.slice(0, 2) : 'SUB'}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                                  {sub.subject}
+                                </h4>
+                                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                                  {isKhmer ? `ជំនួសគ្រូ ${item.originalTeacherKhmer || item.originalTeacherName}` : `Sub for ${item.originalTeacherName}`}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className="font-mono">{sub.startTime} - {sub.endTime}</span>
+                                <span>•</span>
+                                <span>{sub.room}</span>
+                                {item.allocatedHours && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-amber-800 font-semibold">{item.allocatedHours}h</span>
+                                  </>
+                                )}
+                                {item.manualWage !== undefined && item.manualWage > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-emerald-700 font-bold">${item.manualWage.toFixed(2)}</span>
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div>
+                            {item.isCheckedOut ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                                {isKhmer ? 'បានចេញ' : 'Done'}
+                              </span>
+                            ) : item.isCheckedIn ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 animate-pulse">
+                                {isKhmer ? 'ក្នុងថ្នាក់' : 'In Class'}
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={onOpenCheckIn}
+                                className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-2xs"
+                              >
+                                {isKhmer ? 'ស្កេនចូល' : 'Check In'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

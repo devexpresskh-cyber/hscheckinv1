@@ -269,10 +269,27 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
 
       const cells: PeriodCellData[] = filteredPeriods.map(period => {
         // Find if teacher has schedule for this period
-        const sched = teacherSchedules.find(
+        let sched = teacherSchedules.find(
           s => s.periodNumber === period.periodNumber ||
                (s.startTime && period.startTime && s.startTime === period.startTime)
         );
+
+        let isAssignedSubstituteForPeriod = false;
+        let substForPeriod = sched ? StorageService.findSubstitution(sched.id, selectedDate) : undefined;
+
+        // If teacher doesn't have an original schedule in this period, check if they were assigned as a substitute!
+        if (!sched) {
+          const coveredAssignments = StorageService.getAssignedSubstituteSchedules(teacher.id, selectedDate);
+          const matchedCover = coveredAssignments.find(ca =>
+            ca.schedule.periodNumber === period.periodNumber ||
+            (ca.schedule.startTime && period.startTime && ca.schedule.startTime === period.startTime)
+          );
+          if (matchedCover) {
+            sched = matchedCover.schedule;
+            substForPeriod = matchedCover.substitution;
+            isAssignedSubstituteForPeriod = true;
+          }
+        }
 
         if (!sched) {
           return {
@@ -290,7 +307,9 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
         const isCurrentActive = isDateToday && (curMinutes >= startM && curMinutes <= endM);
 
         // Find attendance record for this class schedule on selected date
-        const attRec = AttendanceEngine.findRecordForSubjectSchedule(sched, attendance, selectedDate, teachers);
+        const attRec = isAssignedSubstituteForPeriod
+          ? attendance.find(r => r.date === selectedDate && r.personId === teacher.id && r.isSubstitute && (r.subjectScheduleId === sched.id || r.scheduleId === sched.id))
+          : AttendanceEngine.findRecordForSubjectSchedule(sched, attendance, selectedDate, teachers);
 
         let cellStatus: PeriodCellData['status'] = 'Upcoming';
 
@@ -328,7 +347,7 @@ export const AttendancePeriodGrid: React.FC<AttendancePeriodGridProps> = ({
           }
         }
 
-        const subst = StorageService.findSubstitution(sched.id, selectedDate);
+        const subst = substForPeriod || StorageService.findSubstitution(sched.id, selectedDate);
 
         return {
           period,

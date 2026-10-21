@@ -600,6 +600,18 @@ export const TelegramCenter: React.FC = () => {
                     />
                     <span className="font-semibold text-slate-800">Schedule reminders</span>
                   </label>
+
+                  <label className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.notifyScheduleAssignment !== false}
+                      onChange={e => setSettings({ ...settings, notifyScheduleAssignment: e.target.checked })}
+                      className="rounded text-sky-600"
+                    />
+                    <span className="font-semibold text-slate-800">
+                      Schedule assignments & substitution alerts
+                    </span>
+                  </label>
                 </div>
               </div>
 

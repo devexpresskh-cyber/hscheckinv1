@@ -55,6 +55,8 @@ export interface UserAccount {
   phone?: string;
   phoneNumber?: string;
   telegramChatId?: string;
+  telegramUsername?: string;
+  authProvider?: 'credentials' | 'pin' | 'phone' | 'telegram' | 'google';
   status: 'Active' | 'Inactive';
   personId?: string; // Links to Teacher or Employee profile
   avatarUrl?: string;
@@ -423,6 +425,7 @@ export interface TelegramSettings {
   notifyCheckOut: boolean;
   notifyDailySummary: boolean;
   notifyReminder: boolean;
+  notifyScheduleAssignment?: boolean;
   reminderMinutesBefore: number;
   summaryTime: string;
   // Automated Data Backup Settings
@@ -438,7 +441,7 @@ export interface TelegramSettings {
 export interface TelegramMessageLog {
   id: string;
   chatId: string;
-  type: 'checkin' | 'late' | 'absence' | 'checkout' | 'summary' | 'reminder' | 'custom' | 'backup';
+  type: 'checkin' | 'late' | 'absence' | 'checkout' | 'summary' | 'reminder' | 'custom' | 'backup' | 'schedule_assigned';
   message: string;
   status: 'Sent' | 'Failed' | 'Simulated';
   error?: string;

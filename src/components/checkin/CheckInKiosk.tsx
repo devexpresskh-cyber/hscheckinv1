@@ -352,8 +352,22 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const isTodayHoliday = Boolean(todayHoliday);
 
   const isTeacher = activeStaff?.type === 'teacher';
-  const rawTeacherSubjectSchedules = isTeacher && activeStaff
-    ? StorageService.getSubjectSchedulesForTeacher(activeStaff.id).filter((sub: any) => {
+  const assignedSubstituteClassesToday = useMemo(() => {
+    if (!activeStaff) return [];
+    const assignedSubs = StorageService.getAssignedSubstituteSchedules(activeStaff.id, todayStr);
+    return assignedSubs.map(item => ({
+      ...item.schedule,
+      startTime: item.assignee?.startTime || item.schedule.startTime,
+      endTime: item.assignee?.endTime || item.schedule.endTime,
+      isSubstitute: true,
+      originalTeacherName: item.substitution.originalTeacherName
+    }));
+  }, [activeStaff, todayStr]);
+
+  const rawTeacherSubjectSchedules = useMemo(() => {
+    let regularList: any[] = [];
+    if (isTeacher && activeStaff) {
+      regularList = StorageService.getSubjectSchedulesForTeacher(activeStaff.id).filter((sub: any) => {
         // Prefer an explicit calendar date when one exists.
         const scheduleDate = sub.date ?? sub.scheduledDate ?? sub.scheduleDate;
         if (scheduleDate) {
@@ -368,8 +382,6 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         // Otherwise match the recurring day-of-week field.
         const dayValue = sub.dayOfWeek ?? sub.day ?? sub.weekDay ?? sub.weekday;
 
-        // If this schedule has no day field, keep it for backward compatibility.
-        // The AttendanceEngine still performs the final date/time validation.
         if (dayValue === undefined || dayValue === null || dayValue === '') {
           return true;
         }
@@ -385,8 +397,17 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
           todayDayShortName.toLowerCase(),
           todayDayName.slice(0, 3).toLowerCase()
         ].includes(normalizedDay);
-      })
-    : [];
+      });
+    }
+
+    const combined = [...regularList];
+    assignedSubstituteClassesToday.forEach(subItem => {
+      if (!combined.some(c => c.id === subItem.id)) {
+        combined.push(subItem);
+      }
+    });
+    return combined;
+  }, [isTeacher, activeStaff, todayStr, todayDayIndex, todayDayName, todayDayShortName, assignedSubstituteClassesToday]);
 
   const effectiveTime = useCustomTime && customTimeInput
     ? customTimeInput

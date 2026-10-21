@@ -493,42 +493,67 @@ export const DailyScheduleTableView: React.FC<DailyScheduleTableViewProps> = ({
               {/* Substitution Indicator Badge */}
               {info.substitution && (
                 <div className="pl-9 flex items-center gap-1.5 flex-wrap">
-                  {info.substitution.assignees && info.substitution.assignees.length > 0 ? (
-                    info.substitution.assignees.map((assignee, aIdx) => (
-                      <span
-                        key={assignee.id || aIdx}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow-2xs ${
-                          assignee.substituteType === 'employee'
-                            ? 'bg-purple-100 text-purple-900 border border-purple-200'
-                            : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
-                        }`}
-                      >
-                        <span>{isKhmer ? 'ជំនួស៖' : 'Sub:'} {assignee.substituteName}</span>
-                        <span className="opacity-80 text-[9px]">
-                          ({assignee.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')}, {assignee.allocatedHours}h)
+                  {(() => {
+                    const myPersonId = (activeTeacher?.id || currentUser.personId || currentUser.id || '').toLowerCase();
+                    const myName = (currentUser.fullName || '').toLowerCase();
+                    const isMeSubstitute = Boolean(
+                      (info.substitution.substituteId && info.substitution.substituteId.toLowerCase() === myPersonId) ||
+                      info.substitution.assignees?.some(a => (a.substituteId || '').toLowerCase() === myPersonId) ||
+                      (info.substitution.substituteName && info.substitution.substituteName.toLowerCase() === myName)
+                    );
+
+                    if (isMeSubstitute) {
+                      return (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                          <span>🔄</span>
+                          <span>{isKhmer ? `បានចាត់តាំងឱ្យអ្នក (ជំនួសគ្រូ ${info.substitution.originalTeacherKhmer || info.substitution.originalTeacherName})` : `Assigned to you (Sub for ${info.substitution.originalTeacherName})`}</span>
                         </span>
-                        {assignee.substituteType === 'employee' && (
-                          <span className="font-mono font-black text-purple-800 bg-white/70 px-1 rounded" title="Manual gross wage for staff substitute (default 0)">
-                            ${Number(assignee.manualGrossWage ?? 0).toFixed(2)}
+                      );
+                    }
+
+                    if (info.substitution.assignees && info.substitution.assignees.length > 0) {
+                      return (
+                        <>
+                          {info.substitution.assignees.map((assignee, aIdx) => (
+                            <span
+                              key={assignee.id || aIdx}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow-2xs ${
+                                assignee.substituteType === 'employee'
+                                  ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                  : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                              }`}
+                            >
+                              <span>{isKhmer ? 'ជំនួស៖' : 'Sub:'} {assignee.substituteName}</span>
+                              <span className="opacity-80 text-[9px]">
+                                ({assignee.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')}, {assignee.allocatedHours}h)
+                              </span>
+                              {assignee.substituteType === 'employee' && (
+                                <span className="font-mono font-black text-purple-800 bg-white/70 px-1 rounded" title="Manual gross wage for staff substitute (default 0)">
+                                  ${Number(assignee.manualGrossWage ?? 0).toFixed(2)}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </>
+                      );
+                    }
+
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow-2xs ${
+                        info.substitution.substituteType === 'employee'
+                          ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                          : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                      }`}>
+                        <span>{isKhmer ? 'ជំនួសដោយ៖' : 'Covered by:'} {info.substitution.substituteName}</span>
+                        <span className="opacity-75 text-[9px]">({info.substitution.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')})</span>
+                        {info.substitution.substituteType === 'employee' && (
+                          <span className="text-[10px] font-mono font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200" title="Manual gross wage for staff substitute">
+                            {isKhmer ? 'ឈ្នួល៖' : 'Wage:'} ${Number(info.substitution.manualGrossWage ?? 0).toFixed(2)}
                           </span>
                         )}
                       </span>
-                    ))
-                  ) : (
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow-2xs ${
-                      info.substitution.substituteType === 'employee'
-                        ? 'bg-purple-100 text-purple-900 border border-purple-200'
-                        : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
-                    }`}>
-                      <span>{isKhmer ? 'ជំនួសដោយ៖' : 'Covered by:'} {info.substitution.substituteName}</span>
-                      <span className="opacity-75 text-[9px]">({info.substitution.substituteType === 'employee' ? (isKhmer ? 'បុគ្គលិក' : 'Staff') : (isKhmer ? 'គ្រូ' : 'Teacher')})</span>
-                      {info.substitution.substituteType === 'employee' && (
-                        <span className="text-[10px] font-mono font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200" title="Manual gross wage for staff substitute">
-                          {isKhmer ? 'ឈ្នួល៖' : 'Wage:'} ${Number(info.substitution.manualGrossWage ?? 0).toFixed(2)}
-                        </span>
-                      )}
-                    </span>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
             </div>

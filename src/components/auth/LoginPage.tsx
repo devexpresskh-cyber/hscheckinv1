@@ -19,7 +19,8 @@ import {
   Phone,
   Smartphone,
   QrCode,
-  Sparkles
+  Sparkles,
+  Send
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 import { ScheduleQRScanModal } from '../schedules/ScheduleQRScanModal.tsx';
@@ -29,10 +30,10 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { loginWithGoogle, loginWithCredentials, loginWithPin, loginWithPhone, authError, setAuthError, isLoading, switchUser, allUsers } = useAuth();
+  const { loginWithTelegram, loginWithCredentials, loginWithPin, loginWithPhone, authError, setAuthError, isLoading, switchUser, allUsers } = useAuth();
   const { isKhmer, toggleLanguage, language } = useLanguage();
 
-  // Mode: 'phone' for phone number + PIN (No Google phone auth), 'pin' for Staff ID + PIN, 'standard' for password & Google
+  // Mode: 'phone' for phone number + PIN, 'pin' for Staff ID + PIN, 'standard' for Telegram & credentials
   const [authMode, setAuthMode] = useState<'phone' | 'pin' | 'standard'>('phone');
   const [isQRScanModalOpen, setIsQRScanModalOpen] = useState(false);
 
@@ -42,12 +43,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [showPhonePin, setShowPhonePin] = useState(false);
   const [isPhoneSubmitting, setIsPhoneSubmitting] = useState(false);
 
+  // Telegram Login States
+  const [telegramInput, setTelegramInput] = useState('');
+  const [isTelegramSubmitting, setIsTelegramSubmitting] = useState(false);
+
   // Standard Login States
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Teacher PIN Login States
   const [manualTeacherId, setManualTeacherId] = useState('');
@@ -127,17 +131,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Handle Google Sign-in
-  const handleGoogleSignIn = async () => {
-    setIsGoogleLoading(true);
+  // Handle Telegram Sign-in
+  const handleTelegramSignIn = async (e?: React.FormEvent, customInput?: string) => {
+    if (e) e.preventDefault();
+    const targetInput = customInput || telegramInput;
+    if (!targetInput.trim()) {
+      setAuthError(isKhmer ? 'សូមបញ្ចូល Telegram Username (@user) ឬ Chat ID' : 'Please enter your Telegram Username (@user) or Chat ID');
+      return;
+    }
+    setIsTelegramSubmitting(true);
     setAuthError(null);
     try {
-      await loginWithGoogle();
-      onLoginSuccess?.();
+      const success = await loginWithTelegram(targetInput);
+      if (success) {
+        setTelegramInput('');
+        onLoginSuccess?.();
+      }
     } catch {
       // Handled in context
     } finally {
-      setIsGoogleLoading(false);
+      setIsTelegramSubmitting(false);
     }
   };
 
@@ -228,8 +241,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
               {isKhmer
-                ? 'ចូលប្រើតាមលេខកូដសម្ងាត់ PIN របស់គ្រូ ឬគណនី Google / Email'
-                : 'Fast PIN access for faculty, or sign in via Google & institutional email'}
+                ? 'ចូលប្រើតាមលេខកូដ PIN របស់គ្រូ គណនី Telegram ឬទូរស័ព្ទ'
+                : 'Fast PIN access for faculty, or sign in via Telegram & phone'}
             </p>
 
             {/* Quick Teacher Schedule QR Scan Button (Direct without login) */}
@@ -305,12 +318,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 }}
                 className={`flex items-center justify-center gap-1 sm:gap-1.5 py-2 sm:py-2.5 px-1 sm:px-2 rounded-xl transition-all text-[11px] sm:text-xs ${
                   authMode === 'standard'
-                    ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/60 font-black'
+                    ? 'bg-white text-sky-600 shadow-sm border border-slate-200/60 font-black'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span className="truncate">{isKhmer ? 'Email' : 'Email'}</span>
+                <Send className="w-3.5 h-3.5 text-sky-500 shrink-0 -rotate-12" />
+                <span className="truncate">{isKhmer ? 'Telegram' : 'Telegram'}</span>
               </button>
             </div>
           </div>
@@ -523,48 +536,76 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               </form>
             )}
 
-            {/* TAB 2: STANDARD / GOOGLE SIGN-IN */}
+            {/* TAB 3: TELEGRAM & CREDENTIALS SIGN-IN */}
             {authMode === 'standard' && (
-              <div className="space-y-6 animate-in fade-in-50 duration-200">
-                {/* Google Authentication Button */}
-                <div>
-                  <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    disabled={isGoogleLoading || isLoading}
-                    className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl font-bold text-sm bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 hover:border-slate-300 shadow-xs transition-all duration-200 hover:shadow disabled:opacity-50 disabled:cursor-not-allowed group"
-                  >
-                    {isGoogleLoading ? (
-                      <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                        <path
-                          fill="#4285F4"
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              <div className="space-y-5 animate-in fade-in-50 duration-200">
+                {/* Telegram Authentication Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-sky-50 via-white to-blue-50 border-2 border-sky-200 shadow-xs space-y-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-[#0088cc] flex items-center justify-center text-white shadow-sm shrink-0">
+                      <Send className="w-5 h-5 -rotate-12 translate-x-0.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5">
+                        <span>{isKhmer ? 'ចូលប្រើតាមរយៈ Telegram' : 'Sign in with Telegram'}</span>
+                        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                          {isKhmer ? 'តភ្ជាប់ស្វ័យប្រវត្តិ' : 'Auto-Alert'}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        {isKhmer
+                          ? 'តភ្ជាប់ការជូនដំណឹងកាលវិភាគបង្រៀន និងវត្តមានទៅ Telegram ស្វ័យប្រវត្តិ'
+                          : 'Instant access with auto-linked schedule & attendance chat alerts'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleTelegramSignIn} className="space-y-2.5">
+                    <div>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sky-600 font-bold text-xs">@</span>
+                        <input
+                          type="text"
+                          value={telegramInput}
+                          onChange={e => setTelegramInput(e.target.value)}
+                          placeholder={isKhmer ? 'បញ្ចូល @username, Chat ID ឬលេខទូរស័ព្ទ' : '@username, Chat ID, or phone'}
+                          className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 text-xs sm:text-sm font-medium bg-white text-slate-800 shadow-2xs"
                         />
-                        <path
-                          fill="#34A853"
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        />
-                        <path
-                          fill="#FBBC05"
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                        />
-                        <path
-                          fill="#EA4335"
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                        />
-                      </svg>
-                    )}
-                    <span>
-                      {isKhmer ? 'ចូលប្រើតាមរយៈគណនី Google' : 'Continue with Google Account'}
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isTelegramSubmitting || isLoading}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm bg-[#0088cc] hover:bg-[#0077b5] text-white shadow-sm hover:shadow transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {isTelegramSubmitting ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 -rotate-12" />
+                      )}
+                      <span>
+                        {isKhmer ? 'ចូលប្រើតាម Telegram ឥឡូវនេះ' : 'Log in with Telegram'}
+                      </span>
+                    </button>
+                  </form>
+
+                  
+                  {/* Telegram Bot Link */}
+                  <div className="flex items-center justify-between text-[11px] pt-1">
+                    <span className="text-slate-500">
+                      {isKhmer ? 'Bot ផ្លូវការ៖' : 'Official Bot:'} <b className="text-sky-700">@hschoolsiamreap_bot</b>
                     </span>
-                  </button>
-                  <p className="text-[11px] text-slate-400 text-center mt-1.5">
-                    {isKhmer
-                      ? 'គាំទ្រគណនី Google ស្ថាប័ន ឬអ៊ីមែលផ្ទាល់ខ្លួន'
-                      : 'Fast, secure authentication via Google Firebase Auth'}
-                  </p>
+                    <a
+                      href="https://t.me/hschoolsiamreap_bot?start=login"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-600 hover:text-sky-800 font-bold hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>{isKhmer ? 'បើក Bot ក្នុង Telegram' : 'Open in Telegram'}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </a>
+                  </div>
                 </div>
 
                 {/* Visual Divider */}

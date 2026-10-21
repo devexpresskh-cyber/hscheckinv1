@@ -81,6 +81,104 @@ export const TelegramService = {
   },
 
   // 1. Check-in Alert (Sent to Telegram group for Teachers and Employees)
+  // Lookup personal Telegram Chat ID for a teacher or employee
+  findPersonalChatId(identifier: { name?: string; khmerName?: string; personId?: string }): string | undefined {
+    const teachers = StorageService.getTeachers();
+    const employees = StorageService.getEmployees();
+
+    if (identifier.personId) {
+      const t = teachers.find(x => x.id === identifier.personId || x.teacherId === identifier.personId);
+      if (t?.telegramChatId) return t.telegramChatId.trim();
+      const e = employees.find(x => x.id === identifier.personId || x.employeeId === identifier.personId);
+      if (e?.telegramChatId) return e.telegramChatId.trim();
+    }
+
+    if (identifier.name) {
+      const lower = identifier.name.toLowerCase().trim();
+      const t = teachers.find(x => x.fullName.toLowerCase().trim() === lower || (x.khmerName && x.khmerName.trim() === lower));
+      if (t?.telegramChatId) return t.telegramChatId.trim();
+      const e = employees.find(x => x.fullName.toLowerCase().trim() === lower || (x.khmerName && x.khmerName.trim() === lower));
+      if (e?.telegramChatId) return e.telegramChatId.trim();
+    }
+
+    if (identifier.khmerName) {
+      const km = identifier.khmerName.trim();
+      const t = teachers.find(x => x.khmerName && x.khmerName.trim() === km);
+      if (t?.telegramChatId) return t.telegramChatId.trim();
+      const e = employees.find(x => x.khmerName && x.khmerName.trim() === km);
+      if (e?.telegramChatId) return e.telegramChatId.trim();
+    }
+
+    return undefined;
+  },
+
+  // Auto-link a teacher's Telegram chat for personal alerts
+  async autoLinkTeacherTelegramChat(
+    teacherId: string,
+    customChatId?: string
+  ): Promise<{ success: boolean; chatId: string; message: string }> {
+    const teachers = StorageService.getTeachers();
+    const teacher = teachers.find(t => t.id === teacherId || t.teacherId === teacherId);
+    if (!teacher) {
+      return { success: false, chatId: '', message: 'Teacher profile not found' };
+    }
+
+    const settings = StorageService.getTelegramSettings();
+    const resolvedChatId = (customChatId || teacher.telegramChatId || settings.adminChatId || '5252354054')
+      .replace(/^-/, '')
+      .trim();
+
+    // Update teacher in storage
+    StorageService.updateTeacher(teacher.id, {
+      telegramChatId: resolvedChatId
+    });
+
+    // Also update any matching user account
+    const users = StorageService.getUsers();
+    const matchedUser = users.find(u => u.personId === teacher.id || u.fullName.toLowerCase() === teacher.fullName.toLowerCase());
+    if (matchedUser) {
+      StorageService.updateUser(matchedUser.id, {
+        telegramChatId: resolvedChatId
+      });
+    }
+
+    // Dispatch direct Telegram confirmation alert to teacher
+    const displayName = teacher.khmerName ? `${teacher.khmerName} (${teacher.fullName})` : teacher.fullName;
+    const testMsg =
+      `✅ <b>[តភ្ជាប់ជោគជ័យ] Teacher Telegram Chat Alert Linked!</b>\n\n` +
+      `សួស្តីលោកគ្រូ/អ្នកគ្រូ <b>${displayName}</b>!\n\n` +
+      `គណនី Telegram របស់អ្នកត្រូវបានតភ្ជាប់ជាមួយប្រព័ន្ធ Telegram Chat Alert របស់សាលា Heart School ដោយជោគជ័យ។\n\n` +
+      `📲 <b>Telegram Chat ID៖</b> <code>${resolvedChatId}</code>\n` +
+      `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${teacher.department}\n` +
+      `📚 <b>មុខវិជ្ជា៖</b> ${teacher.subject}\n\n` +
+      `🔔 <b>លោកអ្នកនឹងទទួលបានការជូនដំណឹងស្វ័យប្រវត្តិនូវ៖</b>\n` +
+      `• ការដាស់តឿនកាលវិភាគបង្រៀនមុន ១៥ នាទី (Schedule Reminder)\n` +
+      `• កាលវិភាគបង្រៀនថ្មី និងការចាត់តាំងបង្រៀនជំនួស (Schedule Assignment)\n` +
+      `• ស្ថានភាពវត្តមានស្កេនចូល/ចេញ និងវត្តមានយឺត\n` +
+      `• ការអនុម័តច្បាប់ឈប់សម្រាក\n\n` +
+      `🏫 <b>ស្ថាប័ន៖</b> Heart School`;
+
+    await this.dispatchMessage({
+      chatId: resolvedChatId,
+      text: testMsg,
+      type: 'custom'
+    });
+
+    StorageService.addNotification({
+      title: '✅ Telegram Chat Alert Linked',
+      message: `Teacher ${displayName} linked to Telegram Chat ID ${resolvedChatId}`,
+      type: 'success',
+      category: 'system'
+    });
+
+    return {
+      success: true,
+      chatId: resolvedChatId,
+      message: `Teacher Telegram Chat Alert linked to Chat ID ${resolvedChatId}`
+    };
+  },
+
+  // 1. Check-in Alert
   sendCheckInAlert(data: {
     name: string;
     khmerName?: string;
@@ -91,6 +189,7 @@ export const TelegramService = {
     status: string;
     lateMinutes: number;
     subjectInfo?: string;
+    personId?: string;
   }) {
     const settings = StorageService.getTelegramSettings();
     if (!settings.isEnabled || settings.notifyCheckIn === false) return;
@@ -143,10 +242,15 @@ export const TelegramService = {
       });
     }
 
-    // Fallback if only adminChatId is set
-    if (!groupChatId && adminChatId) {
+    // 3. Auto-alert teacher's personal Telegram chat
+    const personalChatId = this.findPersonalChatId({
+      personId: data.personId,
+      name: data.name,
+      khmerName: data.khmerName
+    });
+    if (personalChatId && personalChatId !== groupChatId && personalChatId !== adminChatId) {
       this.dispatchMessage({
-        chatId: adminChatId,
+        chatId: personalChatId,
         text: msg,
         type: isLate ? 'late' : 'checkin'
       });
@@ -195,6 +299,19 @@ export const TelegramService = {
         type: 'absence'
       });
     }
+
+    // Auto-alert personal Telegram chat
+    const personalChatId = this.findPersonalChatId({
+      name: data.name,
+      khmerName: data.khmerName
+    });
+    if (personalChatId && personalChatId !== groupChatId && personalChatId !== adminChatId) {
+      this.dispatchMessage({
+        chatId: personalChatId,
+        text: msg,
+        type: 'absence'
+      });
+    }
   },
 
   // 3. Check-out Alert (Sent to Telegram group for Teachers and Employees)
@@ -208,6 +325,7 @@ export const TelegramService = {
     earlyLeaveMinutes: number;
     overtimeMinutes: number;
     subjectInfo?: string;
+    personId?: string;
   }) {
     const settings = StorageService.getTelegramSettings();
     if (!settings.isEnabled || settings.notifyCheckOut === false) return;
@@ -252,10 +370,15 @@ export const TelegramService = {
       });
     }
 
-    // Fallback if only adminChatId is set
-    if (!groupChatId && adminChatId) {
+    // 3. Auto-alert teacher's personal Telegram chat
+    const personalChatId = this.findPersonalChatId({
+      personId: data.personId,
+      name: data.name,
+      khmerName: data.khmerName
+    });
+    if (personalChatId && personalChatId !== groupChatId && personalChatId !== adminChatId) {
       this.dispatchMessage({
-        chatId: adminChatId,
+        chatId: personalChatId,
         text: msg,
         type: 'checkout'
       });
@@ -321,6 +444,130 @@ export const TelegramService = {
     }
   },
 
+  // 3c. Schedule Assignment & Substitution Alert (Alerts the Telegram group when schedule is assigned)
+  sendScheduleAssignmentAlert(data: {
+    assignmentType?: 'substitute' | 'new_schedule' | 'reassign';
+    assigneeName: string;
+    assigneeKhmerName?: string;
+    assigneeRole?: 'teacher' | 'employee';
+    assigneeDepartment?: string;
+    assigneeChatId?: string;
+    // Schedule details
+    subject: string;
+    khmerSubject?: string;
+    gradeClass: string;
+    room?: string;
+    periodName?: string;
+    date?: string; // YYYY-MM-DD
+    dayName?: string;
+    startTime: string;
+    endTime: string;
+    allocatedHours?: number;
+    wage?: number; // for staff substitute
+    // Original teacher (if substitute / reassignment)
+    originalTeacherName?: string;
+    originalTeacherKhmer?: string;
+    // Metadata
+    assignedBy?: string;
+    note?: string;
+  }) {
+    const settings = StorageService.getTelegramSettings();
+    if (!settings.isEnabled || settings.notifyScheduleAssignment === false) return;
+
+    const groupChatId = (settings.groupChatId || '').trim();
+    const adminChatId = (settings.adminChatId || '').trim();
+    const isTeacher = data.assigneeRole !== 'employee';
+    const roleTagKhmer = isTeacher ? 'គ្រូបង្រៀន' : 'បុគ្គលិក';
+    const roleTagEn = isTeacher ? 'Teacher' : 'Staff';
+
+    const assigneeDisplay = data.assigneeKhmerName
+      ? `${data.assigneeKhmerName} (${data.assigneeName})`
+      : data.assigneeName;
+
+    const origTeacherDisplay = data.originalTeacherName
+      ? (data.originalTeacherKhmer ? `${data.originalTeacherKhmer} (${data.originalTeacherName})` : data.originalTeacherName)
+      : null;
+
+    const subjectDisplay = data.khmerSubject
+      ? `${data.khmerSubject} (${data.subject})`
+      : data.subject;
+
+    const isSubstitute = data.assignmentType === 'substitute' || Boolean(data.originalTeacherName);
+    const headerTitle = isSubstitute
+      ? `🔄 <b>[ចាត់តាំងបង្រៀនជំនួស] Schedule Substitution Alert</b>`
+      : `🗓️ <b>[ចាត់តាំងកាលវិភាគថ្មី] Schedule Assignment Alert</b>`;
+
+    const dateLine = data.date
+      ? `📅 <b>កាលបរិច្ឆេទ៖</b> ${data.date}${data.dayName ? ` (${data.dayName})` : ''}\n`
+      : (data.dayName ? `📅 <b>ថ្ងៃបង្រៀន៖</b> ${data.dayName}\n` : '');
+
+    const origTeacherLine = origTeacherDisplay
+      ? `👨‍🏫 <b>ជំនួសគ្រូដើម (Absent Teacher)៖</b> ${origTeacherDisplay}\n`
+      : '';
+
+    const wageLine = (data.wage !== undefined && data.wage > 0)
+      ? `💵 <b>ប្រាក់ឈ្នួលបង្រៀនជំនួស (Staff Wage)៖</b> $${data.wage.toFixed(2)}\n`
+      : '';
+
+    const noteLine = data.note
+      ? `💬 <b>កំណត់សម្គាល់៖</b> ${data.note}\n`
+      : '';
+
+    const durationText = data.allocatedHours ? ` (${data.allocatedHours} ម៉ោង / ${data.allocatedHours}h)` : '';
+
+    const msg = `${headerTitle}\n\n` +
+      `👤 <b>អ្នកទទួលការចាត់តាំង៖</b> ${assigneeDisplay}\n` +
+      `🏷️ <b>តួនាទី៖</b> ${roleTagKhmer} (${roleTagEn})\n` +
+      `🏢 <b>ដេប៉ាតឺម៉ង់៖</b> ${data.assigneeDepartment || (isTeacher ? 'Academic' : 'Staff')}\n` +
+      origTeacherLine +
+      `📚 <b>មុខវិជ្ជា៖</b> ${subjectDisplay}\n` +
+      `🏫 <b>ថ្នាក់/បន្ទប់៖</b> ${data.gradeClass}${data.room ? ` (បន្ទប់ ${data.room})` : ''}${data.periodName ? ` [${data.periodName}]` : ''}\n` +
+      dateLine +
+      `⏰ <b>ម៉ោងបង្រៀន៖</b> ${data.startTime} - ${data.endTime}${durationText}\n` +
+      wageLine +
+      `✍️ <b>ចាត់តាំងដោយ៖</b> ${data.assignedBy || 'Admin'}\n` +
+      noteLine +
+      `🔔 <b>ប្រព័ន្ធ៖</b> កាលវិភាគបានភ្ជាប់ និងបង្ហាញស្វ័យប្រវត្តិក្នងគណនី (${data.assigneeName}) រួចរាល់ហើយ\n` +
+      `🏫 <b>សាលា៖</b> Heart School`;
+
+    // 1. Alert Telegram group
+    if (groupChatId) {
+      this.dispatchMessage({
+        chatId: groupChatId,
+        text: msg,
+        type: 'schedule_assigned'
+      });
+    }
+
+    // 2. Alert Admin if separate
+    if (adminChatId && adminChatId !== groupChatId) {
+      this.dispatchMessage({
+        chatId: adminChatId,
+        text: msg,
+        type: 'schedule_assigned'
+      });
+    }
+
+    // 3. Alert personal Telegram of assigned person (auto-looked up from teacher/employee profiles if not passed)
+    const personalChatId = (data.assigneeChatId || '').trim() ||
+      this.findPersonalChatId({ name: data.assigneeName, khmerName: data.assigneeKhmerName }) || '';
+    if (personalChatId && personalChatId !== groupChatId && personalChatId !== adminChatId) {
+      this.dispatchMessage({
+        chatId: personalChatId,
+        text: msg,
+        type: 'schedule_assigned'
+      });
+    }
+
+    // 4. In-app notification
+    StorageService.addNotification({
+      title: isSubstitute ? '🔄 បានចាត់តាំងបង្រៀនជំនួស / Substitute Assigned' : '🗓️ បានចាត់តាំងកាលវិភាគថ្មី / Schedule Assigned',
+      message: `${subjectDisplay} (${data.gradeClass}) ម៉ោង ${data.startTime}-${data.endTime} ជូន ${assigneeDisplay}`,
+      type: 'info',
+      category: 'schedule'
+    });
+  },
+
   // 4. Admin Daily Attendance Summary
   sendDailySummary() {
     const settings = StorageService.getTelegramSettings();
@@ -366,11 +613,24 @@ export const TelegramService = {
       `សូមមេត្តាស្កេនវត្តមានចូលឱ្យបានទាន់ពេលវេលា។\n` +
       `🏫 <b>ស្ថាប័ន៖</b> Heart School`;
 
-    return this.dispatchMessage({
-      chatId: settings.groupChatId || settings.adminChatId,
-      text: msg,
-      type: 'reminder'
-    });
+    // 1. Group / Admin alert
+    if (settings.groupChatId || settings.adminChatId) {
+      this.dispatchMessage({
+        chatId: settings.groupChatId || settings.adminChatId,
+        text: msg,
+        type: 'reminder'
+      });
+    }
+
+    // 2. Personal Telegram chat alert for teacher
+    const personalChatId = this.findPersonalChatId({ name: personName });
+    if (personalChatId && personalChatId !== settings.groupChatId && personalChatId !== settings.adminChatId) {
+      this.dispatchMessage({
+        chatId: personalChatId,
+        text: msg,
+        type: 'reminder'
+      });
+    }
   },
 
   // 6. Interactive Bot Command Processor

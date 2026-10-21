@@ -635,6 +635,7 @@ export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettings = {
   notifyCheckOut: true,
   notifyDailySummary: true,
   notifyReminder: true,
+  notifyScheduleAssignment: true,
   reminderMinutesBefore: 15,
   summaryTime: '17:30',
   autoBackupEnabled: true,

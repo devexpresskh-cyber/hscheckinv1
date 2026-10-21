@@ -845,7 +845,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                   <label className="text-xs font-bold text-slate-700 block mb-1">
                     {isKhmer ? 'Telegram Chat ID (លេខសម្គាល់ឆាត)' : 'Telegram Chat ID'}
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap sm:flex-nowrap gap-2">
                     <input
                       type="text"
                       value={formData.telegramChatId}
@@ -853,6 +853,34 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                       placeholder="e.g. 5252354054"
                       className="w-full text-xs px-3 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-mono text-slate-800"
                     />
+                    <button
+                      type="button"
+                      disabled={isTestingTelegram}
+                      onClick={async () => {
+                        const targetId = linkedTeacher?.id || currentUser.personId || currentUser.id;
+                        if (!targetId) return;
+                        setIsTestingTelegram(true);
+                        try {
+                          const res = await TelegramService.autoLinkTeacherTelegramChat(targetId, formData.telegramChatId);
+                          if (res.success) {
+                            setFormData(prev => ({ ...prev, telegramChatId: res.chatId }));
+                            showToast(
+                              isKhmer
+                                ? `✅ បានតភ្ជាប់ Telegram Chat Alert ស្វ័យប្រវត្តិក្នង Chat ID #${res.chatId}`
+                                : `✅ Auto-linked Teacher Telegram Alert to #${res.chatId}`,
+                              'success'
+                            );
+                          }
+                        } finally {
+                          setIsTestingTelegram(false);
+                        }
+                      }}
+                      className="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                      title={isKhmer ? 'តភ្ជាប់ Telegram Chat Alert ដោយស្វ័យប្រវត្តិ' : 'Auto Link Telegram Alert'}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{isKhmer ? 'តភ្ជាប់ស្វ័យប្រវត្តិ' : 'Auto Link'}</span>
+                    </button>
                     <button
                       type="button"
                       disabled={isTestingTelegram || !formData.telegramChatId.trim()}
@@ -865,7 +893,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1 font-khmer">
-                    ដើម្បីដឹង Chat ID របស់អ្នក សូមឆាតទៅកាន់ <span className="font-mono text-indigo-600">@userinfobot</span> ក្នុង Telegram។
+                    ចុច "តភ្ជាប់ស្វ័យប្រវត្តិ" ដើម្បីភ្ជាប់ Telegram Chat Alert ភ្លាមៗ ឬឆាតទៅកាន់ <span className="font-mono text-indigo-600">@userinfobot</span> ដើម្បីដឹង Chat ID ផ្ទាល់ខ្លួន។
                   </p>
                 </div>
               </div>

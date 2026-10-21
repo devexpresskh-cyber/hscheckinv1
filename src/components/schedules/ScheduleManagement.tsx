@@ -58,6 +58,7 @@ import { TeacherProfileModal } from '../teachers/TeacherProfileModal.tsx';
 import { DailyScheduleTableView, DailySortColumn, DailyGroupMode } from './DailyScheduleTableView.tsx';
 import { AttendanceEngine } from '../../services/attendanceEngine.ts';
 import { GeoService } from '../../services/geoService.ts';
+import { TelegramService } from '../../services/telegramService.ts';
 
 interface ScheduleManagementProps {
   initialView?: 'daily_schedule' | 'weekly_timetable' | 'monthly_calendar' | 'subject_schedules' | 'cards';
@@ -106,6 +107,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [departments, setDepartments] = useState<Department[]>(() => StorageService.getDepartments());
   const [locations, setLocations] = useState<WorkLocation[]>(() => StorageService.getLocations());
   const [systemSettings, setSystemSettings] = useState(() => StorageService.getSettings());
+  const [substitutions, setSubstitutions] = useState<ScheduleSubstitution[]>(() => StorageService.getSubstitutions());
   const [isPeriodManageModalOpen, setIsPeriodManageModalOpen] = useState(false);
   const [isAcademicDatesModalOpen, setIsAcademicDatesModalOpen] = useState(false);
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
@@ -165,6 +167,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       setDepartments(StorageService.getDepartments());
       setLocations(StorageService.getLocations());
       setSystemSettings(StorageService.getSettings());
+      setSubstitutions(StorageService.getSubstitutions());
     });
     return unsub;
   }, []);
@@ -515,6 +518,36 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       showToast(isKhmer ? `បានបង្កើតកាលវិភាគមុខវិជ្ជាថ្មី៖ ${finalData.subject}` : `Created subject schedule: ${finalData.subject}`, 'success');
     }
 
+    // 🔔 Alert Telegram Group and Assigned Teacher
+    try {
+      const assignedTeacher = teachers.find(t => t.id === finalData.teacherId);
+      const dayNames = ['អាទិត្យ/Sun', 'ចន្ទ/Mon', 'អង្គារ/Tue', 'ពុធ/Wed', 'ព្រហ/Thu', 'សុក្រ/Fri', 'សៅរ៍/Sat'];
+      const dayStr = finalData.daysOfWeek?.map(d => dayNames[d]).join(', ') || dayNames[finalData.dayOfWeek || 1];
+
+      TelegramService.sendScheduleAssignmentAlert({
+        assignmentType: editingSubjectSchedule ? 'reassign' : 'new_schedule',
+        assigneeName: finalData.teacherName,
+        assigneeKhmerName: finalData.khmerTeacherName || assignedTeacher?.khmerName,
+        assigneeRole: 'teacher',
+        assigneeDepartment: assignedTeacher?.department || 'Academic',
+        assigneeChatId: assignedTeacher?.telegramChatId,
+        subject: finalData.subject,
+        khmerSubject: finalData.khmerSubject,
+        gradeClass: finalData.gradeClass,
+        room: finalData.room,
+        periodName: finalData.periodName,
+        dayName: dayStr,
+        startTime: finalData.startTime,
+        endTime: finalData.endTime,
+        assignedBy: currentUser.fullName || currentUser.email,
+        note: editingSubjectSchedule
+          ? (isKhmer ? 'កែប្រែ/ចាត់តាំងកាលវិភាគឡើងវិញ' : 'Schedule reassigned/updated')
+          : (isKhmer ? 'ចាត់តាំងកាលវិភាគបង្រៀនថ្មី' : 'New class schedule assigned')
+      });
+    } catch (tgErr) {
+      console.warn('Telegram schedule alert dispatch error:', tgErr);
+    }
+
     setIsSubjectModalOpen(false);
   };
 
@@ -533,8 +566,11 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     }
   };
 
-  // Scoped subject schedules: Teacher can view owned schedule only
+  // Scoped subject schedules: Teacher can view owned schedule AND substitute-assigned schedules
   const filteredSubjectSchedules = useMemo(() => {
+    const myPersonId = (activeTeacher?.id || currentUser.personId || currentUser.id || '').toLowerCase();
+    const myName = (currentUser.fullName || '').toLowerCase();
+
     return subjectSchedules.filter(sub => {
       if (isTeacher) {
         const isOwned =
@@ -542,8 +578,20 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           (activeTeacher?.teacherId && sub.teacherId?.toLowerCase() === activeTeacher.teacherId.toLowerCase()) ||
           (activeTeacher && sub.teacherName?.toLowerCase() === activeTeacher.fullName.toLowerCase()) ||
           (currentUser.personId && (sub.teacherId === currentUser.personId || sub.teacherId?.toLowerCase() === currentUser.personId.toLowerCase())) ||
-          sub.teacherName?.toLowerCase() === currentUser.fullName.toLowerCase();
-        if (!isOwned) return false;
+          sub.teacherName?.toLowerCase() === myName;
+
+        // Auto display schedules assigned to this account as substitute
+        const isAssignedSubstitute = substitutions.some(subst =>
+          subst.subjectScheduleId === sub.id &&
+          subst.status !== 'cancelled' &&
+          (
+            (subst.substituteId && subst.substituteId.toLowerCase() === myPersonId) ||
+            subst.assignees?.some(a => (a.substituteId || '').toLowerCase() === myPersonId) ||
+            (subst.substituteName && subst.substituteName.toLowerCase() === myName)
+          )
+        );
+
+        if (!isOwned && !isAssignedSubstitute) return false;
       } else {
         const matchesTeacher = selectedTeacherFilter === 'All' || sub.teacherId === selectedTeacherFilter;
         if (!matchesTeacher) return false;
@@ -558,7 +606,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         sub.teacherName.toLowerCase().includes(q);
       return matchesQuery;
     });
-  }, [subjectSchedules, isTeacher, activeTeacher, currentUser, selectedTeacherFilter, subjectSearchQuery]);
+  }, [subjectSchedules, isTeacher, activeTeacher, currentUser, selectedTeacherFilter, subjectSearchQuery, substitutions]);
 
   // Scoped general duty shifts: Teacher sees their assigned shift
   const filteredGeneralSchedules = useMemo(() => {
@@ -604,7 +652,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         return sub.dayOfWeek === selectedDay;
       });
 
+    // Also include any substitute schedules assigned to this teacher/staff today
     const isClassToday = selectedDay === todayDayIndex;
+    if (isClassToday) {
+      const myPersonId = activeTeacher?.id || currentUser.personId || currentUser.id;
+      const assignedSubs = StorageService.getAssignedSubstituteSchedules(myPersonId, todayStr);
+      assignedSubs.forEach(as => {
+        if (!list.some(s => s.id === as.schedule.id)) {
+          list.push(as.schedule);
+        }
+      });
+    }
+
     if (!isClassToday) {
       return list.sort((a, b) => {
         if (a.periodNumber !== b.periodNumber) return a.periodNumber - b.periodNumber;
@@ -1727,8 +1786,28 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                {/* Sum of Hours for Selected Day */}
+                {(() => {
+                  const dayTotalMins = dailyClassesFiltered.reduce((sum, cls) => {
+                    const s = cls.schedule;
+                    if (!s.startTime || !s.endTime) return sum;
+                    const st = AttendanceEngine.timeToMinutes(s.startTime);
+                    const et = AttendanceEngine.timeToMinutes(s.endTime);
+                    return sum + (et > st ? et - st : 0);
+                  }, 0);
+                  const dayTotalHours = dayTotalMins > 0
+                    ? (dayTotalMins % 60 === 0 ? (dayTotalMins / 60).toString() : (dayTotalMins / 60).toFixed(1))
+                    : '0';
+
+                  return (
+                    <span className="text-amber-800 font-extrabold bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl whitespace-nowrap flex items-center gap-1 shadow-2xs">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{dayTotalHours} {isKhmer ? 'ម៉ោងសរុប' : 'Total Hours'}</span>
+                    </span>
+                  );
+                })()}
                 <span className="text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl whitespace-nowrap">
-                  {dailyClassesFiltered.length} {isKhmer ? 'ម៉ោង' : 'Classes'}
+                  {dailyClassesFiltered.length} {isKhmer ? 'ថ្នាក់' : 'Classes'}
                 </span>
                 <span className="text-slate-600 font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl whitespace-nowrap">
                   {dailyClassesGroupedByPeriod.length} {isKhmer ? 'វេន' : 'Periods'}
@@ -1740,9 +1819,19 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
               {weekDayTabs.map(tab => {
                 const isSelected = selectedDay === tab.index;
                 const isToday = tab.index === todayDayIndex;
-                const countForDay = filteredSubjectSchedules.filter(s =>
+                const daySchedules = filteredSubjectSchedules.filter(s =>
                   s.daysOfWeek && s.daysOfWeek.length > 0 ? s.daysOfWeek.includes(tab.index) : s.dayOfWeek === tab.index
-                ).length;
+                );
+                const countForDay = daySchedules.length;
+                // Calculate total of hour of each schedule for this day
+                const totalMinutesForDay = daySchedules.reduce((acc, s) => {
+                  const st = AttendanceEngine.timeToMinutes(s.startTime);
+                  const et = AttendanceEngine.timeToMinutes(s.endTime);
+                  return acc + (et > st ? et - st : 0);
+                }, 0);
+                const totalHoursForDay = totalMinutesForDay > 0
+                  ? (totalMinutesForDay % 60 === 0 ? (totalMinutesForDay / 60).toString() : (totalMinutesForDay / 60).toFixed(1))
+                  : '0';
 
                 return (
                   <button
@@ -1767,8 +1856,14 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                         </span>
                       )}
                     </div>
-                    <div className={`text-[10px] ${isSelected ? 'text-indigo-100' : 'text-slate-500'} font-medium`}>
-                      {countForDay} {isKhmer ? 'ម៉ោង' : 'classes'}
+                    {/* Sum of hours of each schedule for this day */}
+                    <div className="flex items-baseline justify-between gap-1 mt-1">
+                      <span className={`text-xs font-black ${isSelected ? 'text-white' : 'text-indigo-600'}`}>
+                        {totalHoursForDay} {isKhmer ? 'ម៉ោង' : 'h'}
+                      </span>
+                      <span className={`text-[10px] ${isSelected ? 'text-indigo-200' : 'text-slate-400'} font-medium`}>
+                        {countForDay} {isKhmer ? 'ថ្នាក់' : 'cls'}
+                      </span>
                     </div>
                   </button>
                 );

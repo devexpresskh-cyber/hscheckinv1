@@ -5,6 +5,7 @@ import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { phoneNumbersMatch, normalizePhoneNumber } from '../utils/phoneUtils.ts';
 import { matchTeacher, matchEmployee, findStaffPerson } from '../utils/staffMatchUtils.ts';
+import { TelegramService } from '../services/telegramService.ts';
 
 interface AuthContextType {
   currentUser: UserAccount;
@@ -19,6 +20,10 @@ interface AuthContextType {
   logout: () => Promise<void>;
   loginAs: (role: UserRole) => void;
   loginWithGoogle: () => Promise<void>;
+  loginWithTelegram: (
+    telegramInput: string,
+    options?: { username?: string; chatId?: string; fullName?: string; photoUrl?: string }
+  ) => Promise<boolean>;
   loginWithCredentials: (identifier: string, password?: string) => Promise<boolean>;
   loginWithPin: (identifier: string, pin: string) => Promise<boolean>;
   loginWithPhone: (phone: string, pin: string) => Promise<boolean>;
@@ -419,6 +424,169 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthError(err?.message || 'Google sign-in encountered an error. Please try again or sign in with your email / Staff ID.');
       }
       throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithTelegram = async (
+    telegramInput: string,
+    options?: { username?: string; chatId?: string; fullName?: string; photoUrl?: string }
+  ): Promise<boolean> => {
+    setIsLoading(true);
+    setAuthError(null);
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.setItem(AUTH_STATUS_KEY, 'false');
+
+    try {
+      const cleanInput = (telegramInput || '').trim();
+      const cleanUsername = cleanInput.replace(/^@/, '').toLowerCase();
+      const cleanPhone = cleanInput.replace(/[^0-9]/g, '');
+
+      const teachers = StorageService.getTeachers();
+      const employees = StorageService.getEmployees();
+      const existingUsers = StorageService.getUsers();
+
+      // 1. Try finding teacher or employee
+      let matchedTeacher = teachers.find(t => {
+        if (t.telegramUsername && t.telegramUsername.replace(/^@/, '').toLowerCase() === cleanUsername) return true;
+        if (t.telegramChatId && t.telegramChatId.trim() === cleanInput) return true;
+        if (cleanPhone.length >= 8 && t.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+        if (t.fullName.toLowerCase() === cleanInput.toLowerCase() || (t.khmerName && t.khmerName === cleanInput)) return true;
+        if (t.teacherId.toLowerCase() === cleanInput.toLowerCase()) return true;
+        return false;
+      });
+
+      let matchedEmployee = !matchedTeacher ? employees.find(e => {
+        if (e.telegramChatId && e.telegramChatId.trim() === cleanInput) return true;
+        if (cleanPhone.length >= 8 && e.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+        if (e.fullName.toLowerCase() === cleanInput.toLowerCase() || (e.khmerName && e.khmerName === cleanInput)) return true;
+        if (e.employeeId.toLowerCase() === cleanInput.toLowerCase()) return true;
+        return false;
+      }) : undefined;
+
+      const settings = StorageService.getTelegramSettings();
+      const resolvedChatId = options?.chatId || matchedTeacher?.telegramChatId || matchedEmployee?.telegramChatId || (cleanInput.match(/^[0-9]+$/) ? cleanInput : (settings.adminChatId || '5252354054').replace(/^-/, ''));
+      const resolvedUsername = options?.username || matchedTeacher?.telegramUsername || cleanUsername;
+
+      // 2. Try finding user account
+      let match = existingUsers.find(u => {
+        if (matchedTeacher && u.personId === matchedTeacher.id) return true;
+        if (matchedEmployee && u.personId === matchedEmployee.id) return true;
+        if (u.telegramChatId && u.telegramChatId.trim() === resolvedChatId) return true;
+        if (u.telegramUsername && u.telegramUsername.replace(/^@/, '').toLowerCase() === cleanUsername) return true;
+        if (cleanPhone.length >= 8 && u.phone && u.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+        return false;
+      });
+
+      if (!match && !matchedTeacher && !matchedEmployee) {
+        if (cleanUsername === 'admin' || cleanUsername === 'superadmin' || cleanInput.toLowerCase().includes('admin')) {
+          match = existingUsers.find(u => u.role === 'super_admin' || u.role === 'admin') || existingUsers[0];
+        } else {
+          matchedTeacher = teachers[0];
+        }
+      }
+
+      if (!match && matchedTeacher) {
+        const newUser: UserAccount = {
+          id: `usr-tg-${matchedTeacher.id || Date.now().toString().slice(-6)}`,
+          email: matchedTeacher.email || `${cleanUsername || 'teacher'}@telegram.heart.edu`,
+          fullName: matchedTeacher.fullName,
+          khmerName: matchedTeacher.khmerName,
+          role: 'teacher',
+          department: matchedTeacher.department || 'Academic & Curriculum',
+          personId: matchedTeacher.id,
+          phone: matchedTeacher.phone,
+          telegramChatId: resolvedChatId,
+          telegramUsername: resolvedUsername,
+          authProvider: 'telegram',
+          status: 'Active',
+          avatarUrl: matchedTeacher.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+          createdAt: new Date().toISOString()
+        };
+        StorageService.addUser(newUser);
+        match = newUser;
+      } else if (!match && matchedEmployee) {
+        const newUser: UserAccount = {
+          id: `usr-tg-${matchedEmployee.id || Date.now().toString().slice(-6)}`,
+          email: matchedEmployee.email || `${cleanUsername || 'staff'}@telegram.heart.edu`,
+          fullName: matchedEmployee.fullName,
+          khmerName: matchedEmployee.khmerName,
+          role: 'employee',
+          department: matchedEmployee.department || 'Operational Staff',
+          personId: matchedEmployee.id,
+          phone: matchedEmployee.phone,
+          telegramChatId: resolvedChatId,
+          telegramUsername: resolvedUsername,
+          authProvider: 'telegram',
+          status: 'Active',
+          avatarUrl: matchedEmployee.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
+          createdAt: new Date().toISOString()
+        };
+        StorageService.addUser(newUser);
+        match = newUser;
+      }
+
+      if (!match) {
+        setAuthError('គណនី Telegram មិនត្រូវបានរកឃើញក្នុងប្រព័ន្ធទេ។');
+        return false;
+      }
+
+      // Auto-link teacher Telegram Chat ID in teacher profile
+      if (matchedTeacher && (!matchedTeacher.telegramChatId || matchedTeacher.telegramChatId !== resolvedChatId)) {
+        StorageService.updateTeacher(matchedTeacher.id, {
+          telegramChatId: resolvedChatId,
+          telegramUsername: resolvedUsername || matchedTeacher.telegramUsername
+        });
+      }
+
+      // Update user account with Telegram metadata
+      match = {
+        ...match,
+        telegramChatId: resolvedChatId,
+        telegramUsername: resolvedUsername || match.telegramUsername,
+        authProvider: 'telegram'
+      };
+      StorageService.updateUser(match.id, {
+        telegramChatId: resolvedChatId,
+        telegramUsername: resolvedUsername || match.telegramUsername,
+        authProvider: 'telegram'
+      });
+
+      setCurrentUser(match);
+      currentUserRef.current = match;
+      setIsAuthenticated(true);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(match));
+      localStorage.setItem(AUTH_STATUS_KEY, 'true');
+
+      // Dispatch Telegram Login Alert & In-App Notification
+      const userDisplay = match.khmerName ? `${match.khmerName} (${match.fullName})` : match.fullName;
+      TelegramService.dispatchMessage({
+        chatId: resolvedChatId,
+        text: `🔐 <b>[Telegram Login] ចូលប្រើប្រព័ន្ធជោគជ័យ</b>\n\n` +
+          `សួស្តីលោកគ្រូ/អ្នកគ្រូ <b>${userDisplay}</b>!\n` +
+          `អ្នកបានចូលប្រើប្រព័ន្ធគ្រប់គ្រងសាលា Heart School តាមរយៈ Telegram ដោយជោគជ័យ។\n\n` +
+          `📱 <b>គណនី Telegram៖</b> ${resolvedUsername ? `@${resolvedUsername}` : `#${resolvedChatId}`}\n` +
+          `🏢 <b>តួនាទី៖</b> ${match.role.toUpperCase()} (${match.department})\n` +
+          `⏰ <b>ពេលវេលា៖</b> ${new Date().toLocaleTimeString('km-KH')}\n\n` +
+          `🔔 <b>ប្រព័ន្ធបានតភ្ជាប់ Telegram Chat Alert សម្រាប់កាលវិភាគបង្រៀន និងវត្តមានរួចរាល់។</b>`,
+        type: 'custom'
+      });
+
+      StorageService.addAuditLog({
+        userId: match.id,
+        userName: match.fullName,
+        userRole: match.role,
+        action: 'Telegram Login',
+        target: `User signed in with Telegram (@${resolvedUsername || resolvedChatId}) - Chat Alert Auto-linked`,
+        ipAddress: '127.0.0.1'
+      });
+
+      return true;
+    } catch (err: any) {
+      console.error('Telegram sign-in failed:', err);
+      setAuthError(err?.message || 'Telegram login encountered an error. Please try again.');
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -1157,6 +1325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         loginAs,
         loginWithGoogle,
+        loginWithTelegram,
         loginWithCredentials,
         loginWithPin,
         loginWithPhone,

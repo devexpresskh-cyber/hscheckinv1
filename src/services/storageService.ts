@@ -1414,6 +1414,48 @@ export const StorageService = {
       handleFirestoreError(err, OperationType.DELETE, `schedule_substitutions/${id}`)
     );
   },
+  getSubstitutionsForPerson(personId: string, dateStr?: string): ScheduleSubstitution[] {
+    const rawId = (personId || '').trim().toLowerCase();
+    if (!rawId) return [];
+    return cache.substitutions.filter(s => {
+      if (s.status === 'cancelled') return false;
+      if (dateStr && s.date !== dateStr) return false;
+      const isDirect = (s.substituteId || '').trim().toLowerCase() === rawId;
+      const isInAssignees = s.assignees?.some(
+        a => (a.substituteId || '').trim().toLowerCase() === rawId
+      );
+      return isDirect || isInAssignees;
+    });
+  },
+  getAssignedSubstituteSchedules(personId: string, dateStr?: string): {
+    schedule: TeacherSubjectSchedule;
+    substitution: ScheduleSubstitution;
+    assignee?: ScheduleSubstitutionAssignee;
+  }[] {
+    const subs = this.getSubstitutionsForPerson(personId, dateStr);
+    const rawId = (personId || '').trim().toLowerCase();
+    const results: {
+      schedule: TeacherSubjectSchedule;
+      substitution: ScheduleSubstitution;
+      assignee?: ScheduleSubstitutionAssignee;
+    }[] = [];
+
+    subs.forEach(sub => {
+      const origSched = cache.subjectSchedules.find(s => s.id === sub.subjectScheduleId);
+      if (origSched) {
+        const matchedAssignee = sub.assignees?.find(
+          a => (a.substituteId || '').trim().toLowerCase() === rawId
+        );
+        results.push({
+          schedule: origSched,
+          substitution: sub,
+          assignee: matchedAssignee
+        });
+      }
+    });
+
+    return results;
+  },
   assignScheduleSubstitute(params: {
     schedule: TeacherSubjectSchedule;
     date: string;

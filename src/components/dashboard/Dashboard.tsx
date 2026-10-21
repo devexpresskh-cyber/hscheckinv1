@@ -170,14 +170,24 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
       const isSelected = dateStr === selectedDate;
       const isCurrentDay = dateStr === todayStr;
 
-      // Count active classes on this day
-      const dayClassesCount = subjectSchedules.filter(sub => {
+      // Count active classes & sum hours on this day
+      const daySchedules = subjectSchedules.filter(sub => {
         if (!sub.isActive) return false;
         if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
           return sub.daysOfWeek.includes(dowIndex);
         }
         return sub.dayOfWeek === dowIndex;
-      }).length;
+      });
+      const dayClassesCount = daySchedules.length;
+      const dayMinutes = daySchedules.reduce((acc, sub) => {
+        if (!sub.startTime || !sub.endTime) return acc;
+        const st = AttendanceEngine.timeToMinutes(sub.startTime);
+        const et = AttendanceEngine.timeToMinutes(sub.endTime);
+        return acc + (et > st ? et - st : 0);
+      }, 0);
+      const dayHoursCount = dayMinutes > 0
+        ? (dayMinutes % 60 === 0 ? (dayMinutes / 60).toString() : (dayMinutes / 60).toFixed(1))
+        : '0';
 
       // Attendance records on this day
       const dayAttendance = allAttendance.filter(a => a.date === dateStr);
@@ -195,6 +205,7 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
         isSelected,
         isCurrentDay,
         dayClassesCount,
+        dayHoursCount,
         hasPresent,
         hasLate,
         hasAbsent
