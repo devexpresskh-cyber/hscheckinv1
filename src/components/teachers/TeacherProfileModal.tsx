@@ -29,8 +29,10 @@ import {
   KeyRound,
   Upload,
   Trash2,
-  Loader2
+  Loader2,
+  MapPin
 } from 'lucide-react';
+import { GeofenceRadiusMapView } from '../common/GeofenceRadiusMapView.tsx';
 
 interface TeacherProfileModalProps {
   isOpen: boolean;
@@ -101,7 +103,7 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
   const [showPin, setShowPin] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'telegram'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'telegram' | 'geofence'>('profile');
 
   // Photo upload ref & state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -451,6 +453,18 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
           >
             <Send className="w-4 h-4 text-sky-500" />
             <span>{isKhmer ? 'តេឡេក្រាម (Telegram)' : 'Telegram Alerts'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('geofence')}
+            className={`py-3 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              activeTab === 'geofence'
+                ? 'border-indigo-600 text-indigo-700 bg-white shadow-2xs'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <MapPin className="w-4 h-4 text-rose-500" />
+            <span>{isKhmer ? 'ផែនទី & កាំស្កេន' : 'Geofence Map'}</span>
           </button>
         </div>
 
@@ -896,6 +910,51 @@ export const TeacherProfileModal: React.FC<TeacherProfileModalProps> = ({
                     ចុច "តភ្ជាប់ស្វ័យប្រវត្តិ" ដើម្បីភ្ជាប់ Telegram Chat Alert ភ្លាមៗ ឬឆាតទៅកាន់ <span className="font-mono text-indigo-600">@userinfobot</span> ដើម្បីដឹង Chat ID ផ្ទាល់ខ្លួន។
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: GEOFENCE RADIUS & PERMITTED CHECK-IN LOCATIONS */}
+          {activeTab === 'geofence' && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-indigo-600/30">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-black text-xs sm:text-sm text-indigo-950">
+                    {isKhmer ? 'ផែនទីផ្ទៀងផ្ទាត់ទីតាំងអនុញ្ញាតស្កេនវត្តមាន (Geofencing Validation Map)' : 'Permitted Check-in Location & Geofencing Validation'}
+                  </h4>
+                  <p className="text-[11px] sm:text-xs text-indigo-800/80 mt-0.5 leading-relaxed">
+                    {isKhmer
+                      ? 'ប្រព័ន្ធកំណត់កាំអនុញ្ញាតស្កេនជុំវិញបរិវេណសាលា។ លោកអ្នកអាចមើលកាំអនុញ្ញាត និងចុច "ពិនិត្យទីតាំងខ្ញុំជាក់ស្តែង" ដើម្បីផ្ទៀងផ្ទាត់ GPS មុនពេលស្កេនចូល-ចេញ។'
+                      : 'Displays the authorized physical campus check-in boundary. You can verify the permitted radius and test your real-time GPS position to validate attendance eligibility.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <GeofenceRadiusMapView
+                  locationName={linkedTeacher?.assignedLocation || linkedEmployee?.workLocation || 'Main Campus'}
+                  staffName={formData.fullName || currentUser.fullName}
+                  staffType={currentUser.role === 'teacher' ? 'teacher' : 'employee'}
+                  showTestLocation={true}
+                />
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>
+                    {isKhmer ? 'ទីតាំងការងារចាត់តាំង៖' : 'Assigned Location:'}{' '}
+                    <strong className="text-slate-800 font-bold">
+                      {linkedTeacher?.assignedLocation || linkedEmployee?.workLocation || 'Main Campus'}
+                    </strong>
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  GPS Active
+                </span>
               </div>
             </div>
           )}

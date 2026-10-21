@@ -17,8 +17,10 @@ import {
   Trash2,
   Eye,
   X,
-  AlertTriangle
+  AlertTriangle,
+  MapPin
 } from 'lucide-react';
+import { GeofenceRadiusMapView } from '../common/GeofenceRadiusMapView.tsx';
 
 export const EmployeeManagement: React.FC = () => {
   const { currentUser, canAccessDepartment, hasPermission } = useAuth();
@@ -395,8 +397,32 @@ export const EmployeeManagement: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
-              <h4 className="font-bold text-xs uppercase text-slate-500">Attendance Log</h4>
+            <div className="p-6 max-h-[70vh] overflow-y-auto space-y-5">
+              {/* Geofence & Permitted Location Radius Map */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs uppercase text-slate-500 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Permitted Check-in Geofence & Location</span>
+                  </h4>
+                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+                    {selectedEmpForHistory.workLocation || 'Main Campus'}
+                  </span>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                  <GeofenceRadiusMapView
+                    compact={true}
+                    locationName={selectedEmpForHistory.workLocation}
+                    staffName={selectedEmpForHistory.fullName}
+                    staffType="employee"
+                    showTestLocation={true}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3">
+                <h4 className="font-bold text-xs uppercase text-slate-500 mb-2">Attendance Log</h4>
+              </div>
               {(() => {
                 const history = attendanceList.filter(a => a.personId === selectedEmpForHistory.id);
                 if (history.length === 0) {

@@ -92,6 +92,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const [dailySortBy, setDailySortBy] = useState<DailySortColumn>('time');
   const [dailySortOrder, setDailySortOrder] = useState<'asc' | 'desc'>('asc');
   const [dailySearchQuery, setDailySearchQuery] = useState<string>('');
+  const [dailyStatusFilter, setDailyStatusFilter] = useState<'all' | 'active' | 'absent'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
@@ -760,9 +761,52 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     });
   }, [filteredSubjectSchedules, selectedDay, todayDayIndex, attendanceList, activeTeacher, currentUser, todayStr]);
 
-  // Daily classes filtered with search query
+  // Helper to determine if a class is marked absent or reassigned due to absence
+  const isClassAbsent = (sub: TeacherSubjectSchedule) => {
+    const isClassToday = selectedDay === todayDayIndex;
+    const curTimeStr = AttendanceEngine.getCurrentTimeString();
+    const curMins = AttendanceEngine.timeToMinutes(curTimeStr);
+    const sEnd = AttendanceEngine.timeToMinutes(sub.endTime);
+
+    // 1. Direct attendance record with status 'Absent'
+    const todayRec = AttendanceEngine.findRecordForSubjectSchedule(sub, attendanceList, todayStr, teachers);
+    if (todayRec?.status === 'Absent') return true;
+
+    // 2. Active substitution where original teacher was replaced due to absence
+    const substitution = StorageService.findSubstitution(sub.id, todayStr);
+    if (substitution && substitution.status !== 'cancelled') {
+      const myPersonId = (activeTeacher?.id || currentUser.personId || currentUser.id || '').toLowerCase();
+      // If I am NOT the substitute (meaning I am the absent original teacher)
+      const isMeSubstitute = Boolean(
+        (substitution.substituteId && substitution.substituteId.toLowerCase() === myPersonId) ||
+        substitution.assignees?.some(a => (a.substituteId || '').toLowerCase() === myPersonId)
+      );
+      if (!isMeSubstitute) return true;
+    }
+
+    // 3. Today past end time without check-in
+    if (isClassToday && curMins >= sEnd && !todayRec?.checkInTime && !substitution) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const absentClassesCount = useMemo(() => {
+    return dailyClasses.filter(sub => isClassAbsent(sub)).length;
+  }, [dailyClasses, attendanceList, selectedDay, todayDayIndex, todayStr, teachers, substitutions, activeTeacher, currentUser]);
+
+  // Daily classes filtered with search query and status filter
   const dailyClassesFiltered = useMemo(() => {
     let list = dailyClasses;
+
+    // Status filter: All / Active / Absent
+    if (dailyStatusFilter === 'absent') {
+      list = list.filter(sub => isClassAbsent(sub));
+    } else if (dailyStatusFilter === 'active') {
+      list = list.filter(sub => !isClassAbsent(sub));
+    }
+
     if (dailySearchQuery.trim()) {
       const q = dailySearchQuery.toLowerCase().trim();
       list = list.filter(
@@ -776,7 +820,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       );
     }
     return list;
-  }, [dailyClasses, dailySearchQuery]);
+  }, [dailyClasses, dailySearchQuery, dailyStatusFilter, attendanceList, selectedDay, todayDayIndex, todayStr, teachers, substitutions, activeTeacher, currentUser]);
 
   // Group and order daily classes by Period
   const dailyClassesGroupedByPeriod = useMemo(() => {
@@ -1672,6 +1716,54 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       {viewMode === 'daily_schedule' && (
         <div className="space-y-4 max-w-full min-w-0">
           
+          {/* 🚨 AUTO DISPLAY ABSENT ASSIGNED SCHEDULE ALERT BANNER */}
+          {absentClassesCount > 0 && (
+            <div className="bg-gradient-to-r from-rose-50 via-rose-100/50 to-rose-50 border-2 border-rose-300 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-950 shadow-xs animate-in fade-in">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-rose-600/30">
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-black text-sm text-rose-900">
+                      {isKhmer ? `កាលវិភាគអវត្តមាន (Absent Assigned Schedules: ${absentClassesCount})` : `Absent Assigned Classes Detected (${absentClassesCount})`}
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-2xs">
+                      {isKhmer ? 'អវត្តមាន' : 'ABSENT'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-800/90 mt-0.5">
+                    {isKhmer
+                      ? 'មានកាលវិភាគបង្រៀនដែលត្រូវបានសម្គាល់ថាអវត្តមាន ឬបានចាត់តាំងគ្រូជំនួស។ សូមពិនិត្យព័ត៌មានលម្អិត ឬផ្ទៀងផ្ទាត់វត្តមាន។'
+                      : 'One or more of your assigned teaching schedules have been marked Absent or reassigned to a substitute.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDailyStatusFilter(f => f === 'absent' ? 'all' : 'absent')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    dailyStatusFilter === 'absent'
+                      ? 'bg-rose-700 text-white shadow-xs'
+                      : 'bg-white border border-rose-300 text-rose-700 hover:bg-rose-100'
+                  }`}
+                >
+                  {dailyStatusFilter === 'absent'
+                    ? (isKhmer ? 'បង្ហាញកាលវិភាគទាំងអស់' : 'Show All Classes')
+                    : (isKhmer ? 'បង្ហាញតែកាលវិភាគអវត្តមាន' : 'Filter Absent Classes')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsReconciliationModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  {isKhmer ? 'ផ្ទៀងផ្ទាត់ & បោះពុម្ព' : 'Reconciliation & Print'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Day Selector Navigation Pills & Toolbar */}
           <div className="bg-white rounded-3xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-3.5 max-w-full overflow-hidden">
             {/* Top Toolbar: Teacher Filter, Search, Layout & Group Switchers, Sort */}
@@ -1705,6 +1797,46 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                     </span>
                   </div>
                 )}
+
+                {/* Status Filter Pills: All / Active / Absent */}
+                <div className="inline-flex p-0.5 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setDailyStatusFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                      dailyStatusFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {isKhmer ? `ទាំងអស់ (${dailyClasses.length})` : `All (${dailyClasses.length})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyStatusFilter('active')}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                      dailyStatusFilter === 'active'
+                        ? 'bg-indigo-600 text-white shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {isKhmer ? `សកម្ម (${dailyClasses.length - absentClassesCount})` : `Active (${dailyClasses.length - absentClassesCount})`}
+                  </button>
+                  {absentClassesCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDailyStatusFilter('absent')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                        dailyStatusFilter === 'absent'
+                          ? 'bg-rose-600 text-white shadow-2xs font-black'
+                          : 'text-rose-700 hover:text-rose-900 font-extrabold animate-pulse'
+                      }`}
+                    >
+                      <AlertTriangle className="w-3 h-3 text-rose-600 inline" />
+                      <span>{isKhmer ? `អវត្តមាន (${absentClassesCount})` : `Absent (${absentClassesCount})`}</span>
+                    </button>
+                  )}
+                </div>
 
                 {/* Search Input for Daily Classes */}
                 <div className="relative w-full sm:w-56">

@@ -1288,6 +1288,12 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
               ) : (
                 selectedDayClasses.map((cls, idx) => {
                   const isToday = selectedDayCell?.dateStr === todayStr;
+                  const isPastDate = Boolean(selectedDayCell?.dateStr && selectedDayCell.dateStr < todayStr);
+                  const curMins = AttendanceEngine.timeToMinutes(AttendanceEngine.getCurrentTimeString());
+                  const sStart = AttendanceEngine.timeToMinutes(cls.startTime);
+                  const sEnd = AttendanceEngine.timeToMinutes(cls.endTime);
+                  const isPastTimeToday = isToday && curMins >= sEnd;
+
                   const classAtt = AttendanceEngine.findRecordForSubjectSchedule(
                     cls,
                     attendance,
@@ -1298,7 +1304,9 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                   const hasCheckedIn = Boolean(classAtt?.checkInTime);
                   const hasCheckedOut = Boolean(classAtt?.checkOutTime);
                   const isInProgress = isToday && hasCheckedIn && !hasCheckedOut;
-                  const isCurOngoing = isToday && !hasCheckedIn;
+                  const isCurOngoing = isToday && !hasCheckedIn && curMins >= sStart && curMins < sEnd;
+                  const isClassLeave = classAtt?.status === 'Leave';
+                  const isClassAbsent = classAtt?.status === 'Absent' || (!hasCheckedIn && (isPastDate || isPastTimeToday));
 
                   // Initials for avatar circle
                   const initials = (cls.teacherName || activeTeacher?.fullName || 'T')
@@ -1318,6 +1326,8 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           ? 'border-cyan-400 ring-2 ring-cyan-200/50 bg-gradient-to-br from-white via-cyan-50/20 to-blue-50/30'
                           : isCurOngoing
                           ? 'border-blue-300 hover:border-blue-400'
+                          : isClassAbsent
+                          ? 'border-rose-200 bg-rose-50/20 hover:border-rose-300'
                           : 'border-slate-200/90 hover:border-blue-300'
                       }`}
                     >
@@ -1346,7 +1356,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           </div>
                         </div>
 
-                        {/* Status Badge: COMPLETED vs IN PROGRESS vs CURRENT / UPCOMING */}
+                        {/* Status Badge: COMPLETED vs IN PROGRESS vs ABSENT vs CURRENT / UPCOMING */}
                         {hasCheckedOut ? (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shrink-0">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1356,6 +1366,16 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50 text-cyan-800 border border-cyan-300 flex items-center gap-1.5 shrink-0 shadow-2xs animate-pulse">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                             <span>{isKhmer ? 'កំពុងបង្រៀន' : 'IN PROGRESS'}</span>
+                          </span>
+                        ) : isClassLeave ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1 shrink-0">
+                            <span>📋</span>
+                            <span>{isKhmer ? 'សុំច្បាប់' : 'LEAVE'}</span>
+                          </span>
+                        ) : isClassAbsent ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 shrink-0">
+                            <AlertCircle className="w-3 h-3 text-rose-600" />
+                            <span>{isKhmer ? 'អវត្តមាន' : 'ABSENT'}</span>
                           </span>
                         ) : isCurOngoing ? (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200 shrink-0">

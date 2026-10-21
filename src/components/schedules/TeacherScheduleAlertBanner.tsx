@@ -148,28 +148,95 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
     ScheduleAlertService.savePreferences(updated);
   };
 
+  const [isAbsentAlertDismissed, setIsAbsentAlertDismissed] = useState(false);
+
+  // Check for any assigned schedule today that is marked absent
+  const absentClassAlert = React.useMemo(() => {
+    if (!isTeacher) return null;
+    const today = new Date().toISOString().split('T')[0];
+    const allAtt = StorageService.getAttendance();
+    const subScheds = StorageService.getSubjectSchedules();
+    const myId = (teacherId || '').toLowerCase();
+    const myName = (currentUser.fullName || '').toLowerCase();
+
+    const absentRecords = allAtt.filter(
+      a => a.date === today &&
+           a.status === 'Absent' &&
+           (
+             (a.personId && a.personId.toLowerCase() === myId) ||
+             (a.personName && a.personName.toLowerCase() === myName)
+           )
+    );
+
+    if (absentRecords.length === 0) return null;
+
+    const firstAbsent = absentRecords[0];
+    const matchedSchedule = subScheds.find(s => s.id === firstAbsent.subjectScheduleId || s.id === firstAbsent.scheduleId);
+
+    return {
+      count: absentRecords.length,
+      subject: firstAbsent.subject || matchedSchedule?.subject || 'Class Session',
+      time: `${firstAbsent.scheduledStart || matchedSchedule?.startTime || ''} - ${firstAbsent.scheduledEnd || matchedSchedule?.endTime || ''}`,
+      note: firstAbsent.correctionNote || 'Attendance flagged as Absent'
+    };
+  }, [isTeacher, teacherId, currentUser]);
+
   // Only teachers have scheduled class alert countdowns - admin and employees do not teach
   if (!isTeacher) {
     return null;
   }
 
-  // If no upcoming or ongoing class, don't crowd the top
-  if (!nextScheduleData && !activeAlert) {
+  // If no upcoming or ongoing class and no absent alert, don't crowd the top
+  if (!nextScheduleData && !activeAlert && (!absentClassAlert || isAbsentAlertDismissed)) {
     return null;
   }
 
   const schedule = activeAlert ? activeAlert.schedule : nextScheduleData?.schedule;
-  if (!schedule) return null;
-
   const isOngoing = activeAlert ? activeAlert.type === 'end' : nextScheduleData?.status === 'ongoing';
   const minutes = activeAlert ? activeAlert.minutesRemaining : nextScheduleData?.minutesDiff || 0;
-  const subjectName = isKhmer && schedule.khmerSubject ? schedule.khmerSubject : schedule.subject;
+  const subjectName = schedule && isKhmer && schedule.khmerSubject ? schedule.khmerSubject : schedule?.subject || '';
 
   return (
     <div className="relative mb-4 w-full max-w-full min-w-0 overflow-hidden">
-      {/* Active Class Alert Banner */}
-      <div
-        className={`rounded-2xl p-3 sm:p-4 border transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full max-w-full min-w-0 ${
+      {/* 🚨 Auto-displayed Absent Assigned Schedule Alert */}
+      {absentClassAlert && !isAbsentAlertDismissed && (
+        <div className="mb-3 rounded-2xl p-3.5 border-2 border-rose-300 bg-gradient-to-r from-rose-50 via-rose-100/50 to-rose-50 text-rose-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs shadow-rose-600/30">
+              <AlertCircle className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-2xs">
+                  {isKhmer ? 'អវត្តមាន' : 'ABSENT ALERT'}
+                </span>
+                <strong className="text-xs sm:text-sm font-black text-rose-900">
+                  {absentClassAlert.subject} ({absentClassAlert.time})
+                </strong>
+              </div>
+              <p className="text-[11px] text-rose-800/90 mt-0.5">
+                {isKhmer
+                  ? `កាលវិភាគបង្រៀនត្រូវបានកត់ត្រាថា "អវត្តមាន" (${absentClassAlert.note})។ សូមទាក់ទងរដ្ឋបាល ឬស្នើសុំច្បាប់។`
+                  : `Your assigned class was marked Absent (${absentClassAlert.note}). Please review with Academic Admin.`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsAbsentAlertDismissed(true)}
+              className="p-1 text-rose-400 hover:text-rose-700 rounded-lg hover:bg-rose-100/50 cursor-pointer"
+              title="Dismiss alert"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {schedule && (
+        <div
+          className={`rounded-2xl p-3 sm:p-4 border transition-all shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 w-full max-w-full min-w-0 ${
           isOngoing
             ? 'bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50 border-amber-300 text-amber-950'
             : 'bg-gradient-to-r from-indigo-500/10 via-indigo-50 to-blue-50 border-indigo-200 text-indigo-950'
@@ -281,6 +348,7 @@ export const TeacherScheduleAlertBanner: React.FC<TeacherScheduleAlertBannerProp
           )}
         </div>
       </div>
+      )}
 
       {/* Alert Settings Modal / Popover */}
       {isSettingsOpen && (

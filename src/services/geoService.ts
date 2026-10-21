@@ -10,6 +10,11 @@ export interface GeoLocationResult {
 }
 
 export const GeoService = {
+  // Calculate distance in meters between two lat/lon coordinates
+  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    return AttendanceEngine.calculateDistance(lat1, lon1, lat2, lon2);
+  },
+
   // Get current device coordinates with timeout
   async getCurrentPosition(options?: { highAccuracy?: boolean; timeout?: number; maximumAge?: number }): Promise<{ latitude: number; longitude: number }> {
     return new Promise((resolve, reject) => {

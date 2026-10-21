@@ -28,6 +28,7 @@ import {
   MapPin,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Clock4,
   ChevronRight,
   TrendingUp,
@@ -69,6 +70,7 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
   const [isGpsRefreshing, setIsGpsRefreshing] = useState(false);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [scheduleTabFilter, setScheduleTabFilter] = useState<'all' | 'active' | 'absent'>('all');
 
   // Storage states
   const [teachers, setTeachers] = useState<Teacher[]>(() =>
@@ -232,6 +234,9 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
       const isInSession = (isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut);
       const isUpcoming = curMins < sStart && !isCheckedIn;
       const isCompleted = isCheckedOut || (curMins >= sEnd && isCheckedIn);
+      const isPassed = curMins >= sEnd && !isCheckedIn;
+      const isAbsent = Boolean(rec?.status === 'Absent' || (isPassed && !isCheckedIn));
+      const isLeave = rec?.status === 'Leave';
 
       return {
         schedule: {
@@ -245,7 +250,13 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
         isInSession,
         isUpcoming,
         isCompleted,
+        isPassed,
+        isAbsent,
+        isLeave,
         isSubstitute: true,
+        isReassignedDueToAbsence: false,
+        substituteNames: undefined as string | undefined,
+        absentNote: undefined as string | undefined,
         originalTeacherName: item.substitution.originalTeacherName,
         originalTeacherKhmer: item.substitution.originalTeacherKhmer,
         allocatedHours: item.assignee?.allocatedHours || item.substitution.totalScheduleHours,
@@ -285,6 +296,9 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
       })
       .map(sub => {
         const rec = AttendanceEngine.findRecordForSubjectSchedule(sub, allAttendance, todayStr, teachers);
+        const substitution = StorageService.findSubstitution(sub.id, todayStr);
+        const isReassignedDueToAbsence = Boolean(substitution && substitution.status !== 'cancelled');
+        const substituteNames = substitution?.assignees?.map(a => a.substituteName).join(', ') || substitution?.substituteName;
         const isCheckedIn = Boolean(rec?.checkInTime);
         const isCheckedOut = Boolean(rec?.checkOutTime);
         const sStart = AttendanceEngine.timeToMinutes(sub.startTime);
@@ -293,6 +307,9 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
         const isInSession = (isCheckedIn && !isCheckedOut) || (curMins >= sStart && curMins < sEnd && !isCheckedOut);
         const isUpcoming = curMins < sStart && !isCheckedIn;
         const isCompleted = isCheckedOut || (curMins >= sEnd && isCheckedIn);
+        const isPassed = curMins >= sEnd && !isCheckedIn;
+        const isAbsent = Boolean(rec?.status === 'Absent' || isReassignedDueToAbsence || (isPassed && !isCheckedIn));
+        const isLeave = rec?.status === 'Leave';
 
         return {
           schedule: sub,
@@ -302,7 +319,13 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
           isInSession,
           isUpcoming,
           isCompleted,
+          isPassed,
+          isAbsent,
+          isLeave,
           isSubstitute: false,
+          isReassignedDueToAbsence,
+          substituteNames,
+          absentNote: rec?.correctionNote || (isReassignedDueToAbsence ? `Absent - Reassigned to: ${substituteNames}` : isPassed ? 'Missed class without clock-in' : undefined),
           originalTeacherName: undefined as string | undefined,
           originalTeacherKhmer: undefined as string | undefined,
           allocatedHours: undefined as number | undefined,
@@ -552,8 +575,11 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
         {/* ======================================================== */}
         {/* RECENT ACTIVITY & TIMELINE ("Today's Schedule")          */}
         {/* ======================================================== */}
+        {/* ======================================================== */}
+        {/* RECENT ACTIVITY & TIMELINE ("Today's Schedule")          */}
+        {/* ======================================================== */}
         <div className="px-6 pt-5 pb-8 flex-1">
-          <div className="flex items-center justify-between mb-3.5">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-black text-slate-900 tracking-tight">
               {isKhmer ? 'កាលវិភាគ & វត្តមានថ្ងៃនេះ' : "Today's Schedule"}
             </h2>
@@ -566,6 +592,103 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
             </button>
           </div>
 
+          {/* Teacher: Filter Pills (All / Active / Absent) */}
+          {isTeacher && todayClasses.length > 0 && (() => {
+            const absentList = todayClasses.filter(c => c.isAbsent);
+            const absentCount = absentList.length;
+            const activeCount = todayClasses.length - absentCount;
+
+            return (
+              <div className="space-y-3 mb-3.5">
+                {/* 🚨 AUTO DISPLAY ABSENT ASSIGNED SCHEDULE ALERT BANNER */}
+                {absentCount > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-rose-50 via-rose-100/60 to-rose-50 border-2 border-rose-300 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs shadow-rose-600/30 mt-0.5 sm:mt-0">
+                        <AlertTriangle className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-black text-xs sm:text-sm text-rose-950">
+                            {isKhmer ? 'កាលវិភាគអវត្តមាន (Absent Assigned Schedule)' : 'Absent Assigned Schedule Alert'}
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-600 text-white shadow-2xs">
+                            {absentCount} {isKhmer ? 'ម៉ោងអវត្តមាន' : 'Class(es) Absent'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-rose-800/90 mt-0.5 leading-snug">
+                          {isKhmer
+                            ? 'កាលវិភាគបង្រៀនរបស់អ្នកត្រូវបានសម្គាល់ជា "អវត្តមាន" ឬបានចាត់តាំងគ្រូជំនួស។ សូមពិនិត្យវត្តមាន ឬប្តឹងតវ៉ា។'
+                            : 'Your assigned class has been marked Absent or reassigned to a substitute. Please verify records.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setScheduleTabFilter(f => f === 'absent' ? 'all' : 'absent')}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                          scheduleTabFilter === 'absent'
+                            ? 'bg-rose-700 text-white shadow-xs'
+                            : 'bg-white border border-rose-300 text-rose-700 hover:bg-rose-100'
+                        }`}
+                      >
+                        {scheduleTabFilter === 'absent' ? (isKhmer ? 'បង្ហាញទាំងអស់' : 'Show All') : (isKhmer ? 'មើលអវត្តមាន' : 'View Absent')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('schedules')}
+                        className="px-2.5 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition-colors cursor-pointer"
+                      >
+                        {isKhmer ? 'កាលវិភាគពេញ' : 'Schedules'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setScheduleTabFilter('all')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                      scheduleTabFilter === 'all'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {isKhmer ? `ទាំងអស់ (${todayClasses.length})` : `All (${todayClasses.length})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScheduleTabFilter('active')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                      scheduleTabFilter === 'active'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {isKhmer ? `សកម្ម (${activeCount})` : `Active (${activeCount})`}
+                  </button>
+                  {absentCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setScheduleTabFilter('absent')}
+                      className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
+                        scheduleTabFilter === 'absent'
+                          ? 'bg-rose-600 text-white shadow-xs shadow-rose-600/30 ring-2 ring-rose-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 animate-pulse'
+                      }`}
+                    >
+                      <AlertTriangle className="w-3 h-3 text-rose-600" />
+                      <span>{isKhmer ? `🚨 អវត្តមាន (${absentCount})` : `🚨 Absent (${absentCount})`}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* List of today's periods / shifts */}
           <div className="space-y-2.5">
             {isTeacher && todayClasses.length === 0 ? (
@@ -573,66 +696,115 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
                 {isKhmer ? 'គ្មានកាលវិភាគបង្រៀនសម្រាប់ថ្ងៃនេះទេ' : 'No classes scheduled for today.'}
               </div>
             ) : isTeacher ? (
-              todayClasses.map((item, idx) => {
-                const sub = item.schedule;
-                const rec = item.record;
-                return (
-                  <div
-                    key={sub.id || idx}
-                    className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-blue-300 flex items-center justify-between gap-3 transition-colors shadow-2xs"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
-                        {sub.periodName.slice(0, 2)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                            {sub.subject}
-                          </h4>
-                          {item.isSubstitute && (
-                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                              <span>🔄</span>
-                              <span>{isKhmer ? `បង្រៀនជំនួស (${item.originalTeacherKhmer || item.originalTeacherName || 'គ្រូ'})` : `Sub for ${item.originalTeacherName}`}</span>
-                            </span>
+              (() => {
+                const classesToShow =
+                  scheduleTabFilter === 'absent'
+                    ? todayClasses.filter(c => c.isAbsent)
+                    : scheduleTabFilter === 'active'
+                    ? todayClasses.filter(c => !c.isAbsent)
+                    : todayClasses;
+
+                if (classesToShow.length === 0) {
+                  return (
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center text-xs text-slate-500">
+                      {scheduleTabFilter === 'absent'
+                        ? (isKhmer ? 'គ្មានកាលវិភាគអវត្តមានសម្រាប់ថ្ងៃនេះទេ' : 'No absent classes today.')
+                        : (isKhmer ? 'គ្មានកាលវិភាគក្នុងតម្រងនេះទេ' : 'No classes match this filter.')}
+                    </div>
+                  );
+                }
+
+                return classesToShow.map((item, idx) => {
+                  const sub = item.schedule;
+                  const rec = item.record;
+                  return (
+                    <div
+                      key={sub.id || idx}
+                      className={`p-3.5 rounded-2xl border transition-all shadow-2xs ${
+                        item.isAbsent
+                          ? 'bg-rose-50/50 border-rose-300 hover:border-rose-400 ring-1 ring-rose-200/60'
+                          : 'bg-slate-50 border-slate-200/80 hover:border-blue-300'
+                      } flex items-center justify-between gap-3`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                          item.isAbsent
+                            ? 'bg-rose-600 text-white shadow-xs shadow-rose-600/30'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {sub.periodName.slice(0, 2)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className={`text-xs sm:text-sm font-black truncate ${
+                              item.isAbsent ? 'text-rose-950' : 'text-slate-900'
+                            }`}>
+                              {sub.subject}
+                            </h4>
+                            {item.isSubstitute && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                <span>🔄</span>
+                                <span>{isKhmer ? `បង្រៀនជំនួស (${item.originalTeacherKhmer || item.originalTeacherName || 'គ្រូ'})` : `Sub for ${item.originalTeacherName}`}</span>
+                              </span>
+                            )}
+                            {item.isReassignedDueToAbsence && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-purple-100 text-purple-900 border border-purple-200 flex items-center gap-1">
+                                <span>🔄</span>
+                                <span>{isKhmer ? `ជំនួសដោយ៖ ${item.substituteNames}` : `Sub: ${item.substituteNames}`}</span>
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="font-mono">{sub.startTime} - {sub.endTime}</span>
+                            <span>•</span>
+                            <span>{sub.room}</span>
+                            {item.allocatedHours && (
+                              <>
+                                <span>•</span>
+                                <span className="text-amber-700 font-semibold">{item.allocatedHours}h</span>
+                              </>
+                            )}
+                          </p>
+                          {item.isAbsent && item.absentNote && (
+                            <p className="text-[10px] text-rose-700 font-medium mt-1 bg-rose-100/70 border border-rose-200/80 px-2 py-0.5 rounded-md inline-block">
+                              ⚠️ {item.absentNote}
+                            </p>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="font-mono">{sub.startTime} - {sub.endTime}</span>
-                          <span>•</span>
-                          <span>{sub.room}</span>
-                          {item.allocatedHours && (
-                            <>
-                              <span>•</span>
-                              <span className="text-amber-700 font-semibold">{item.allocatedHours}h</span>
-                            </>
-                          )}
-                        </p>
+                      </div>
+
+                      <div>
+                        {item.isCheckedOut ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                            {isKhmer ? 'បានចេញ' : 'Done'}
+                          </span>
+                        ) : item.isCheckedIn ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 animate-pulse">
+                            {isKhmer ? 'ក្នុងថ្នាក់' : 'In Class'}
+                          </span>
+                        ) : item.isLeave ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">
+                            {isKhmer ? '📋 សុំច្បាប់' : 'Leave'}
+                          </span>
+                        ) : item.isAbsent ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white border border-rose-700 flex items-center gap-1 shadow-xs shadow-rose-600/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            <span>{isKhmer ? 'អវត្តមាន' : 'Absent'}</span>
+                          </span>
+                        ) : item.isInSession ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                            {isKhmer ? 'ដល់ម៉ោង' : 'Active'}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-slate-200 text-slate-600">
+                            {isKhmer ? 'ត្រៀម' : 'Upcoming'}
+                          </span>
+                        )}
                       </div>
                     </div>
-
-                    <div>
-                      {item.isCheckedOut ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
-                          {isKhmer ? 'បានចេញ' : 'Done'}
-                        </span>
-                      ) : item.isCheckedIn ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 animate-pulse">
-                          {isKhmer ? 'ក្នុងថ្នាក់' : 'In Class'}
-                        </span>
-                      ) : item.isInSession ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                          {isKhmer ? 'ដល់ម៉ោង' : 'Active'}
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-slate-200 text-slate-600">
-                          {isKhmer ? 'ត្រៀម' : 'Upcoming'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
             ) : (
               /* Employee Shift */
               <div className="space-y-3">
