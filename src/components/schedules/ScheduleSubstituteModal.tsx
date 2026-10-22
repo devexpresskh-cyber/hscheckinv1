@@ -68,7 +68,7 @@ export const ScheduleSubstituteModal: React.FC<ScheduleSubstituteModalProps> = (
   const { showToast } = useNotification();
 
   const [assignees, setAssignees] = useState<AssigneeDraft[]>([]);
-  const [markCheckedIn, setMarkCheckedIn] = useState<boolean>(true);
+  const [markCheckedIn, setMarkCheckedIn] = useState<boolean>(false);
   const [note, setNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -150,7 +150,7 @@ export const ScheduleSubstituteModal: React.FC<ScheduleSubstituteModalProps> = (
           endTime: schedEnd
         };
         setAssignees([initialDraft]);
-        setMarkCheckedIn(true);
+        setMarkCheckedIn(false);
         setNote(
           isKhmer
             ? 'គ្រូដើមអវត្តមាន - ចាត់តាំងគ្រូ/បុគ្គលិកបង្រៀនជំនួស'
@@ -791,13 +791,13 @@ export const ScheduleSubstituteModal: React.FC<ScheduleSubstituteModalProps> = (
                 className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
               />
               <span className="text-xs font-bold text-slate-800">
-                {isKhmer ? 'ស្កេនវត្តមានចូលភ្លាមៗ (Mark Present for assigned substitutes)' : 'Record attendance as Present immediately for substitutes'}
+                {isKhmer ? 'កត់ត្រាវត្តមានចូលភ្លាមៗ (Mark Present immediately without Kiosk check-in)' : 'Mark Present immediately (skip Kiosk/Mobile check-in)'}
               </span>
             </label>
             <p className="text-[11px] text-slate-500 pl-6">
               {isKhmer
-                ? 'កំណត់ត្រាវត្តមាននឹងត្រូវបានបង្កើតដោយស្វ័យប្រវត្តិតាមចំណែកម៉ោងរបស់គ្រូ/បុគ្គលិកនីមួយៗ'
-                : 'Attendance records will be created automatically for each substitute covering their allocated time slot.'}
+                ? 'ទុកមិនធីក (លំនាំដើម)៖ កាលវិភាគនឹងរង់ចាំគ្រូ/បុគ្គលិកជំនួសធ្វើការស្កេនចូលដោយផ្ទាល់នៅស្ថានីយ Check-in Kiosk ឬលើទូរស័ព្ទ។'
+                : 'Leave unchecked (default): The reassigned class will await live check-in by the substitute teacher or staff at the Kiosk / Mobile app.'}
             </p>
           </div>
 

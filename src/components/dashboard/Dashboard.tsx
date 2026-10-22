@@ -1225,7 +1225,7 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
                 </tr>
               ) : (
                 filteredAttendance.map(record => {
-                  const statusColors = {
+                  const statusColors: Record<string, string> = {
                     Present: 'bg-emerald-100 text-emerald-800 border-emerald-200',
                     Late: 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
                     Absent: 'bg-rose-100 text-rose-800 border-rose-200 font-bold',
@@ -1233,8 +1233,9 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
                     Leave: 'bg-purple-100 text-purple-800 border-purple-200',
                     Holiday: 'bg-blue-100 text-blue-800 border-blue-200',
                     'Missing Check-out': 'bg-rose-50 text-rose-700 border-rose-200',
-                    'Off Day': 'bg-slate-100 text-slate-600 border-slate-200'
-                  }[record.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+                    'Off Day': 'bg-slate-100 text-slate-600 border-slate-200',
+                    Scheduled: 'bg-amber-50 text-amber-800 border-amber-300 font-bold'
+                  };
 
                   const getStatusLabel = (status: string) => {
                     if (!isKhmer) return status;
@@ -1247,6 +1248,7 @@ export const Dashboard: React.FC<{ onNavigate: (tab: any) => void; onOpenCheckIn
                       case 'Holiday': return 'ថ្ងៃឈប់សម្រាក';
                       case 'Missing Check-out': return 'ខកខានស្កេនចេញ';
                       case 'Off Day': return 'ថ្ងៃសម្រាក';
+                      case 'Scheduled': return 'បានកំណត់កាលវិភាគ';
                       default: return status;
                     }
                   };

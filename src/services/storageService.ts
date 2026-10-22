@@ -1504,8 +1504,8 @@ export const StorageService = {
           : 0,
         hourlyRate: a.hourlyRate,
         calculatedWage: a.calculatedWage,
-        checkInTime: a.checkInTime || (params.markCheckedIn !== false ? (a.startTime || schedule.startTime) : undefined),
-        checkOutTime: a.checkOutTime || (params.markCheckedIn !== false ? (a.endTime || schedule.endTime) : undefined)
+        checkInTime: a.checkInTime || (params.markCheckedIn === true ? (a.startTime || schedule.startTime) : undefined),
+        checkOutTime: a.checkOutTime || (params.markCheckedIn === true ? (a.endTime || schedule.endTime) : undefined)
       }));
     } else if (params.substituteId && params.substituteName) {
       const subType = params.substituteType || 'teacher';
@@ -1524,8 +1524,8 @@ export const StorageService = {
           endTime: params.checkOutTime || schedule.endTime,
           allocatedHours: schedDurationHours,
           manualGrossWage: staffWage,
-          checkInTime: params.markCheckedIn !== false ? (params.checkInTime || schedule.startTime) : undefined,
-          checkOutTime: params.markCheckedIn !== false ? (params.checkOutTime || schedule.endTime) : undefined
+          checkInTime: params.markCheckedIn === true ? (params.checkInTime || schedule.startTime) : undefined,
+          checkOutTime: params.markCheckedIn === true ? (params.checkOutTime || schedule.endTime) : undefined
         }
       ];
     } else {
@@ -1617,9 +1617,9 @@ export const StorageService = {
         session: parseInt((assignee.startTime || schedule.startTime).split(':')[0], 10) < 12 ? 'morning' : 'afternoon',
         scheduledStart: assignee.startTime || schedule.startTime,
         scheduledEnd: assignee.endTime || schedule.endTime,
-        checkInTime: assignee.checkInTime || (params.markCheckedIn !== false ? (assignee.startTime || schedule.startTime) : undefined),
-        checkOutTime: assignee.checkOutTime || (params.markCheckedIn !== false ? (assignee.endTime || schedule.endTime) : undefined),
-        status: 'Present',
+        checkInTime: assignee.checkInTime || (params.markCheckedIn === true ? (assignee.startTime || schedule.startTime) : undefined),
+        checkOutTime: assignee.checkOutTime || (params.markCheckedIn === true ? (assignee.endTime || schedule.endTime) : undefined),
+        status: (params.markCheckedIn === true || assignee.checkInTime) ? 'Present' : 'Scheduled',
         lateMinutes: 0,
         earlyLeaveMinutes: 0,
         overtimeMinutes: 0,

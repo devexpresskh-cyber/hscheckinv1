@@ -360,9 +360,15 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       startTime: item.assignee?.startTime || item.schedule.startTime,
       endTime: item.assignee?.endTime || item.schedule.endTime,
       isSubstitute: true,
-      originalTeacherName: item.substitution.originalTeacherName
+      originalTeacherId: item.substitution.originalTeacherId,
+      originalTeacherName: item.substitution.originalTeacherName,
+      originalTeacherKhmer: item.substitution.originalTeacherKhmer,
+      allocatedHours: item.assignee?.allocatedHours,
+      manualGrossWage: item.assignee?.manualGrossWage
     }));
   }, [activeStaff, todayStr]);
+
+  const hasTeachingClasses = isTeacher || assignedSubstituteClassesToday.length > 0;
 
   const rawTeacherSubjectSchedules = useMemo(() => {
     let regularList: any[] = [];
@@ -456,7 +462,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   // 2. Class active right now at present time
   // 3. Class starting next within early check-in window (up to 30 mins)
   const currentActiveSchedule = useMemo<TeacherSubjectSchedule | null>(() => {
-    if (!isTeacher || !teacherSubjectSchedules || teacherSubjectSchedules.length === 0) return null;
+    if (!hasTeachingClasses || !teacherSubjectSchedules || teacherSubjectSchedules.length === 0) return null;
 
     // 1. In-progress class (checked in, not checked out)
     const inProgress = teacherSubjectSchedules.find((sub: TeacherSubjectSchedule) => {
@@ -482,11 +488,11 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
     if (upcomingSoon) return upcomingSoon;
 
     return null;
-  }, [isTeacher, teacherSubjectSchedules, attendanceList, activeStaff?.id, todayStr, effectiveTime]);
+  }, [hasTeachingClasses, teacherSubjectSchedules, attendanceList, activeStaff?.id, todayStr, effectiveTime]);
 
   // Next upcoming class today (if no active class right now)
   const nextUpcomingSchedule = useMemo<TeacherSubjectSchedule | null>(() => {
-    if (!isTeacher || !teacherSubjectSchedules || teacherSubjectSchedules.length === 0) return null;
+    if (!hasTeachingClasses || !teacherSubjectSchedules || teacherSubjectSchedules.length === 0) return null;
     const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
     const futureClasses = teacherSubjectSchedules
       .filter(s => {
@@ -495,59 +501,59 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       })
       .sort((a, b) => AttendanceEngine.timeToMinutes(a.startTime) - AttendanceEngine.timeToMinutes(b.startTime));
     return futureClasses[0] || null;
-  }, [isTeacher, teacherSubjectSchedules, effectiveTime]);
+  }, [hasTeachingClasses, teacherSubjectSchedules, effectiveTime]);
 
-  // Auto-select active present-time subject period for teacher
+  // Auto-select active present-time subject period
   useEffect(() => {
-    if (isTeacher) {
+    if (hasTeachingClasses) {
       if (currentActiveSchedule) {
         setSelectedSubjectId(currentActiveSchedule.id);
       } else {
         setSelectedSubjectId('');
       }
     }
-  }, [activeStaff?.id, isTeacher, currentActiveSchedule?.id]);
+  }, [activeStaff?.id, hasTeachingClasses, currentActiveSchedule?.id]);
 
-  const activeSubject = isTeacher
+  const activeSubject = hasTeachingClasses
     ? (currentActiveSchedule || null)
     : undefined;
 
-  const activeSubjectTimeCheck = isTeacher && activeSubject
+  const activeSubjectTimeCheck = hasTeachingClasses && activeSubject
     ? AttendanceEngine.isSubjectScheduleAtPresentTime(activeSubject, effectiveTime, todayStr)
     : null;
   const isCurrentSubjectPresentTime = activeSubjectTimeCheck ? activeSubjectTimeCheck.isValid : true;
 
-  const currentScheduledStartTime = isTeacher && activeSubject ? activeSubject.startTime : activeSchedule.startTime;
-  const currentScheduledEndTime = isTeacher && activeSubject ? activeSubject.endTime : activeSchedule.endTime;
+  const currentScheduledStartTime = hasTeachingClasses && activeSubject ? activeSubject.startTime : activeSchedule.startTime;
+  const currentScheduledEndTime = hasTeachingClasses && activeSubject ? activeSubject.endTime : activeSchedule.endTime;
 
   const startMins = AttendanceEngine.timeToMinutes(currentScheduledStartTime);
   const endMins = AttendanceEngine.timeToMinutes(currentScheduledEndTime);
   const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
   const earlyBufferMinutes = 30; // 30 minutes early window
 
-  const isBeforeStartTime = isTeacher && activeSubject
+  const isBeforeStartTime = hasTeachingClasses && activeSubject
     ? curMins < Math.max(0, startMins - earlyBufferMinutes)
     : false;
 
-  const isEarlyArrival = isTeacher && activeSubject
+  const isEarlyArrival = hasTeachingClasses && activeSubject
     ? curMins < startMins && curMins >= Math.max(0, startMins - earlyBufferMinutes)
     : false;
 
-  // Over end time is strictly a teacher restriction (employees can check in/out before and after shifttime)
-  const isOverEndTime = isTeacher && curMins >= endMins;
+  // Over end time restriction
+  const isOverEndTime = hasTeachingClasses && curMins >= endMins;
 
-  const isBeforeEndTime = isTeacher && activeSubject
+  const isBeforeEndTime = hasTeachingClasses && activeSubject
     ? curMins < endMins
     : false;
 
-  const isMissingCheckOut = isTeacher && activeSubject
+  const isMissingCheckOut = hasTeachingClasses && activeSubject
     ? curMins >= endMins
     : false;
 
-  // Selected subject attendance record for today (if teacher)
-  const activeSubjectRecord = isTeacher && activeSubject
+  // Selected subject attendance record for today (if has teaching classes)
+  const activeSubjectRecord = hasTeachingClasses && activeSubject
     ? attendanceList.find(
-        a => a.personId === activeStaff?.id && a.date === todayStr && a.subjectScheduleId === activeSubject.id
+        a => a.personId === activeStaff?.id && a.date === todayStr && (a.subjectScheduleId === activeSubject.id || a.scheduleId === activeSubject.id)
       )
     : undefined;
 
@@ -604,14 +610,14 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
       return;
     }
 
-    const targetSubject = isTeacher
+    const targetSubject = hasTeachingClasses
       ? (teacherSubjectSchedules.find((s: TeacherSubjectSchedule) => s.id === (specificSubjectId || selectedSubjectId)) || activeSubject)
       : undefined;
 
     const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
 
-    // Strict validation for teachers: Do not allow check-in before schedule early buffer window or overtime
-    if (isTeacher && targetSubject) {
+    // Strict validation for teaching schedules: Do not allow check-in before schedule early buffer window or overtime
+    if (hasTeachingClasses && targetSubject) {
       const startMins = AttendanceEngine.timeToMinutes(targetSubject.startTime);
       const endMins = AttendanceEngine.timeToMinutes(targetSubject.endTime);
       const earlyBufferMins = 30;
@@ -695,10 +701,14 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         khmerName: activeStaff.khmerName,
         personType: activeStaff.type,
         department: activeStaff.dept,
-        scheduleId: activeStaff.scheduleId,
+        scheduleId: targetSubject ? targetSubject.id : activeStaff.scheduleId,
         subjectScheduleId: targetSubject?.id,
-        shiftType: !isTeacher ? effectiveShift : undefined,
-        session: !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
+        isSubstitute: Boolean(targetSubject?.isSubstitute),
+        originalTeacherId: targetSubject?.originalTeacherId,
+        originalTeacherName: targetSubject?.originalTeacherName,
+        manualGrossWage: targetSubject?.manualGrossWage,
+        shiftType: !targetSubject && !isTeacher ? effectiveShift : undefined,
+        session: !targetSubject && !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
         customTime: effectiveTime,
         latitude: lat,
         longitude: lng,
@@ -715,7 +725,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         });
         showToast(
           isKhmer
-            ? `ស្កេនចូលជោគជ័យ៖ ${activeStaff.khmerName || activeStaff.name} ${targetSubject ? `[${targetSubject.khmerSubject || targetSubject.subject}]` : ''} (${result.record?.status === 'Late' ? 'មកយឺត' : 'ទាន់ម៉ោង'})`
+            ? `ស្កេនចូលជោគជ័យ៖ ${activeStaff.khmerName || activeStaff.name} ${targetSubject ? `[${targetSubject.khmerSubject || targetSubject.subject}${targetSubject.isSubstitute ? ' • បង្រៀនជំនួស' : ''}]` : ''} (${result.record?.status === 'Late' ? 'មកយឺត' : 'ទាន់ម៉ោង'})`
             : result.message,
           result.record?.status === 'Late' ? 'warning' : 'success'
         );
@@ -729,27 +739,27 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const executeCheckOut = (specificSubjectId?: string, autoSetToEndOfSchedule?: boolean, shiftType?: 'morning' | 'evening') => {
     if (!activeStaff) return;
 
-    const targetSubjectId = isTeacher
+    const targetSubjectId = hasTeachingClasses
       ? (specificSubjectId || selectedSubjectId || activeSubject?.id)
       : undefined;
 
-    const targetSubject = isTeacher
+    const targetSubject = hasTeachingClasses
       ? (teacherSubjectSchedules.find((s: TeacherSubjectSchedule) => s.id === targetSubjectId) || activeSubject)
       : undefined;
 
     const curMins = AttendanceEngine.timeToMinutes(effectiveTime);
 
-    // Validation for teachers
+    // Validation for teaching schedules
     let shouldAutoSetToEnd = Boolean(autoSetToEndOfSchedule);
-    if (isTeacher && targetSubject) {
+    if (hasTeachingClasses && targetSubject) {
       const endMins = AttendanceEngine.timeToMinutes(targetSubject.endTime);
 
       if (curMins < endMins) {
         const earlyMins = endMins - curMins;
         showToast(
           isKhmer
-            ? `មិនអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងទេ៖ ម៉ោងបង្រៀន "${targetSubject.khmerSubject || targetSubject.subject}" បញ្ចប់នៅម៉ោង ${targetSubject.endTime} (នៅសល់ ${earlyMins} នាទីទៀត)។ គ្រូបង្រៀនមិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងកាលវិភាគឡើយ។`
-            : `Cannot check out before schedule: "${targetSubject.subject}" ends at ${targetSubject.endTime} (${earlyMins}m remaining). Teachers are not allowed to check out before schedule.`,
+            ? `មិនអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងទេ៖ ម៉ោងបង្រៀន "${targetSubject.khmerSubject || targetSubject.subject}" បញ្ចប់នៅម៉ោង ${targetSubject.endTime} (នៅសល់ ${earlyMins} នាទីទៀត)។ មិនត្រូវបានអនុញ្ញាតឱ្យស្កេនចេញមុនម៉ោងកាលវិភាគឡើយ។`
+            : `Cannot check out before schedule: "${targetSubject.subject}" ends at ${targetSubject.endTime} (${earlyMins}m remaining). Early checkout is strictly prohibited.`,
           'error'
         );
         return;
@@ -805,8 +815,8 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
         personId: activeStaff.id,
         personName: activeStaff.name,
         subjectScheduleId: targetSubjectId,
-        shiftType: !isTeacher ? effectiveShift : undefined,
-        session: !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
+        shiftType: !targetSubject && !isTeacher ? effectiveShift : undefined,
+        session: !targetSubject && !isTeacher ? (effectiveShift === 'evening' ? 'afternoon' : 'morning') : undefined,
         customTime: shouldAutoSetToEnd && targetSubject ? targetSubject.endTime : effectiveTime,
         autoSetToEndOfSchedule: shouldAutoSetToEnd,
         latitude: lat,
@@ -1194,39 +1204,6 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                   )}
                 </button>
               </form>
-
-              {/* One-click Faculty Test Sign-in */}
-              <div className="pt-4 border-t border-slate-200 max-w-md mx-auto">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2 text-center">
-                  {isKhmer ? 'ចូលគណនីគ្រូផ្ទាល់ខ្លួន (One-Click Testing)' : 'One-Click Faculty Authentication:'}
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTeacherAuth('TCH-2026-001')}
-                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-left"
-                  >
-                    <div className="font-bold text-slate-800 text-xs truncate">Sok Chenda</div>
-                    <div className="font-mono text-[10px] text-slate-400">TCH-2026-001</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTeacherAuth('TCH-2026-002')}
-                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
-                  >
-                    <div className="font-bold text-slate-800 text-xs truncate">Chann Borey</div>
-                    <div className="font-mono text-[10px] text-slate-400">TCH-2026-002</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickTeacherAuth('TCH-2026-003')}
-                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-sky-400 hover:bg-sky-50/50 transition-all text-left"
-                  >
-                    <div className="font-bold text-slate-800 text-xs truncate">Keo Piseth</div>
-                    <div className="font-mono text-[10px] text-slate-400">TCH-2026-003</div>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
@@ -1269,12 +1246,12 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
               {/* Today's Schedule Details */}
               <div className="border-t md:border-t-0 md:border-l border-indigo-200/60 pt-3 md:pt-0 md:pl-6 space-y-1 shrink-0">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-700">
-                  {isTeacher 
+                  {hasTeachingClasses 
                     ? (isKhmer ? 'កាលវិភាគបង្រៀនបច្ចុប្បន្ន' : "Current Teaching Schedule")
                     : (isKhmer ? 'កាលវិភាគថ្ងៃនេះ' : "Today's Assigned Shift")}
                 </span>
                 <p className="text-xs sm:text-sm font-bold text-slate-900">
-                  {isTeacher
+                  {hasTeachingClasses
                     ? (currentActiveSchedule
                         ? `${currentActiveSchedule.subject} (${currentActiveSchedule.periodName})`
                         : nextUpcomingSchedule
@@ -1285,7 +1262,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                 <div className="flex items-center gap-2 font-mono text-xs font-semibold text-slate-700">
                   <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                   <span>
-                    {isTeacher && (currentActiveSchedule || nextUpcomingSchedule)
+                    {hasTeachingClasses && (currentActiveSchedule || nextUpcomingSchedule)
                       ? `${(currentActiveSchedule || nextUpcomingSchedule)!.startTime} — ${(currentActiveSchedule || nextUpcomingSchedule)!.endTime}`
                       : `${activeSchedule.startTime} — ${activeSchedule.endTime}`}
                   </span>
@@ -1293,7 +1270,7 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
                   <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span className="truncate">
-                    {isTeacher && (currentActiveSchedule || nextUpcomingSchedule)
+                    {hasTeachingClasses && (currentActiveSchedule || nextUpcomingSchedule)
                       ? `${(currentActiveSchedule || nextUpcomingSchedule)!.room} • ${(currentActiveSchedule || nextUpcomingSchedule)!.gradeClass}`
                       : (activeStaff.location || activeSchedule.location)}
                   </span>
@@ -1303,9 +1280,34 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
             </div>
           )}
 
-          {/* TEACHER ONLY: Current Schedule Display on Terminal */}
-          {isTeacher && (
+          {/* Current Teaching Schedule Display on Terminal (Teachers & Substitute Staff) */}
+          {hasTeachingClasses && (
             <div className="space-y-3">
+              {assignedSubstituteClassesToday.length > 0 && (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-400/80 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-200 text-amber-800 flex items-center justify-center font-black text-base shrink-0 shadow-xs">
+                      🔄
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-200 text-amber-900 border border-amber-300">
+                          {isKhmer ? 'ចាត់តាំងបង្រៀនជំនួស' : 'Assigned Substitute Class'}
+                        </span>
+                        <span className="text-xs font-bold text-amber-900">
+                          {isKhmer ? `ជំនួសគ្រូអវត្តមាន៖ ${assignedSubstituteClassesToday[0]?.originalTeacherKhmer || assignedSubstituteClassesToday[0]?.originalTeacherName}` : `Covering for absent teacher: ${assignedSubstituteClassesToday[0]?.originalTeacherName}`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        {isKhmer
+                          ? 'លោកអ្នកត្រូវបានចាត់តាំងឱ្យបង្រៀនជំនួសម៉ោងនេះ។ សូមស្កេនចូល និងស្កេនចេញតាមកាលវិភាគខាងក្រោម។'
+                          : 'You are assigned to cover this class session. Please scan check-in and check-out below.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
@@ -1406,10 +1408,17 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                             }`}>
                               {sub.periodName}
                             </span>
-                            <span className="px-2 py-0.5 rounded text-[9px] font-black bg-gradient-to-r from-emerald-600 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-2xs">
-                              <Sparkles className="w-2.5 h-2.5 text-amber-200" />
-                              {isKhmer ? 'កាលវិភាគបច្ចុប្បន្ន' : 'Current Schedule'}
-                            </span>
+                            {sub.isSubstitute ? (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+                                <span>🔄</span>
+                                <span>{isKhmer ? `បង្រៀនជំនួស (${sub.originalTeacherKhmer || sub.originalTeacherName || 'គ្រូ'})` : `Substitute for ${sub.originalTeacherName || 'Absent Teacher'}`}</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-gradient-to-r from-emerald-600 to-indigo-600 text-white uppercase tracking-wider animate-pulse flex items-center gap-1 shadow-2xs">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-200" />
+                                {isKhmer ? 'កាលវិភាគបច្ចុប្បន្ន' : 'Current Schedule'}
+                              </span>
+                            )}
                           </div>
                           <span className="font-mono text-xs font-bold text-slate-700 flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md">
                             <Clock className={`w-3.5 h-3.5 ${isPresentTime ? 'text-emerald-600' : 'text-slate-500'}`} />
@@ -1436,6 +1445,20 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                               {sub.room}
                             </span>
                           </div>
+
+                          {sub.isSubstitute && (
+                            <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold">🔄 {isKhmer ? 'ជំនួសគ្រូអវត្តមាន៖' : 'Substitute for:'}</span>
+                                <span className="font-extrabold">{sub.originalTeacherKhmer || sub.originalTeacherName}</span>
+                              </div>
+                              {sub.manualGrossWage !== undefined && Number(sub.manualGrossWage) > 0 && (
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold self-start sm:self-auto">
+                                  Gross Wage: ${Number(sub.manualGrossWage).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Status Indicator & Quick Action */}
@@ -1610,18 +1633,31 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
           {/* Current Session Attendance Status Banner & Action Buttons */}
           {activeStaff && (
             <>
-              {isTeacher ? (
-                /* ================= TEACHER CLASS STATUS & BUTTONS ================= */
+              {hasTeachingClasses && activeSubject && (
+                /* ================= TEACHER / SUBSTITUTE CLASS STATUS & BUTTONS ================= */
                 <>
-                  <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className={`p-4 rounded-2xl border ${activeSubject?.isSubstitute ? 'border-amber-300 bg-amber-50/80 shadow-xs' : 'border-slate-200 bg-slate-50'} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-xs shrink-0">
-                        <GraduationCap className="w-5 h-5 text-indigo-600" />
+                      <div className={`w-10 h-10 rounded-xl bg-white border ${activeSubject?.isSubstitute ? 'border-amber-300' : 'border-slate-200'} flex items-center justify-center text-slate-700 shadow-xs shrink-0`}>
+                        {activeSubject?.isSubstitute ? (
+                          <UserCheck className="w-5 h-5 text-amber-600" />
+                        ) : (
+                          <GraduationCap className="w-5 h-5 text-indigo-600" />
+                        )}
                       </div>
                       <div>
-                        <span className="text-[11px] font-semibold text-slate-500 uppercase block">
-                          {isKhmer ? `ស្ថានភាពម៉ោងបង្រៀន៖ ${activeSubject?.subject || 'មុខវិជ្ជា'}` : `Selected Class Status: ${activeSubject?.subject || 'Subject'}`}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-semibold text-slate-500 uppercase block">
+                            {activeSubject?.isSubstitute
+                              ? (isKhmer ? `ស្ថានភាពម៉ោងបង្រៀនជំនួស៖ ${activeSubject?.khmerSubject || activeSubject?.subject || 'មុខវិជ្ជា'}` : `Assigned Substitute Class: ${activeSubject?.subject || 'Subject'}`)
+                              : (isKhmer ? `ស្ថានភាពម៉ោងបង្រៀន៖ ${activeSubject?.khmerSubject || activeSubject?.subject || 'មុខវិជ្ជា'}` : `Selected Class Status: ${activeSubject?.subject || 'Subject'}`)}
+                          </span>
+                          {activeSubject?.isSubstitute && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
+                              {isKhmer ? `ជំនួសគ្រូ ${activeSubject.originalTeacherKhmer || activeSubject.originalTeacherName}` : `Covering: ${activeSubject.originalTeacherName}`}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-sm sm:text-base font-extrabold text-slate-900">
                           {currentRecord ? (
                             isKhmer ? (
@@ -1806,7 +1842,9 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
                     </button>
                   </div>
                 </>
-              ) : (
+              )}
+
+              {!isTeacher && (
                 /* ================= EMPLOYEE TWO-SHIFT STATION ================= */
                 <div className="space-y-4 pt-1">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200">

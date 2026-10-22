@@ -152,6 +152,13 @@ export interface TeacherSubjectSchedule {
   currency?: 'USD' | 'KHR';
   color?: string;
   isActive: boolean;
+  // Dynamic substitute assignment properties
+  isSubstitute?: boolean;
+  originalTeacherId?: string;
+  originalTeacherName?: string;
+  originalTeacherKhmer?: string;
+  allocatedHours?: number;
+  manualGrossWage?: number;
 }
 
 export interface TeacherWageSummary {
@@ -244,7 +251,8 @@ export type AttendanceStatus =
   | 'Leave'
   | 'Holiday'
   | 'Missing Check-out'
-  | 'Off Day';
+  | 'Off Day'
+  | 'Scheduled';
 
 export interface AttendanceRecord {
   id: string;

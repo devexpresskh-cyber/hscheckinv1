@@ -24,7 +24,8 @@ import {
   Sun,
   Moon,
   ClockAlert,
-  Palmtree
+  Palmtree,
+  UserCheck
 } from 'lucide-react';
 
 interface PinnedCheckInWidgetProps {
@@ -204,6 +205,23 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
         (a.subjectScheduleId === activeTeacherSubject.id || a.scheduleId === activeTeacherSubject.id)
     );
   }, [selectedTeacher, activeTeacherSubject, allAttendance, todayStr]);
+
+  // Assigned substitute classes today for the selected staff member (teacher or employee)
+  const assignedSubstituteClasses = useMemo(() => {
+    if (!selectedStaffId) return [];
+    const assignedSubs = StorageService.getAssignedSubstituteSchedules(selectedStaffId, todayStr);
+    return assignedSubs.map(item => ({
+      ...item.schedule,
+      startTime: item.assignee?.startTime || item.schedule.startTime,
+      endTime: item.assignee?.endTime || item.schedule.endTime,
+      isSubstitute: true,
+      originalTeacherId: item.substitution.originalTeacherId,
+      originalTeacherName: item.substitution.originalTeacherName,
+      originalTeacherKhmer: item.substitution.originalTeacherKhmer,
+      allocatedHours: item.assignee?.allocatedHours,
+      manualGrossWage: item.assignee?.manualGrossWage
+    }));
+  }, [selectedStaffId, todayStr, tick, allAttendance]);
 
   const [deviceCoords, setDeviceCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -500,6 +518,145 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
     }, 250);
   };
 
+  // Handle Substitute Class Check-in / Check-out
+  const handleSubstituteCheckIn = async (sub: TeacherSubjectSchedule & { originalTeacherId?: string; originalTeacherName?: string; manualGrossWage?: number }) => {
+    if (!selectedStaffId || isSubmitting) return;
+
+    if (isTodayHoliday) {
+      showToast(
+        isKhmer
+          ? `មិនអនុញ្ញាតឱ្យស្កេនចូលទេ៖ ថ្ងៃនេះ (${todayStr}) ជាថ្ងៃឈប់សម្រាកបុណ្យផ្លូវការ "${todayHoliday?.khmerName || todayHoliday?.name}"។`
+          : `Check-in denied: Today (${todayStr}) is an official holiday — "${todayHoliday?.name}".`,
+        'error'
+      );
+      return;
+    }
+
+    const coords = await getGpsCoordsForCheck();
+    if (systemSettings.enforceGeofence) {
+      if (!coords) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please allow location access.',
+          'error'
+        );
+        return;
+      }
+      const check = AttendanceEngine.verifyLocation(coords.latitude, coords.longitude, systemSettings);
+      if (!check.inside) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនចូលត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${check.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Denied: You are ${check.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    const targetPerson = selectedTeacher || selectedEmployee;
+    if (!targetPerson) return;
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      const result = AttendanceEngine.processCheckIn({
+        personId: targetPerson.id,
+        personName: targetPerson.fullName,
+        khmerName: targetPerson.khmerName,
+        personType: selectedTeacher ? 'teacher' : 'employee',
+        department: targetPerson.department,
+        scheduleId: sub.id,
+        subjectScheduleId: sub.id,
+        isSubstitute: true,
+        originalTeacherId: sub.originalTeacherId,
+        originalTeacherName: sub.originalTeacherName,
+        manualGrossWage: sub.manualGrossWage,
+        customTime: currentTimeStr,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude
+      });
+
+      setIsSubmitting(false);
+
+      if (result.success) {
+        confetti({
+          particleCount: 40,
+          spread: 60,
+          origin: { y: 0.6 }
+        });
+        showToast(
+          isKhmer
+            ? `ស្កេនចូលម៉ោងបង្រៀនជំនួសជោគជ័យ៖ ${targetPerson.khmerName || targetPerson.fullName} [${sub.khmerSubject || sub.subject}]`
+            : `Substitute check-in successful: ${targetPerson.fullName} [${sub.subject}]`,
+          'success'
+        );
+      } else {
+        showToast(result.message, 'error');
+      }
+    }, 250);
+  };
+
+  const handleSubstituteCheckOut = async (sub: TeacherSubjectSchedule) => {
+    if (!selectedStaffId || isSubmitting) return;
+
+    const targetPerson = selectedTeacher || selectedEmployee;
+    if (!targetPerson) return;
+
+    const coords = await getGpsCoordsForCheck();
+    if (systemSettings.enforceGeofence) {
+      if (!coords) {
+        showToast(
+          isKhmer
+            ? 'តម្រូវឱ្យបើកទីតាំង GPS ដើម្បីស្កេនវត្តមាន។ សូមអនុញ្ញាតសិទ្ធិទីតាំងក្នុងឧបករណ៍។'
+            : 'GPS location is required to verify campus attendance. Please allow location access.',
+          'error'
+        );
+        return;
+      }
+      const check = AttendanceEngine.verifyLocation(coords.latitude, coords.longitude, systemSettings);
+      if (!check.inside) {
+        showToast(
+          isKhmer
+            ? `ការស្កេនចេញត្រូវបានបដិសេធ៖ លោកអ្នកនៅចម្ងាយ ${check.distance.toLocaleString()}ម ពីបរិវេណសាលា (កាំអនុញ្ញាត ${systemSettings.geofenceRadiusMeters}ម)។`
+            : `Denied: You are ${check.distance.toLocaleString()}m away from campus. Authorized radius is ${systemSettings.geofenceRadiusMeters}m.`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    const curM = AttendanceEngine.timeToMinutes(currentTimeStr);
+    const endM = AttendanceEngine.timeToMinutes(sub.endTime);
+    const isAutoSet = curM >= endM;
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      const result = AttendanceEngine.processCheckOut({
+        personId: targetPerson.id,
+        personName: targetPerson.fullName,
+        subjectScheduleId: sub.id,
+        customTime: isAutoSet ? sub.endTime : currentTimeStr,
+        autoSetToEndOfSchedule: isAutoSet,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude
+      });
+
+      setIsSubmitting(false);
+
+      if (result.success) {
+        showToast(
+          isKhmer
+            ? `ស្កេនចេញម៉ោងបង្រៀនជំនួសជោគជ័យ៖ ${targetPerson.khmerName || targetPerson.fullName} (${sub.khmerSubject || sub.subject})`
+            : `Substitute check-out successful: ${targetPerson.fullName} (${sub.subject})`,
+          'success'
+        );
+      } else {
+        showToast(result.message, 'error');
+      }
+    }, 250);
+  };
+
   return (
     <div className="bg-white rounded-3xl border-2 border-indigo-200/80 shadow-md p-4 sm:p-5 mb-5 relative overflow-hidden transition-all">
       {/* Decorative top accent strip */}
@@ -594,6 +751,129 @@ export const PinnedCheckInWidget: React.FC<PinnedCheckInWidgetProps> = ({ onOpen
                 ? 'សាលាត្រូវបានបិទសម្រាក។ ការស្កេនវត្តមានចូល (Check-In) ត្រូវបានបិទដំណើរការ និងមិនអនុញ្ញាតនៅថ្ងៃឈប់សម្រាកឡើយ។'
                 : 'The school is closed for the holiday. Attendance check-in is strictly closed and not permitted today.'}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Assigned Substitute Classes Station (if any assigned today) */}
+      {assignedSubstituteClasses.length > 0 && (
+        <div className="mt-3.5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-2xl bg-amber-500/10 border-2 border-amber-400/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center font-black text-sm shrink-0">
+                🔄
+              </div>
+              <div>
+                <span className="font-extrabold text-amber-950 text-xs sm:text-sm block">
+                  {isKhmer ? 'កាលវិភាគចាត់តាំងបង្រៀនជំនួស (Assigned Substitute Classes)' : 'Assigned Substitute Classes Today'}
+                </span>
+                <span className="text-[11px] text-amber-800 font-medium">
+                  {isKhmer
+                    ? 'លោកអ្នកត្រូវបានចាត់តាំងឱ្យបង្រៀនជំនួសគ្រូអវត្តមាន។ សូមស្កេនចូល/ចេញតាមកាលវិភាគខាងក្រោម។'
+                    : 'You are assigned to cover for absent faculty. Please check in/out below.'}
+                </span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-amber-200 text-amber-900 border border-amber-300 self-start sm:self-auto">
+              {assignedSubstituteClasses.length} {isKhmer ? 'ម៉ោងបង្រៀន' : 'Session(s)'}
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            {assignedSubstituteClasses.map(sub => {
+              const subRec = allAttendance.find(
+                a => a.personId === selectedStaffId &&
+                     a.date === todayStr &&
+                     (a.subjectScheduleId === sub.id || a.scheduleId === sub.id) &&
+                     a.isSubstitute
+              );
+              const isCheckedIn = Boolean(subRec?.checkInTime);
+              const isCheckedOut = Boolean(subRec?.checkOutTime);
+
+              return (
+                <div
+                  key={sub.id}
+                  className="p-3.5 sm:p-4 rounded-2xl border-2 border-amber-300/80 bg-amber-50/60 hover:bg-white transition-all shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 sm:mt-0">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-slate-900 text-sm">
+                          {sub.khmerSubject || sub.subject}
+                        </span>
+                        <span className="font-mono text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200">
+                          {sub.startTime} — {sub.endTime}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
+                          {isKhmer ? `ជំនួសគ្រូ ${sub.originalTeacherKhmer || sub.originalTeacherName}` : `Covering: ${sub.originalTeacherName}`}
+                        </span>
+                        {sub.manualGrossWage !== undefined && sub.manualGrossWage > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            +${sub.manualGrossWage.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                        <span>{sub.periodName} • {sub.gradeClass} ({sub.room})</span>
+                        {isCheckedIn && (
+                          <span className="text-emerald-700 font-bold">
+                            • {isKhmer ? 'ស្កេនចូល៖ ' : 'In: '}{subRec?.checkInTime}
+                          </span>
+                        )}
+                        {isCheckedOut && (
+                          <span className="text-sky-700 font-bold">
+                            • {isKhmer ? 'ស្កេនចេញ៖ ' : 'Out: '}{subRec?.checkOutTime}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    {!isCheckedIn ? (
+                      isTodayHoliday ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="py-2 px-3 rounded-xl bg-amber-100 text-amber-800 text-xs font-bold border border-amber-300 cursor-not-allowed"
+                        >
+                          {isKhmer ? 'ថ្ងៃឈប់សម្រាក' : 'Holiday'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSubstituteCheckIn(sub)}
+                          disabled={isSubmitting}
+                          className="py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <LogIn className="w-3.5 h-3.5" />
+                          <span>{isKhmer ? 'ស្កេនចូលជំនួស' : 'Substitute Check In'}</span>
+                        </button>
+                      )
+                    ) : !isCheckedOut ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSubstituteCheckOut(sub)}
+                        disabled={isSubmitting}
+                        className="py-2 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>{isKhmer ? 'ស្កេនចេញ' : 'Check Out'}</span>
+                      </button>
+                    ) : (
+                      <span className="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 font-bold text-xs border border-emerald-200 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{isKhmer ? 'បានបញ្ចប់' : 'Completed'}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
