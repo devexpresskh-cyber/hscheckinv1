@@ -617,10 +617,24 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
   // Scoped subject schedules: Teacher can view owned schedule AND substitute-assigned schedules
   const filteredSubjectSchedules = useMemo(() => {
-    const myPersonId = (activeTeacher?.id || currentUser.personId || currentUser.id || '').toLowerCase();
-    const myName = (currentUser.fullName || '').toLowerCase();
+    const candidateIds = [
+      activeTeacher?.id,
+      activeTeacher?.teacherId,
+      currentUser.personId,
+      currentUser.id,
+      currentUser.id?.replace(/^usr-/, ''),
+      currentUser.fullName,
+      activeTeacher?.fullName
+    ].filter(Boolean).map(x => String(x).toLowerCase());
 
-    return subjectSchedules.filter(sub => {
+    const myName = (currentUser.fullName || activeTeacher?.fullName || '').toLowerCase();
+
+    // 1. Owned schedules
+    const ownedList: TeacherSubjectSchedule[] = [];
+    // 2. Substitute schedules
+    const subList: TeacherSubjectSchedule[] = [];
+
+    subjectSchedules.forEach(sub => {
       if (isTeacher) {
         const isOwned =
           (activeTeacher && sub.teacherId === activeTeacher.id) ||
@@ -629,31 +643,69 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           (currentUser.personId && (sub.teacherId === currentUser.personId || sub.teacherId?.toLowerCase() === currentUser.personId.toLowerCase())) ||
           sub.teacherName?.toLowerCase() === myName;
 
+        if (isOwned) {
+          ownedList.push(sub);
+        }
+
         // Auto display schedules assigned to this account as substitute
-        const isAssignedSubstitute = substitutions.some(subst =>
+        const activeSubst = substitutions.find(subst =>
           subst.subjectScheduleId === sub.id &&
           subst.status !== 'cancelled' &&
           (
-            (subst.substituteId && subst.substituteId.toLowerCase() === myPersonId) ||
-            subst.assignees?.some(a => (a.substituteId || '').toLowerCase() === myPersonId) ||
-            (subst.substituteName && subst.substituteName.toLowerCase() === myName)
+            candidateIds.includes((subst.substituteId || '').toLowerCase()) ||
+            candidateIds.includes((subst.substituteName || '').toLowerCase()) ||
+            subst.assignees?.some(a =>
+              candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+              candidateIds.includes((a.substituteName || '').toLowerCase())
+            )
           )
         );
 
-        if (!isOwned && !isAssignedSubstitute) return false;
+        if (activeSubst) {
+          const matchedAssignee = activeSubst.assignees?.find(a =>
+            candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+            candidateIds.includes((a.substituteName || '').toLowerCase())
+          );
+
+          subList.push({
+            ...sub,
+            isSubstitute: true,
+            originalTeacherId: activeSubst.originalTeacherId,
+            originalTeacherName: activeSubst.originalTeacherName,
+            originalTeacherKhmer: activeSubst.originalTeacherKhmer,
+            allocatedHours: matchedAssignee?.allocatedHours || activeSubst.totalScheduleHours,
+            manualGrossWage: matchedAssignee?.manualGrossWage
+          });
+        }
       } else {
         const matchesTeacher = selectedTeacherFilter === 'All' || sub.teacherId === selectedTeacherFilter;
-        if (!matchesTeacher) return false;
+        if (matchesTeacher) {
+          ownedList.push(sub);
+        }
       }
+    });
 
-      const q = subjectSearchQuery.toLowerCase().trim();
-      const matchesQuery = !q ||
+    const combined = [...ownedList];
+    subList.forEach(item => {
+      const existingIdx = combined.findIndex(c => c.id === item.id);
+      if (existingIdx === -1) {
+        combined.push(item);
+      } else if (!combined[existingIdx].isSubstitute) {
+        combined[existingIdx] = item;
+      }
+    });
+
+    const q = subjectSearchQuery.toLowerCase().trim();
+    return combined.filter(sub => {
+      if (!q) return true;
+      return (
         sub.subject.toLowerCase().includes(q) ||
         (sub.khmerSubject && sub.khmerSubject.toLowerCase().includes(q)) ||
         sub.gradeClass.toLowerCase().includes(q) ||
         sub.room.toLowerCase().includes(q) ||
-        sub.teacherName.toLowerCase().includes(q);
-      return matchesQuery;
+        sub.teacherName.toLowerCase().includes(q) ||
+        (sub.originalTeacherName && sub.originalTeacherName.toLowerCase().includes(q))
+      );
     });
   }, [subjectSchedules, isTeacher, activeTeacher, currentUser, selectedTeacherFilter, subjectSearchQuery, substitutions]);
 
@@ -695,6 +747,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
   const dailyClasses = useMemo(() => {
     const list = filteredSubjectSchedules
       .filter(sub => {
+        if (sub.isSubstitute && selectedDay === todayDayIndex) {
+          return true;
+        }
         if (sub.daysOfWeek && Array.isArray(sub.daysOfWeek) && sub.daysOfWeek.length > 0) {
           return sub.daysOfWeek.includes(selectedDay);
         }
@@ -704,11 +759,31 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     // Also include any substitute schedules assigned to this teacher/staff today
     const isClassToday = selectedDay === todayDayIndex;
     if (isClassToday) {
-      const myPersonId = activeTeacher?.id || currentUser.personId || currentUser.id;
-      const assignedSubs = StorageService.getAssignedSubstituteSchedules(myPersonId, todayStr);
+      const candidateIds = [
+        activeTeacher?.id,
+        activeTeacher?.teacherId,
+        currentUser.personId,
+        currentUser.id,
+        currentUser.fullName
+      ].filter(Boolean) as string[];
+
+      const assignedSubs = StorageService.getAssignedSubstituteSchedules(candidateIds, todayStr);
       assignedSubs.forEach(as => {
-        if (!list.some(s => s.id === as.schedule.id)) {
-          list.push(as.schedule);
+        const enrichedSub: TeacherSubjectSchedule = {
+          ...as.schedule,
+          isSubstitute: true,
+          originalTeacherId: as.substitution.originalTeacherId,
+          originalTeacherName: as.substitution.originalTeacherName,
+          originalTeacherKhmer: as.substitution.originalTeacherKhmer,
+          allocatedHours: as.assignee?.allocatedHours || as.substitution.totalScheduleHours,
+          manualGrossWage: as.assignee?.manualGrossWage
+        };
+
+        const existingIdx = list.findIndex(s => s.id === as.schedule.id);
+        if (existingIdx === -1) {
+          list.push(enrichedSub);
+        } else {
+          list[existingIdx] = enrichedSub;
         }
       });
     }
@@ -988,6 +1063,34 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     const startMins = AttendanceEngine.timeToMinutes(sub.startTime);
     const endMins = AttendanceEngine.timeToMinutes(sub.endTime);
 
+    // Check if this schedule is a substitute class for the current user/teacher
+    const candidateIds = [
+      activeTeacher?.id,
+      activeTeacher?.teacherId,
+      currentUser.personId,
+      currentUser.id,
+      currentUser.fullName,
+      activeTeacher?.fullName
+    ].filter(Boolean).map(x => String(x).toLowerCase());
+
+    const activeSubst = StorageService.findSubstitution(sub.id, todayStr);
+    const isSubstituteCheckIn = Boolean(
+      sub.isSubstitute ||
+      (activeSubst && activeSubst.status !== 'cancelled' && (
+        candidateIds.includes((activeSubst.substituteId || '').toLowerCase()) ||
+        candidateIds.includes((activeSubst.substituteName || '').toLowerCase()) ||
+        activeSubst.assignees?.some(a =>
+          candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+          candidateIds.includes((a.substituteName || '').toLowerCase())
+        )
+      ))
+    );
+
+    const matchedAssignee = activeSubst?.assignees?.find(a =>
+      candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+      candidateIds.includes((a.substituteName || '').toLowerCase())
+    );
+
     // Resolve assigned teacher for this class schedule
     const assignedTeacher = teachers.find(
       t => t.id === sub.teacherId ||
@@ -995,10 +1098,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
            t.fullName.toLowerCase() === sub.teacherName.toLowerCase()
     ) || (activeTeacher && (activeTeacher.id === sub.teacherId || activeTeacher.teacherId === sub.teacherId) ? activeTeacher : null);
 
-    const targetTeacherId = assignedTeacher?.id || sub.teacherId;
-    const targetTeacherName = assignedTeacher?.fullName || sub.teacherName;
-    const targetTeacherKhmer = assignedTeacher?.khmerName || sub.khmerTeacherName;
-    const targetDept = assignedTeacher?.department || 'Academic & Curriculum';
+    const targetTeacherId = isSubstituteCheckIn
+      ? (activeTeacher?.id || currentUser.personId || currentUser.id)
+      : (assignedTeacher?.id || sub.teacherId);
+    const targetTeacherName = isSubstituteCheckIn
+      ? (activeTeacher?.fullName || currentUser.fullName)
+      : (assignedTeacher?.fullName || sub.teacherName);
+    const targetTeacherKhmer = isSubstituteCheckIn
+      ? (activeTeacher?.khmerName || currentUser.khmerName)
+      : (assignedTeacher?.khmerName || sub.khmerTeacherName);
+    const targetDept = isSubstituteCheckIn
+      ? (activeTeacher?.department || 'Academic & Curriculum')
+      : (assignedTeacher?.department || 'Academic & Curriculum');
 
     const holiday = AttendanceEngine.getHoliday();
     if (holiday) {
@@ -1073,7 +1184,12 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       khmerName: targetTeacherKhmer,
       personType: 'teacher',
       department: targetDept,
+      scheduleId: sub.id,
       subjectScheduleId: sub.id,
+      isSubstitute: isSubstituteCheckIn,
+      originalTeacherId: isSubstituteCheckIn ? (sub.originalTeacherId || activeSubst?.originalTeacherId || sub.teacherId) : undefined,
+      originalTeacherName: isSubstituteCheckIn ? (sub.originalTeacherName || activeSubst?.originalTeacherName || sub.teacherName) : undefined,
+      manualGrossWage: isSubstituteCheckIn ? (sub.manualGrossWage ?? matchedAssignee?.manualGrossWage) : undefined,
       customTime: curTime,
       latitude: checkInLat,
       longitude: checkInLng,
@@ -1118,8 +1234,13 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
            t.fullName.toLowerCase() === sub.teacherName.toLowerCase()
     );
 
-    const targetTeacherId = assignedTeacher?.id || sub.teacherId;
-    const targetTeacherName = assignedTeacher?.fullName || sub.teacherName;
+    const isSubstituteCheckOut = Boolean(sub.isSubstitute);
+    const targetTeacherId = isSubstituteCheckOut
+      ? (activeTeacher?.id || currentUser.personId || currentUser.id)
+      : (assignedTeacher?.id || sub.teacherId);
+    const targetTeacherName = isSubstituteCheckOut
+      ? (activeTeacher?.fullName || currentUser.fullName)
+      : (assignedTeacher?.fullName || sub.teacherName);
     const canOverride = !isTeacher || hasPermission('schedules.create') || hasPermission('attendance.edit') || forceAdminOverride;
 
     if (!canOverride && curMins < endMins) {
@@ -1209,11 +1330,29 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       <div
         key={sub.id}
         className={`bg-white rounded-3xl border p-4 sm:p-5 shadow-xs hover:shadow-md transition-all relative overflow-hidden flex flex-col justify-between ${
+          sub.isSubstitute ? 'border-amber-400 ring-2 ring-amber-500/20 bg-amber-50/10' :
           isCurrentActive ? 'border-indigo-400 ring-2 ring-indigo-500/20 shadow-sm' : 'border-slate-200'
         }`}
-        style={{ borderLeftWidth: '6px', borderLeftColor: sub.color || '#4F46E5' }}
+        style={{ borderLeftWidth: '6px', borderLeftColor: sub.isSubstitute ? '#F59E0B' : (sub.color || '#4F46E5') }}
       >
         <div>
+          {sub.isSubstitute && (
+            <div className="mb-3 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-950 text-xs font-bold flex items-center justify-between gap-1 shadow-2xs">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="truncate">
+                  {isKhmer
+                    ? `🔄 ចាត់តាំងបង្រៀនជំនួស • ជំនួសគ្រូអវត្តមាន៖ ${sub.originalTeacherKhmer || sub.originalTeacherName || 'គ្រូដើម'}`
+                    : `🔄 Covering for Absent Teacher: ${sub.originalTeacherName || 'Original Teacher'}`}
+                </span>
+              </div>
+              {sub.allocatedHours && (
+                <span className="text-[10px] bg-amber-200/80 text-amber-900 font-mono px-1.5 py-0.5 rounded-md shrink-0">
+                  {sub.allocatedHours}h
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-start justify-between gap-2 mb-2.5 min-w-0">
             <div className="flex flex-wrap items-center gap-1.5 min-w-0">
               <span
@@ -1434,7 +1573,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>
-                    {!isTeacher
+                    {sub.isSubstitute
+                      ? (isKhmer ? `ស្កេនចូលបង្រៀនជំនួស (ជំនួស ${sub.originalTeacherKhmer || sub.originalTeacherName || ''})` : `Check In as Substitute (For ${sub.originalTeacherName || 'Absent Teacher'})`)
+                      : !isTeacher
                       ? (isKhmer ? `ស្កេនចូល (${sub.khmerTeacherName || sub.teacherName})` : `Scan In (${sub.khmerTeacherName || sub.teacherName})`)
                       : curMins < sStart
                       ? (isKhmer ? `ស្កេនចូលមុនម៉ោង (ចាប់ផ្តើម ${sub.startTime})` : `Early Check In (Starts ${sub.startTime})`)
@@ -1447,7 +1588,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 <div className="w-full flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 min-w-0">
                   <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold truncate">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block shrink-0" />
-                    <span className="truncate">{isKhmer ? `កំពុងបង្រៀន (ចប់ ${sub.endTime})` : `In Class (${sub.startTime}-${sub.endTime})`}</span>
+                    <span className="truncate">{isKhmer ? (sub.isSubstitute ? `កំពុងបង្រៀនជំនួស (ចប់ ${sub.endTime})` : `កំពុងបង្រៀន (ចប់ ${sub.endTime})`) : `In Class (${sub.startTime}-${sub.endTime})`}</span>
                   </div>
                   <button
                     type="button"
@@ -1468,7 +1609,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 >
                   <ClockAlert className="w-3.5 h-3.5 text-amber-200" />
                   <span>
-                    {isKhmer ? `ស្កេនចេញបំពេញម៉ោង (${sub.endTime})` : `Scan Out Missing Check-out (${sub.endTime})`}
+                    {sub.isSubstitute
+                      ? (isKhmer ? `ស្កេនចេញបញ្ចប់ការបង្រៀនជំនួស (${sub.endTime})` : `Check Out of Substitute Class (${sub.endTime})`)
+                      : isKhmer ? `ស្កេនចេញបំពេញម៉ោង (${sub.endTime})` : `Scan Out Missing Check-out (${sub.endTime})`}
                   </span>
                 </button>
               ) : (
@@ -1479,7 +1622,9 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>
-                    {!isTeacher
+                    {sub.isSubstitute
+                      ? (isKhmer ? 'ស្កេនចេញបញ្ចប់ការបង្រៀនជំនួស' : 'Check Out of Substitute Class')
+                      : !isTeacher
                       ? (isKhmer ? `ស្កេនចេញ (${sub.khmerTeacherName || sub.teacherName})` : `Scan Out (${sub.khmerTeacherName || sub.teacherName})`)
                       : (isKhmer ? 'ស្កេនចេញបញ្ចប់ម៉ោង (Check Out)' : 'Check Out of this Class')}
                   </span>

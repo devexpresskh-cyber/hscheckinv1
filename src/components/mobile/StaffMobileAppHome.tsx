@@ -210,11 +210,18 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
 
   // Today's assigned substitute classes (for Teacher OR Employee)
   const todayAssignedSubstituteClasses = useMemo(() => {
-    const personId = isTeacher ? activeTeacher?.id : activeEmployee?.id;
-    const targetId = personId || currentUser.personId || currentUser.id;
-    if (!targetId) return [];
+    const candidateIds = [
+      activeTeacher?.id,
+      activeTeacher?.teacherId,
+      activeEmployee?.id,
+      activeEmployee?.employeeId,
+      currentUser.personId,
+      currentUser.id,
+      currentUser.fullName,
+      currentUser.khmerName
+    ].filter(Boolean) as string[];
 
-    const assignedSubs = StorageService.getAssignedSubstituteSchedules(targetId, todayStr);
+    const assignedSubs = StorageService.getAssignedSubstituteSchedules(candidateIds.length > 0 ? candidateIds : (currentUser.personId || currentUser.id), todayStr);
     return assignedSubs.map(item => {
       const sub = item.schedule;
       const effectiveStart = item.assignee?.startTime || sub.startTime;
@@ -222,7 +229,7 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
 
       const rec = allAttendance.find(
         r => r.date === todayStr &&
-             (r.personId === targetId || r.personName?.toLowerCase() === currentUser.fullName?.toLowerCase()) &&
+             (candidateIds.includes(r.personId) || r.personName?.toLowerCase() === currentUser.fullName?.toLowerCase()) &&
              (r.subjectScheduleId === sub.id || r.scheduleId === sub.id) &&
              r.isSubstitute
       );
@@ -786,6 +793,15 @@ export const StaffMobileAppHome: React.FC<StaffMobileAppHomeProps> = ({
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">
                             {isKhmer ? '📋 សុំច្បាប់' : 'Leave'}
                           </span>
+                        ) : item.isSubstitute && !item.isCheckedIn ? (
+                          <button
+                            type="button"
+                            onClick={onOpenCheckIn}
+                            className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-2xs cursor-pointer active:scale-95 flex items-center gap-1"
+                          >
+                            <span>🔄</span>
+                            <span>{isKhmer ? 'ស្កេនចូល' : 'Check In'}</span>
+                          </button>
                         ) : item.isAbsent ? (
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-600 text-white border border-rose-700 flex items-center gap-1 shadow-xs shadow-rose-600/30">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />

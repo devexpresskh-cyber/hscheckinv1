@@ -164,6 +164,7 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
   const relevantSchedulesForTeacher = useMemo(() => {
     if (effectiveLockedTeacher) {
       return subjectSchedules.filter(s =>
+        s.isSubstitute ||
         s.teacherId === effectiveLockedTeacher.id ||
         s.teacherName?.toLowerCase() === effectiveLockedTeacher.fullName.toLowerCase() ||
         (s.teacherId && effectiveLockedTeacher.teacherId && s.teacherId.toLowerCase() === effectiveLockedTeacher.teacherId.toLowerCase())
@@ -239,6 +240,7 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
     return subjectSchedules.filter(sub => {
       if (effectiveTeacher !== 'All') {
         const matchesTeacher =
+          sub.isSubstitute ||
           sub.teacherId === effectiveTeacher ||
           (lockedTeacher && (
             sub.teacherName?.toLowerCase() === lockedTeacher.fullName.toLowerCase() ||
@@ -988,6 +990,18 @@ export const MonSatWeeklyTimetable: React.FC<MonSatWeeklyTimetableProps> = ({
                                           )}
                                           <span className="text-[9px] font-semibold text-slate-700 truncate font-khmer">
                                             {cls.khmerTeacherName || teacher?.khmerName || cls.teacherName}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {/* Substitute Indicator Badge */}
+                                      {cls.isSubstitute && (
+                                        <div className="mt-1 pt-1 border-t border-amber-200/80 flex items-center gap-1 text-[8.5px] font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded">
+                                          <span className="shrink-0 text-amber-600">🔄</span>
+                                          <span className="truncate font-khmer">
+                                            {cls.originalTeacherKhmer || cls.originalTeacherName
+                                              ? (isKhmer ? `ជំនួស ${cls.originalTeacherKhmer || cls.originalTeacherName}` : `Sub for ${cls.originalTeacherName}`)
+                                              : (isKhmer ? 'បង្រៀនជំនួស' : 'Substitute')}
                                           </span>
                                         </div>
                                       )}

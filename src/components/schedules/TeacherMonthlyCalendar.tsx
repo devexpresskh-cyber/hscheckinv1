@@ -374,7 +374,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
       if (!s.isActive) return false;
       if (selectedTeacherId !== 'All') {
         const selTeacher = teachers.find(t => t.id === selectedTeacherId || t.teacherId?.toLowerCase() === selectedTeacherId?.toLowerCase());
-        const matchesTeacher = s.teacherId === selectedTeacherId ||
+        const matchesTeacher = s.isSubstitute || s.teacherId === selectedTeacherId ||
           (selTeacher && (
             s.teacherId === selTeacher.id ||
             s.teacherId?.toLowerCase() === selTeacher.teacherId?.toLowerCase() ||
@@ -382,7 +382,7 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
           ));
         if (!matchesTeacher) return false;
       }
-      if (selectedDept !== 'All') {
+      if (selectedDept !== 'All' && !s.isSubstitute) {
         const teacher = teachers.find(t => t.id === s.teacherId || t.teacherId === s.teacherId);
         if (teacher && teacher.department !== selectedDept) return false;
       }
@@ -1346,6 +1346,13 @@ export const TeacherMonthlyCalendar: React.FC<TeacherMonthlyCalendarProps> = ({
                               <span className="font-mono text-blue-700 font-black">
                                 {cls.subjectCode || cls.subject}
                               </span>
+                              {cls.isSubstitute && (
+                                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                  {isKhmer
+                                    ? `🔄 ជំនួស ${cls.originalTeacherKhmer || cls.originalTeacherName || 'គ្រូ'}`
+                                    : `🔄 Sub: ${cls.originalTeacherName || 'Teacher'}`}
+                                </span>
+                              )}
                             </h3>
                             <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
                               <Calendar className="w-3 h-3 text-slate-400" />
