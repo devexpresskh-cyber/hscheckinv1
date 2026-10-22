@@ -200,12 +200,53 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
     return 'All';
   });
 
+  const [viewingOriginalTeacherId, setViewingOriginalTeacherId] = useState<string | null>(null);
+
   // Automatically keep teacher filter synchronized with teacher account
   useEffect(() => {
-    if (isTeacher && activeTeacher) {
+    if (isTeacher && activeTeacher && !viewingOriginalTeacherId) {
       setSelectedTeacherFilter(activeTeacher.id);
     }
-  }, [isTeacher, activeTeacher]);
+  }, [isTeacher, activeTeacher, viewingOriginalTeacherId]);
+
+  // List of unique original teachers the logged-in user is substituting for
+  const coveredOriginalTeachers = useMemo(() => {
+    if (!isTeacher) return [];
+    const candidateIds = [
+      activeTeacher?.id,
+      activeTeacher?.teacherId,
+      currentUser.personId,
+      currentUser.id,
+      currentUser.id?.replace(/^usr-/, ''),
+      currentUser.fullName,
+      activeTeacher?.fullName
+    ].filter(Boolean).map(x => String(x).toLowerCase());
+
+    const origTeachers = new Map<string, { id: string; name: string; khmerName?: string }>();
+    substitutions.forEach(s => {
+      if (s.status === 'cancelled') return;
+      const isAssigned =
+        candidateIds.includes((s.substituteId || '').toLowerCase()) ||
+        candidateIds.includes((s.substituteName || '').toLowerCase()) ||
+        s.assignees?.some(a =>
+          candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+          candidateIds.includes((a.substituteName || '').toLowerCase())
+        );
+      if (isAssigned && s.originalTeacherId) {
+        origTeachers.set(s.originalTeacherId, {
+          id: s.originalTeacherId,
+          name: s.originalTeacherName || 'Original Teacher',
+          khmerName: s.originalTeacherKhmer
+        });
+      }
+    });
+    return Array.from(origTeachers.values());
+  }, [isTeacher, substitutions, activeTeacher, currentUser]);
+
+  const viewingOriginalTeacherObj = useMemo(() => {
+    if (!viewingOriginalTeacherId) return null;
+    return teachers.find(t => t.id === viewingOriginalTeacherId || t.teacherId?.toLowerCase() === viewingOriginalTeacherId.toLowerCase()) || null;
+  }, [viewingOriginalTeacherId, teachers]);
 
   useEffect(() => {
     const unsub = StorageService.subscribe(() => {
@@ -629,6 +670,74 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
     const myName = (currentUser.fullName || activeTeacher?.fullName || '').toLowerCase();
 
+    // Mode A: Teacher viewing the full schedule of an original teacher they are substituting for
+    if (isTeacher && viewingOriginalTeacherId) {
+      const origTeacher = teachers.find(t => t.id === viewingOriginalTeacherId || t.teacherId?.toLowerCase() === viewingOriginalTeacherId.toLowerCase());
+      const origName = (origTeacher?.fullName || '').toLowerCase();
+      const origKhmer = (origTeacher?.khmerName || '').trim();
+
+      const origList: TeacherSubjectSchedule[] = [];
+      subjectSchedules.forEach(sub => {
+        const matchesOriginal =
+          sub.teacherId === viewingOriginalTeacherId ||
+          (sub.teacherId && origTeacher?.teacherId && sub.teacherId.toLowerCase() === origTeacher.teacherId.toLowerCase()) ||
+          (origName && sub.teacherName.toLowerCase() === origName) ||
+          (origKhmer && sub.khmerTeacherName && sub.khmerTeacherName.trim() === origKhmer);
+
+        if (matchesOriginal) {
+          // Check if this class is specifically assigned to me as a substitute
+          const activeSubst = substitutions.find(subst =>
+            subst.subjectScheduleId === sub.id &&
+            subst.status !== 'cancelled' &&
+            (
+              candidateIds.includes((subst.substituteId || '').toLowerCase()) ||
+              candidateIds.includes((subst.substituteName || '').toLowerCase()) ||
+              subst.assignees?.some(a =>
+                candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+                candidateIds.includes((a.substituteName || '').toLowerCase())
+              )
+            )
+          );
+
+          if (activeSubst) {
+            const matchedAssignee = activeSubst.assignees?.find(a =>
+              candidateIds.includes((a.substituteId || '').toLowerCase()) ||
+              candidateIds.includes((a.substituteName || '').toLowerCase())
+            );
+
+            origList.push({
+              ...sub,
+              isSubstitute: true,
+              originalTeacherId: activeSubst.originalTeacherId,
+              originalTeacherName: activeSubst.originalTeacherName,
+              originalTeacherKhmer: activeSubst.originalTeacherKhmer,
+              allocatedHours: matchedAssignee?.allocatedHours || activeSubst.totalScheduleHours,
+              manualGrossWage: matchedAssignee?.manualGrossWage
+            });
+          } else {
+            origList.push({
+              ...sub,
+              originalTeacherId: sub.teacherId,
+              originalTeacherName: sub.teacherName,
+              originalTeacherKhmer: sub.khmerTeacherName
+            });
+          }
+        }
+      });
+
+      const q = subjectSearchQuery.toLowerCase().trim();
+      return origList.filter(sub => {
+        if (!q) return true;
+        return (
+          sub.subject.toLowerCase().includes(q) ||
+          (sub.khmerSubject && sub.khmerSubject.toLowerCase().includes(q)) ||
+          sub.gradeClass.toLowerCase().includes(q) ||
+          sub.room.toLowerCase().includes(q) ||
+          sub.teacherName.toLowerCase().includes(q)
+        );
+      });
+    }
+
     // 1. Owned schedules
     const ownedList: TeacherSubjectSchedule[] = [];
     // 2. Substitute schedules
@@ -707,7 +816,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         (sub.originalTeacherName && sub.originalTeacherName.toLowerCase().includes(q))
       );
     });
-  }, [subjectSchedules, isTeacher, activeTeacher, currentUser, selectedTeacherFilter, subjectSearchQuery, substitutions]);
+  }, [subjectSchedules, isTeacher, activeTeacher, currentUser, selectedTeacherFilter, subjectSearchQuery, substitutions, viewingOriginalTeacherId, teachers]);
 
   // Scoped general duty shifts: Teacher sees their assigned shift
   const filteredGeneralSchedules = useMemo(() => {
@@ -1857,6 +1966,100 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         </div>
       )}
 
+      {/* Substitute / Original Teacher Timetable Switcher */}
+      {isTeacher && coveredOriginalTeachers.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-300 rounded-3xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs print:hidden">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+              <span className="text-lg">🔄</span>
+            </div>
+            <div className="min-w-0">
+              <h4 className="font-black text-sm text-amber-950 flex items-center gap-2 flex-wrap">
+                <span>{isKhmer ? 'កាលវិភាគបង្រៀនជំនួស • ប្តូរមើលកាលវិភាគគ្រូដើម' : 'Substitute Mode • View Original Teacher Timetable'}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                  {coveredOriginalTeachers.length} {isKhmer ? 'គ្រូដើម' : 'Absent Teachers'}
+                </span>
+              </h4>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {isKhmer
+                  ? 'លោកអ្នកត្រូវបានចាត់តាំងបង្រៀនជំនួស។ លោកអ្នកអាចជ្រើសរើសដើម្បីពិនិត្យមើលកាលវិភាគពេញលេញរបស់គ្រូដើមបាន។'
+                  : 'You have active substitute assignments. Click below to inspect the absent teacher’s full timetable and room schedule.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewingOriginalTeacherId(null)}
+              className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                !viewingOriginalTeacherId
+                  ? 'bg-indigo-600 text-white font-black shadow-indigo-600/20'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+              }`}
+            >
+              {isKhmer ? 'កាលវិភាគរបស់ខ្ញុំ (My Schedule)' : 'My Schedule'}
+            </button>
+
+            {coveredOriginalTeachers.map(orig => (
+              <button
+                key={orig.id}
+                type="button"
+                onClick={() => setViewingOriginalTeacherId(orig.id)}
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                  viewingOriginalTeacherId === orig.id
+                    ? 'bg-amber-600 text-white font-black ring-2 ring-amber-400 shadow-amber-600/20'
+                    : 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-300'
+                }`}
+              >
+                <span>👁️</span>
+                <span>
+                  {isKhmer
+                    ? `កាលវិភាគគ្រូ ${orig.khmerName || orig.name}`
+                    : `Timetable: ${orig.name}`}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active Original Teacher Schedule Inspection Alert Banner */}
+      {isTeacher && viewingOriginalTeacherId && viewingOriginalTeacherObj && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-400 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-950 shadow-sm print:hidden animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-white flex items-center justify-center font-black text-lg shrink-0 shadow-sm shadow-amber-500/30">
+              👁️
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-black text-sm text-amber-950 truncate">
+                  {isKhmer
+                    ? `កំពុងបង្ហាញកាលវិភាគពេញលេញរបស់គ្រូដើម៖ ${viewingOriginalTeacherObj.khmerName || viewingOriginalTeacherObj.fullName} (${viewingOriginalTeacherObj.subject})`
+                    : `Inspecting Full Timetable for Absent Teacher: ${viewingOriginalTeacherObj.fullName}`}
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                  {viewingOriginalTeacherObj.teacherId || 'ORIGINAL'}
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5 line-clamp-2 sm:line-clamp-none">
+                {isKhmer
+                  ? 'លោកអ្នកកំពុងមើលម៉ោងបង្រៀន បន្ទប់រៀន និងថ្នាក់ទាំងអស់របស់គ្រូដើមដែលលោកអ្នកត្រូវបង្រៀនជំនួស។ ម៉ោងដែលចាត់តាំងឱ្យអ្នកត្រូវបានសម្គាល់ដោយផ្លាកសញ្ញាពណ៌លឿងទុំ។'
+                  : 'Reviewing all classes, rooms, and periods of the absent teacher. Sessions assigned to you are highlighted with amber substitute badges.'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setViewingOriginalTeacherId(null)}
+            className="px-4 py-2 rounded-2xl text-xs font-bold bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 shadow-xs cursor-pointer shrink-0 self-start sm:self-auto"
+          >
+            {isKhmer ? '↩️ ត្រឡប់ទៅកាលវិភាគរបស់ខ្ញុំ' : '↩️ Return to My Schedule'}
+          </button>
+        </div>
+      )}
+
       {/* Daily Schedule View (Default for Teacher Account) */}
       {viewMode === 'daily_schedule' && (
         <div className="space-y-4 max-w-full min-w-0">
@@ -2413,12 +2616,18 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       {viewMode === 'weekly_timetable' && (
         <MonSatWeeklyTimetable
           subjectSchedules={isTeacher ? filteredSubjectSchedules : subjectSchedules}
-          teachers={isTeacher && activeTeacher ? [activeTeacher] : teachers}
+          teachers={
+            isTeacher
+              ? viewingOriginalTeacherObj
+                ? [viewingOriginalTeacherObj]
+                : (activeTeacher ? [activeTeacher] : teachers)
+              : teachers
+          }
           onEditSchedule={hasPermission('schedules.edit') && !isTeacher ? handleOpenEditSubject : undefined}
           onDeleteSchedule={hasPermission('schedules.delete') && !isTeacher ? handleDeleteSubject : undefined}
           onAddForSlot={hasPermission('schedules.create') && !isTeacher ? handleOpenAddSubjectForSlot : undefined}
-          initialTeacherFilter={isTeacher && activeTeacher ? activeTeacher.id : selectedTeacherFilter}
-          lockedTeacherId={isTeacher && activeTeacher ? activeTeacher.id : undefined}
+          initialTeacherFilter={viewingOriginalTeacherId || (isTeacher && activeTeacher ? activeTeacher.id : selectedTeacherFilter)}
+          lockedTeacherId={viewingOriginalTeacherId || (isTeacher && activeTeacher ? activeTeacher.id : undefined)}
           isTeacherRole={isTeacher}
           canEdit={hasPermission('schedules.edit') && !isTeacher}
           canDelete={hasPermission('schedules.delete') && !isTeacher}
@@ -2429,7 +2638,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       {/* Monthly Calendar Schedule View */}
       {viewMode === 'monthly_calendar' && (
         <TeacherMonthlyCalendar
-          initialTeacher={isTeacher ? activeTeacher : undefined}
+          initialTeacher={viewingOriginalTeacherObj || (isTeacher ? activeTeacher : undefined)}
           onCheckIn={isTeacher ? handleTeacherClassCheckIn : undefined}
           onCheckOut={isTeacher ? handleTeacherClassCheckOut : undefined}
           onAddScheduleForDay={hasPermission('schedules.create') && !isTeacher ? (dayOfWeek) => {
