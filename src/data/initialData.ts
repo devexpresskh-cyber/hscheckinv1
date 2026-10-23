@@ -105,19 +105,6 @@ export const DEFAULT_USERS: UserAccount[] = [
     createdAt: new Date().toISOString()
   },
   {
-    id: 'usr-admin-singsa',
-    email: 'singsabmc@gmail.com',
-    fullName: 'Principal Singsa',
-    khmerName: 'នាយកសាលា',
-    role: 'super_admin',
-    department: 'Administration',
-    phone: '+855 12 555 444',
-    pinCode: '1234',
-    status: 'Active',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    createdAt: new Date().toISOString()
-  },
-  {
     id: 'usr-tch-001',
     email: 'sok.dara@heartschool.edu.kh',
     fullName: 'Sok Dara',
