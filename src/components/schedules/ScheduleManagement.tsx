@@ -211,7 +211,6 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
 
   // List of unique original teachers the logged-in user is substituting for
   const coveredOriginalTeachers = useMemo(() => {
-    if (!isTeacher) return [];
     const candidateIds = [
       activeTeacher?.id,
       activeTeacher?.teacherId,
@@ -219,19 +218,34 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       currentUser.id,
       currentUser.id?.replace(/^usr-/, ''),
       currentUser.fullName,
-      activeTeacher?.fullName
-    ].filter(Boolean).map(x => String(x).toLowerCase());
+      currentUser.khmerName,
+      activeTeacher?.fullName,
+      activeTeacher?.khmerName
+    ].filter(Boolean).map(x => String(x).trim().toLowerCase());
 
     const origTeachers = new Map<string, { id: string; name: string; khmerName?: string }>();
     substitutions.forEach(s => {
       if (s.status === 'cancelled') return;
+      const sId = (s.substituteId || '').trim().toLowerCase();
+      const sName = (s.substituteName || '').trim().toLowerCase();
+      const sKhmer = (s.substituteKhmerName || '').trim().toLowerCase();
       const isAssigned =
-        candidateIds.includes((s.substituteId || '').toLowerCase()) ||
-        candidateIds.includes((s.substituteName || '').toLowerCase()) ||
-        s.assignees?.some(a =>
-          candidateIds.includes((a.substituteId || '').toLowerCase()) ||
-          candidateIds.includes((a.substituteName || '').toLowerCase())
-        );
+        candidateIds.includes(sId) ||
+        candidateIds.includes(sName) ||
+        (sKhmer && candidateIds.includes(sKhmer)) ||
+        candidateIds.some(id => id && (sName.includes(id) || id.includes(sName))) ||
+        s.assignees?.some(a => {
+          const aId = (a.substituteId || '').trim().toLowerCase();
+          const aName = (a.substituteName || '').trim().toLowerCase();
+          const aKhmer = (a.substituteKhmerName || '').trim().toLowerCase();
+          return (
+            candidateIds.includes(aId) ||
+            candidateIds.includes(aName) ||
+            (aKhmer && candidateIds.includes(aKhmer)) ||
+            candidateIds.some(id => id && (aName.includes(id) || id.includes(aName)))
+          );
+        });
+
       if (isAssigned && s.originalTeacherId) {
         origTeachers.set(s.originalTeacherId, {
           id: s.originalTeacherId,
@@ -241,7 +255,7 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       }
     });
     return Array.from(origTeachers.values());
-  }, [isTeacher, substitutions, activeTeacher, currentUser]);
+  }, [substitutions, activeTeacher, currentUser]);
 
   const viewingOriginalTeacherObj = useMemo(() => {
     if (!viewingOriginalTeacherId) return null;
@@ -665,8 +679,10 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
       currentUser.id,
       currentUser.id?.replace(/^usr-/, ''),
       currentUser.fullName,
-      activeTeacher?.fullName
-    ].filter(Boolean).map(x => String(x).toLowerCase());
+      currentUser.khmerName,
+      activeTeacher?.fullName,
+      activeTeacher?.khmerName
+    ].filter(Boolean).map(x => String(x).trim().toLowerCase());
 
     const myName = (currentUser.fullName || activeTeacher?.fullName || '').toLowerCase();
 
@@ -690,19 +706,25 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
             subst.subjectScheduleId === sub.id &&
             subst.status !== 'cancelled' &&
             (
-              candidateIds.includes((subst.substituteId || '').toLowerCase()) ||
-              candidateIds.includes((subst.substituteName || '').toLowerCase()) ||
+              candidateIds.includes((subst.substituteId || '').trim().toLowerCase()) ||
+              candidateIds.includes((subst.substituteName || '').trim().toLowerCase()) ||
+              (subst.substituteKhmerName && candidateIds.includes(subst.substituteKhmerName.trim().toLowerCase())) ||
+              candidateIds.some(id => id && subst.substituteName && ((subst.substituteName || '').toLowerCase().includes(id) || id.includes((subst.substituteName || '').toLowerCase()))) ||
               subst.assignees?.some(a =>
-                candidateIds.includes((a.substituteId || '').toLowerCase()) ||
-                candidateIds.includes((a.substituteName || '').toLowerCase())
+                candidateIds.includes((a.substituteId || '').trim().toLowerCase()) ||
+                candidateIds.includes((a.substituteName || '').trim().toLowerCase()) ||
+                (a.substituteKhmerName && candidateIds.includes(a.substituteKhmerName.trim().toLowerCase())) ||
+                candidateIds.some(id => id && a.substituteName && ((a.substituteName || '').toLowerCase().includes(id) || id.includes((a.substituteName || '').toLowerCase())))
               )
             )
           );
 
           if (activeSubst) {
             const matchedAssignee = activeSubst.assignees?.find(a =>
-              candidateIds.includes((a.substituteId || '').toLowerCase()) ||
-              candidateIds.includes((a.substituteName || '').toLowerCase())
+              candidateIds.includes((a.substituteId || '').trim().toLowerCase()) ||
+              candidateIds.includes((a.substituteName || '').trim().toLowerCase()) ||
+              (a.substituteKhmerName && candidateIds.includes(a.substituteKhmerName.trim().toLowerCase())) ||
+              candidateIds.some(id => id && a.substituteName && ((a.substituteName || '').toLowerCase().includes(id) || id.includes((a.substituteName || '').toLowerCase())))
             );
 
             origList.push({
@@ -761,19 +783,25 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
           subst.subjectScheduleId === sub.id &&
           subst.status !== 'cancelled' &&
           (
-            candidateIds.includes((subst.substituteId || '').toLowerCase()) ||
-            candidateIds.includes((subst.substituteName || '').toLowerCase()) ||
+            candidateIds.includes((subst.substituteId || '').trim().toLowerCase()) ||
+            candidateIds.includes((subst.substituteName || '').trim().toLowerCase()) ||
+            (subst.substituteKhmerName && candidateIds.includes(subst.substituteKhmerName.trim().toLowerCase())) ||
+            candidateIds.some(id => id && subst.substituteName && ((subst.substituteName || '').toLowerCase().includes(id) || id.includes((subst.substituteName || '').toLowerCase()))) ||
             subst.assignees?.some(a =>
-              candidateIds.includes((a.substituteId || '').toLowerCase()) ||
-              candidateIds.includes((a.substituteName || '').toLowerCase())
+              candidateIds.includes((a.substituteId || '').trim().toLowerCase()) ||
+              candidateIds.includes((a.substituteName || '').trim().toLowerCase()) ||
+              (a.substituteKhmerName && candidateIds.includes(a.substituteKhmerName.trim().toLowerCase())) ||
+              candidateIds.some(id => id && a.substituteName && ((a.substituteName || '').toLowerCase().includes(id) || id.includes((a.substituteName || '').toLowerCase())))
             )
           )
         );
 
         if (activeSubst) {
           const matchedAssignee = activeSubst.assignees?.find(a =>
-            candidateIds.includes((a.substituteId || '').toLowerCase()) ||
-            candidateIds.includes((a.substituteName || '').toLowerCase())
+            candidateIds.includes((a.substituteId || '').trim().toLowerCase()) ||
+            candidateIds.includes((a.substituteName || '').trim().toLowerCase()) ||
+            (a.substituteKhmerName && candidateIds.includes(a.substituteKhmerName.trim().toLowerCase())) ||
+            candidateIds.some(id => id && a.substituteName && ((a.substituteName || '').toLowerCase().includes(id) || id.includes((a.substituteName || '').toLowerCase())))
           );
 
           subList.push({
@@ -793,6 +821,100 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         }
       }
     });
+
+    // Direct inspection of all assigned substitutions so no substitution is missed (even if schedule was customized)
+    if (isTeacher) {
+      substitutions.forEach(subst => {
+        if (subst.status === 'cancelled') return;
+        const sId = (subst.substituteId || '').trim().toLowerCase();
+        const sName = (subst.substituteName || '').trim().toLowerCase();
+        const sKhmer = (subst.substituteKhmerName || '').trim().toLowerCase();
+        const isAssigned =
+          candidateIds.includes(sId) ||
+          candidateIds.includes(sName) ||
+          (sKhmer && candidateIds.includes(sKhmer)) ||
+          candidateIds.some(id => id && sName && (sName.includes(id) || id.includes(sName))) ||
+          subst.assignees?.some(a => {
+            const aId = (a.substituteId || '').trim().toLowerCase();
+            const aName = (a.substituteName || '').trim().toLowerCase();
+            const aKhmer = (a.substituteKhmerName || '').trim().toLowerCase();
+            return (
+              candidateIds.includes(aId) ||
+              candidateIds.includes(aName) ||
+              (aKhmer && candidateIds.includes(aKhmer)) ||
+              candidateIds.some(id => id && aName && (aName.includes(id) || id.includes(aName)))
+            );
+          });
+
+        if (isAssigned) {
+          const schedId = subst.subjectScheduleId || `subst-sch-${subst.id}`;
+          const existingIdx = subList.findIndex(s => s.id === schedId);
+
+          const matchedAssignee = subst.assignees?.find(a => {
+            const aId = (a.substituteId || '').trim().toLowerCase();
+            const aName = (a.substituteName || '').trim().toLowerCase();
+            const aKhmer = (a.substituteKhmerName || '').trim().toLowerCase();
+            return (
+              candidateIds.includes(aId) ||
+              candidateIds.includes(aName) ||
+              (aKhmer && candidateIds.includes(aKhmer)) ||
+              candidateIds.some(id => id && aName && (aName.includes(id) || id.includes(aName)))
+            );
+          });
+
+          const origSched = subjectSchedules.find(s => s.id === subst.subjectScheduleId);
+
+          if (origSched) {
+            const enriched: TeacherSubjectSchedule = {
+              ...origSched,
+              isSubstitute: true,
+              originalTeacherId: subst.originalTeacherId,
+              originalTeacherName: subst.originalTeacherName,
+              originalTeacherKhmer: subst.originalTeacherKhmer,
+              allocatedHours: matchedAssignee?.allocatedHours || subst.totalScheduleHours,
+              manualGrossWage: matchedAssignee?.manualGrossWage
+            };
+            if (existingIdx === -1) {
+              subList.push(enriched);
+            } else {
+              subList[existingIdx] = enriched;
+            }
+          } else {
+            const dayOfSub = subst.date ? new Date(subst.date).getDay() : 1;
+            const reconstructed: TeacherSubjectSchedule = {
+              id: schedId,
+              teacherId: subst.substituteId || activeTeacher?.id || currentUser.id,
+              teacherName: subst.substituteName || currentUser.fullName,
+              khmerTeacherName: subst.substituteKhmerName || currentUser.khmerName || activeTeacher?.khmerName,
+              subject: subst.subject || 'General Subject',
+              khmerSubject: subst.khmerSubject || subst.subject,
+              subjectCode: '',
+              gradeClass: subst.gradeClass || 'General Class',
+              room: subst.room || 'Room 1',
+              periodName: subst.periodName || 'Period 1',
+              dayOfWeek: dayOfSub,
+              daysOfWeek: [dayOfSub],
+              startTime: subst.startTime || '07:30',
+              endTime: subst.endTime || '08:30',
+              periodNumber: 1,
+              gracePeriodMinutes: 15,
+              isActive: true,
+              isSubstitute: true,
+              originalTeacherId: subst.originalTeacherId,
+              originalTeacherName: subst.originalTeacherName,
+              originalTeacherKhmer: subst.originalTeacherKhmer,
+              allocatedHours: matchedAssignee?.allocatedHours || subst.totalScheduleHours,
+              manualGrossWage: matchedAssignee?.manualGrossWage
+            };
+            if (existingIdx === -1) {
+              subList.push(reconstructed);
+            } else {
+              subList[existingIdx] = reconstructed;
+            }
+          }
+        }
+      });
+    }
 
     const combined = [...ownedList];
     subList.forEach(item => {
@@ -865,37 +987,49 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
         return sub.dayOfWeek === selectedDay;
       });
 
-    // Also include any substitute schedules assigned to this teacher/staff today
+    // Also include any substitute schedules assigned to this teacher/staff
+    const candidateIds = [
+      activeTeacher?.id,
+      activeTeacher?.teacherId,
+      currentUser.personId,
+      currentUser.id,
+      currentUser.fullName,
+      currentUser.khmerName,
+      activeTeacher?.fullName,
+      activeTeacher?.khmerName
+    ].filter(Boolean) as string[];
+
     const isClassToday = selectedDay === todayDayIndex;
-    if (isClassToday) {
-      const candidateIds = [
-        activeTeacher?.id,
-        activeTeacher?.teacherId,
-        currentUser.personId,
-        currentUser.id,
-        currentUser.fullName
-      ].filter(Boolean) as string[];
+    const assignedSubs = isClassToday
+      ? StorageService.getAssignedSubstituteSchedules(candidateIds, todayStr)
+      : StorageService.getAssignedSubstituteSchedules(candidateIds).filter(as => {
+          if (as.substitution.date) {
+            return new Date(as.substitution.date).getDay() === selectedDay;
+          }
+          if (as.schedule.daysOfWeek && as.schedule.daysOfWeek.includes(selectedDay)) {
+            return true;
+          }
+          return as.schedule.dayOfWeek === selectedDay;
+        });
 
-      const assignedSubs = StorageService.getAssignedSubstituteSchedules(candidateIds, todayStr);
-      assignedSubs.forEach(as => {
-        const enrichedSub: TeacherSubjectSchedule = {
-          ...as.schedule,
-          isSubstitute: true,
-          originalTeacherId: as.substitution.originalTeacherId,
-          originalTeacherName: as.substitution.originalTeacherName,
-          originalTeacherKhmer: as.substitution.originalTeacherKhmer,
-          allocatedHours: as.assignee?.allocatedHours || as.substitution.totalScheduleHours,
-          manualGrossWage: as.assignee?.manualGrossWage
-        };
+    assignedSubs.forEach(as => {
+      const enrichedSub: TeacherSubjectSchedule = {
+        ...as.schedule,
+        isSubstitute: true,
+        originalTeacherId: as.substitution.originalTeacherId,
+        originalTeacherName: as.substitution.originalTeacherName,
+        originalTeacherKhmer: as.substitution.originalTeacherKhmer,
+        allocatedHours: as.assignee?.allocatedHours || as.substitution.totalScheduleHours,
+        manualGrossWage: as.assignee?.manualGrossWage
+      };
 
-        const existingIdx = list.findIndex(s => s.id === as.schedule.id);
-        if (existingIdx === -1) {
-          list.push(enrichedSub);
-        } else {
-          list[existingIdx] = enrichedSub;
-        }
-      });
-    }
+      const existingIdx = list.findIndex(s => s.id === as.schedule.id);
+      if (existingIdx === -1) {
+        list.push(enrichedSub);
+      } else {
+        list[existingIdx] = enrichedSub;
+      }
+    });
 
     if (!isClassToday) {
       return list.sort((a, b) => {
@@ -2660,16 +2794,44 @@ export const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ initialV
                 </span>
               </div>
               {isTeacher ? (
-                <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
-                  <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span className="text-xs font-bold text-indigo-900">
-                    {activeTeacher?.fullName || currentUser.fullName}
-                    {activeTeacher?.khmerName ? ` (${activeTeacher.khmerName})` : ''}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-600 text-white uppercase tracking-wider">
-                    {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned'}
-                  </span>
-                </div>
+                coveredOriginalTeachers.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={viewingOriginalTeacherId || ''}
+                      onChange={e => setViewingOriginalTeacherId(e.target.value || null)}
+                      className="bg-amber-50 border border-amber-300 text-amber-950 font-bold rounded-xl px-3 py-1.5 text-xs focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-xs"
+                    >
+                      <option value="">
+                        {isKhmer ? '📋 កាលវិភាគផ្ទាល់ខ្លួន + ថ្នាក់ជំនួស' : '📋 My Schedule + Substitutions'}
+                      </option>
+                      {coveredOriginalTeachers.map(cov => (
+                        <option key={cov.id} value={cov.id}>
+                          🔄 {isKhmer ? 'កាលវិភាគគ្រូដើម៖' : 'Original Teacher:'} {cov.khmerName || cov.name}
+                        </option>
+                      ))}
+                    </select>
+                    {viewingOriginalTeacherId && (
+                      <button
+                        type="button"
+                        onClick={() => setViewingOriginalTeacherId(null)}
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-200 text-amber-900 hover:bg-amber-300 transition-colors shadow-2xs"
+                      >
+                        {isKhmer ? 'ត្រឡប់ទៅកាលវិភាគរបស់ខ្ញុំ' : 'Back to Mine'}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl">
+                    <GraduationCap className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="text-xs font-bold text-indigo-900">
+                      {activeTeacher?.fullName || currentUser.fullName}
+                      {activeTeacher?.khmerName ? ` (${activeTeacher.khmerName})` : ''}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-600 text-white uppercase tracking-wider">
+                      {isKhmer ? 'កាលវិភាគផ្ទាល់ខ្លួន' : 'Owned'}
+                    </span>
+                  </div>
+                )
               ) : (
                 <select
                   value={selectedTeacherFilter}

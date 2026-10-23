@@ -354,7 +354,14 @@ export const CheckInKiosk: React.FC<CheckInKioskProps> = ({
   const isTeacher = activeStaff?.type === 'teacher';
   const assignedSubstituteClassesToday = useMemo(() => {
     if (!activeStaff) return [];
-    const assignedSubs = StorageService.getAssignedSubstituteSchedules(activeStaff.id, todayStr);
+    const staffCandidateIds = [
+      activeStaff.id,
+      (activeStaff as any).teacherId,
+      activeStaff.name,
+      (activeStaff as any).fullName,
+      activeStaff.khmerName
+    ].filter(Boolean) as string[];
+    const assignedSubs = StorageService.getAssignedSubstituteSchedules(staffCandidateIds, todayStr);
     return assignedSubs.map(item => ({
       ...item.schedule,
       startTime: item.assignee?.startTime || item.schedule.startTime,

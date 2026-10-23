@@ -1051,9 +1051,11 @@ export const StorageService = {
     if (matchedTeacher) {
       if (matchedTeacher.id) validIds.add(matchedTeacher.id.toLowerCase());
       if (matchedTeacher.teacherId) validIds.add(matchedTeacher.teacherId.toLowerCase());
+      if (matchedTeacher.fullName) validIds.add(matchedTeacher.fullName.toLowerCase());
+      if (matchedTeacher.khmerName) validIds.add(matchedTeacher.khmerName.toLowerCase());
     }
 
-    return cache.subjectSchedules.filter(s => {
+    const regularList = cache.subjectSchedules.filter(s => {
       if (!s.isActive) return false;
       const sTeacherId = (s.teacherId || '').trim().toLowerCase();
       const matchesId = validIds.has(sTeacherId);
@@ -1070,6 +1072,39 @@ export const StorageService = {
       }
       return true;
     });
+
+    // Also include assigned substitute schedules for this teacher
+    const candidateArray = Array.from(validIds);
+    const assignedSubs = this.getAssignedSubstituteSchedules(candidateArray);
+    assignedSubs.forEach(as => {
+      if (dayOfWeek !== undefined) {
+        const substDay = as.substitution.date ? new Date(as.substitution.date).getDay() : undefined;
+        const matchesDow =
+          substDay === dayOfWeek ||
+          (as.schedule.daysOfWeek && as.schedule.daysOfWeek.includes(dayOfWeek)) ||
+          as.schedule.dayOfWeek === dayOfWeek;
+        if (!matchesDow) return;
+      }
+
+      const enriched: TeacherSubjectSchedule = {
+        ...as.schedule,
+        isSubstitute: true,
+        originalTeacherId: as.substitution.originalTeacherId,
+        originalTeacherName: as.substitution.originalTeacherName,
+        originalTeacherKhmer: as.substitution.originalTeacherKhmer,
+        allocatedHours: as.assignee?.allocatedHours || as.substitution.totalScheduleHours,
+        manualGrossWage: as.assignee?.manualGrossWage
+      };
+
+      const existingIdx = regularList.findIndex(s => s.id === as.schedule.id);
+      if (existingIdx === -1) {
+        regularList.push(enriched);
+      } else {
+        regularList[existingIdx] = enriched;
+      }
+    });
+
+    return regularList;
   },
   getSubjectScheduleById(id: string): TeacherSubjectSchedule | undefined {
     return cache.subjectSchedules.find(s => s.id === id);
@@ -1425,11 +1460,23 @@ export const StorageService = {
       if (dateStr && s.date !== dateStr) return false;
       const sId = (s.substituteId || '').trim().toLowerCase();
       const sName = (s.substituteName || '').trim().toLowerCase();
-      const isDirect = ids.includes(sId) || ids.includes(sName);
+      const sKhmer = (s.substituteKhmerName || '').trim().toLowerCase();
+      const isDirect =
+        ids.includes(sId) ||
+        ids.includes(sName) ||
+        (sKhmer && ids.includes(sKhmer)) ||
+        ids.some(id => id && (sName.includes(id) || id.includes(sName)));
+
       const isInAssignees = s.assignees?.some(a => {
         const aId = (a.substituteId || '').trim().toLowerCase();
         const aName = (a.substituteName || '').trim().toLowerCase();
-        return ids.includes(aId) || ids.includes(aName);
+        const aKhmer = (a.substituteKhmerName || '').trim().toLowerCase();
+        return (
+          ids.includes(aId) ||
+          ids.includes(aName) ||
+          (aKhmer && ids.includes(aKhmer)) ||
+          ids.some(id => id && (aName.includes(id) || id.includes(aName)))
+        );
       });
       return isDirect || isInAssignees;
     });
@@ -1450,19 +1497,40 @@ export const StorageService = {
     }[] = [];
 
     subs.forEach(sub => {
-      const origSched = cache.subjectSchedules.find(s => s.id === sub.subjectScheduleId);
-      if (origSched) {
-        const matchedAssignee = sub.assignees?.find(a => {
-          const aId = (a.substituteId || '').trim().toLowerCase();
-          const aName = (a.substituteName || '').trim().toLowerCase();
-          return ids.includes(aId) || ids.includes(aName);
-        });
-        results.push({
-          schedule: origSched,
-          substitution: sub,
-          assignee: matchedAssignee
-        });
-      }
+      const origSched = cache.subjectSchedules.find(s => s.id === sub.subjectScheduleId) || {
+        id: sub.subjectScheduleId,
+        subject: sub.subject,
+        khmerSubject: sub.khmerSubject,
+        gradeClass: sub.gradeClass,
+        room: sub.room,
+        periodName: sub.periodName,
+        startTime: sub.startTime,
+        endTime: sub.endTime,
+        teacherId: sub.originalTeacherId,
+        teacherName: sub.originalTeacherName,
+        khmerTeacherName: sub.originalTeacherKhmer,
+        isActive: true,
+        dayOfWeek: new Date(sub.date).getDay(),
+        daysOfWeek: [new Date(sub.date).getDay()]
+      } as TeacherSubjectSchedule;
+
+      const matchedAssignee = sub.assignees?.find(a => {
+        const aId = (a.substituteId || '').trim().toLowerCase();
+        const aName = (a.substituteName || '').trim().toLowerCase();
+        const aKhmer = (a.substituteKhmerName || '').trim().toLowerCase();
+        return (
+          ids.includes(aId) ||
+          ids.includes(aName) ||
+          (aKhmer && ids.includes(aKhmer)) ||
+          ids.some(id => id && (aName.includes(id) || id.includes(aName)))
+        );
+      });
+
+      results.push({
+        schedule: origSched,
+        substitution: sub,
+        assignee: matchedAssignee
+      });
     });
 
     return results;
